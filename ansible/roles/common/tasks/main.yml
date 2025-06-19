@@ -1,0 +1,12 @@
+---
+# tasks file for common
+- name: Update package cache
+  package:
+    update_cache: yes
+  become: yes
+
+- name: Install common packages
+  package:
+    name: "{{ common_packages }}"
+    state: present
+  become: yes
