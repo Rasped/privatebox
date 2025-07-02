@@ -9,8 +9,14 @@
 #   --no-execute    Deploy files only, don't run bootstrap
 #   --verbose       Enable verbose output
 #   --help          Show this help message
-
-set -euo pipefail
+#
+# Exit codes:
+#   0 - Success
+#   1 - General error
+#   2 - Missing dependencies
+#   3 - SSH connection failed
+#   4 - Deployment failed
+#   5 - Remote execution failed
 
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,20 +24,29 @@ SCRIPT_NAME="deploy-to-server"
 REMOTE_DEPLOY_DIR="/tmp/privatebox-bootstrap-$(date +%Y%m%d-%H%M%S)"
 DEFAULT_USERNAME="root"
 
-# Source common library if available
-if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
-    # Temporarily disable log directory creation for non-root users
-    export LOG_DIR="/tmp/privatebox-logs"
-    export LOG_FILE="/tmp/privatebox-logs/${SCRIPT_NAME}.log"
-    mkdir -p "${LOG_DIR}" 2>/dev/null || true
-    source "${SCRIPT_DIR}/lib/common.sh"
-else
-    # Fallback logging functions if common.sh is not available
-    log_info() { echo "[INFO] $*"; }
-    log_warn() { echo "[WARN] $*" >&2; }
-    log_error() { echo "[ERROR] $*" >&2; }
-    log_debug() { [[ "${VERBOSE:-false}" == "true" ]] && echo "[DEBUG] $*"; }
-fi
+# Set log directory for non-root users
+export LOG_DIR="/tmp/privatebox-logs"
+export LOG_FILE="/tmp/privatebox-logs/${SCRIPT_NAME}.log"
+mkdir -p "${LOG_DIR}" 2>/dev/null || true
+
+# Source common library
+source "${SCRIPT_DIR}/lib/common.sh" || {
+    echo "[ERROR] Cannot source common library from ${SCRIPT_DIR}/lib/common.sh" >&2
+    exit 1
+}
+
+# Setup standardized error handling
+setup_error_handling
+
+# Define additional exit codes
+EXIT_SSH_FAILED=3
+EXIT_DEPLOY_FAILED=4
+EXIT_REMOTE_EXEC_FAILED=5
+
+# Check required commands
+require_command "ssh" "SSH client is required"
+require_command "scp" "SCP is required for file transfer"
+require_command "tar" "tar is required for archive creation"
 
 # Default values
 RUN_TESTS=false
@@ -87,7 +102,7 @@ parse_arguments() {
     # Check for minimum arguments
     if [[ $# -lt 1 ]]; then
         show_usage
-        exit 1
+        exit ${EXIT_ERROR}
     fi
 
     # Parse server (required)
@@ -129,7 +144,7 @@ parse_arguments() {
             *)
                 log_error "Unknown option: $1"
                 show_usage
-                exit 1
+                exit ${EXIT_ERROR}
                 ;;
         esac
     done
@@ -149,7 +164,7 @@ validate_ssh_connection() {
     fi
     
     log_info "SSH connection validated successfully"
-    return 0
+    return ${EXIT_SUCCESS}
 }
 
 # Deploy files to remote server
@@ -157,20 +172,19 @@ deploy_files() {
     log_info "Deploying bootstrap files to ${SERVER}:${REMOTE_DEPLOY_DIR}..."
     
     # Create remote directory
-    if ! ssh "${USERNAME}@${SERVER}" "mkdir -p ${REMOTE_DEPLOY_DIR}"; then
+    ssh "${USERNAME}@${SERVER}" "mkdir -p ${REMOTE_DEPLOY_DIR}" || {
         log_error "Failed to create remote directory"
-        return 1
-    fi
+        return ${EXIT_SSH_FAILED}
+    }
     
     # Use rsync to copy files
     log_debug "Running rsync to copy files..."
-    if rsync -avz --exclude='.git' --exclude='*.log' --exclude='*.swp' \
-        "${SCRIPT_DIR}/" "${USERNAME}@${SERVER}:${REMOTE_DEPLOY_DIR}/"; then
-        log_info "Files deployed successfully"
-    else
+    rsync -avz --exclude='.git' --exclude='*.log' --exclude='*.swp' \
+        "${SCRIPT_DIR}/" "${USERNAME}@${SERVER}:${REMOTE_DEPLOY_DIR}/" || {
         log_error "Failed to deploy files via rsync"
-        return 1
-    fi
+        return ${EXIT_DEPLOY_FAILED}
+    }
+    log_info "Files deployed successfully"
     
     # Make scripts executable
     log_info "Making scripts executable on remote server..."
@@ -180,7 +194,7 @@ deploy_files() {
         log_warn "Failed to make some scripts executable"
     fi
     
-    return 0
+    return ${EXIT_SUCCESS}
 }
 
 # Execute bootstrap on remote server
@@ -277,7 +291,7 @@ run_integration_tests() {
         log_info "  ssh ${USERNAME}@${SERVER} \"ssh ubuntuadmin@${vm_ip} 'sudo cloud-init status'\""
     fi
     
-    return 0
+    return ${EXIT_SUCCESS}
 }
 
 # Cleanup deployed files
@@ -297,14 +311,10 @@ main() {
     log_info "======================================"
     
     # Validate SSH connection
-    if ! validate_ssh_connection; then
-        exit 1
-    fi
+    validate_ssh_connection || check_result $? "SSH connection validation failed"
     
     # Deploy files
-    if ! deploy_files; then
-        exit 1
-    fi
+    deploy_files || check_result $? "File deployment failed"
     
     log_info "Files deployed to: ${REMOTE_DEPLOY_DIR}"
     
@@ -357,3 +367,4 @@ parse_arguments "$@"
 
 # Run main function
 main
+exit $?
