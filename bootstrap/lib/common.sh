@@ -191,17 +191,9 @@ save_credentials() {
 # These are deprecated but provided for scripts that haven't been updated yet
 
 # Validation function aliases (now in validation.sh)
-validate_ip() {
-    validate_input "ip" "$@"
-}
-
-validate_port() {
-    validate_input "port" "$@"
-}
-
-validate_host() {
-    validate_input "hostname" "$@"
-}
+# These are provided for backward compatibility but actually call
+# the real validation functions from validation.sh
+# Note: validation.sh must be sourced before these are used
 
 # Configuration validation (simplified wrapper)
 validate_config() {

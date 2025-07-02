@@ -41,10 +41,10 @@ readonly DEFAULT_VM_BRIDGE="vmbr0"
 readonly DEFAULT_STORAGE="local-lvm"
 
 # Ubuntu Cloud Image
-readonly UBUNTU_VERSION="24.04"
-readonly UBUNTU_CODENAME="noble"
-readonly UBUNTU_IMAGE_URL="https://cloud-images.ubuntu.com/minimal/releases/${UBUNTU_CODENAME}/release/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img"
-readonly UBUNTU_IMAGE_NAME="ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img"
+UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
+UBUNTU_CODENAME="${UBUNTU_CODENAME:-noble}"
+UBUNTU_IMAGE_URL="${UBUNTU_IMAGE_URL:-https://cloud-images.ubuntu.com/minimal/releases/${UBUNTU_CODENAME}/release/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img}"
+UBUNTU_IMAGE_NAME="${UBUNTU_IMAGE_NAME:-ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img}"
 
 # Network Defaults
 readonly DEFAULT_NETMASK="255.255.255.0"
@@ -63,15 +63,15 @@ readonly PRIVATEBOX_SCRIPTS_DIR="/opt/privatebox/scripts"
 readonly PRIVATEBOX_DATA_DIR="/var/lib/privatebox"
 
 # Docker Configuration
-readonly DOCKER_COMPOSE_VERSION="v2.29.7"
-readonly PORTAINER_VERSION="latest"
-readonly PORTAINER_PORT=9443
+DOCKER_COMPOSE_VERSION="${DOCKER_COMPOSE_VERSION:-v2.29.7}"
+PORTAINER_VERSION="${PORTAINER_VERSION:-latest}"
+PORTAINER_PORT="${PORTAINER_PORT:-9443}"
 
 # Semaphore Configuration
-readonly SEMAPHORE_VERSION="latest"
-readonly SEMAPHORE_PORT=3000
-readonly SEMAPHORE_DB_NAME="semaphore"
-readonly SEMAPHORE_DB_USER="semaphore"
+SEMAPHORE_VERSION="${SEMAPHORE_VERSION:-latest}"
+SEMAPHORE_PORT="${SEMAPHORE_PORT:-3000}"
+SEMAPHORE_DB_NAME="${SEMAPHORE_DB_NAME:-semaphore}"
+SEMAPHORE_DB_USER="${SEMAPHORE_DB_USER:-semaphore}"
 
 # Service Timeouts (in seconds)
 readonly SERVICE_START_TIMEOUT=300
