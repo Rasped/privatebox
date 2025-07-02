@@ -150,7 +150,7 @@ download_repository() {
     fi
     
     # Extract just the bootstrap folder
-    if ! tar -xzf "$temp_tar" --strip-components=1 "Privatebox-${REPO_BRANCH}/bootstrap"; then
+    if ! tar -xzf "$temp_tar" --strip-components=1 "privatebox-${REPO_BRANCH}/bootstrap"; then
         print_error "Failed to extract bootstrap files"
         print_error "This might be a temporary issue. Please try again."
         rm -f "$temp_tar"
