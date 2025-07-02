@@ -24,7 +24,7 @@ set -euo pipefail
 # Configuration
 REPO_URL="https://github.com/Rasped/privatebox"
 REPO_BRANCH="main"
-TEMP_DIR="/tmp/privatebox-quickstart-$(date +%Y%m%d-%H%M%S)"
+TEMP_DIR="/tmp/privatebox-quickstart"
 CLEANUP_AFTER=false
 SKIP_CONFIRMATION=false
 
@@ -139,6 +139,12 @@ check_prerequisites() {
 
 download_repository() {
     print_info "Downloading PrivateBox bootstrap files..."
+    
+    # Clean up any existing directory
+    if [[ -d "$TEMP_DIR" ]]; then
+        print_info "Removing existing installation directory..."
+        rm -rf "$TEMP_DIR"
+    fi
     
     # Create temp directory
     mkdir -p "$TEMP_DIR"
