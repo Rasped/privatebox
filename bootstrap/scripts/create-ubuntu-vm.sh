@@ -294,6 +294,32 @@ function generate_cloud_init() {
     # Ensure SSH key exists
     ensure_ssh_key
     
+    # Read the setup scripts into variables to ensure they're available
+    local initial_setup_content
+    local portainer_setup_content
+    local semaphore_setup_content
+    
+    if [[ -f "${SCRIPT_DIR}/initial-setup.sh" ]]; then
+        initial_setup_content=$(cat "${SCRIPT_DIR}/initial-setup.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find initial-setup.sh at ${SCRIPT_DIR}/initial-setup.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/portainer-setup.sh" ]]; then
+        portainer_setup_content=$(cat "${SCRIPT_DIR}/portainer-setup.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find portainer-setup.sh at ${SCRIPT_DIR}/portainer-setup.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/semaphore-setup.sh" ]]; then
+        semaphore_setup_content=$(cat "${SCRIPT_DIR}/semaphore-setup.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find semaphore-setup.sh at ${SCRIPT_DIR}/semaphore-setup.sh"
+        return 1
+    fi
+    
     cat > "${USER_DATA_FILE}" <<EOF
 #cloud-config
 locale: en_US.UTF-8
@@ -340,15 +366,15 @@ $(cat "${SCRIPT_DIR}/../lib/common.sh" | sed 's/^/      /') # Indent script for 
   - path: /usr/local/bin/post-install-setup.sh
     permissions: '0755'
     content: |
-$(cat "${SCRIPT_DIR}/initial-setup.sh" | sed 's/^/      /') # Indent script for YAML
+${initial_setup_content}
   - path: /usr/local/bin/portainer-setup.sh
     permissions: '0755'
     content: |
-$(cat "${SCRIPT_DIR}/portainer-setup.sh" | sed 's/^/      /') # Indent script for YAML
+${portainer_setup_content}
   - path: /usr/local/bin/semaphore-setup.sh
     permissions: '0755'
     content: |
-$(cat "${SCRIPT_DIR}/semaphore-setup.sh" | sed 's/^/      /') # Indent script for YAML
+${semaphore_setup_content}
   - path: /etc/privatebox-cloud-init-complete
     permissions: '0644'
     content: |
