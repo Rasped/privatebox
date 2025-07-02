@@ -121,7 +121,15 @@ main() {
             echo ""
             echo "Service Credentials:"
             echo "  Semaphore Admin: admin"
-            echo "  Semaphore Password: (see /root/.credentials/semaphore_credentials.txt on VM)"
+            
+            # Try to retrieve Semaphore password from VM
+            SEMAPHORE_PASS=$(sshpass -p "${VM_PASSWORD}" ssh -o StrictHostKeyChecking=no ${VM_USERNAME}@${STATIC_IP} "sudo grep 'Admin Password:' /root/.credentials/semaphore_credentials.txt 2>/dev/null | cut -d' ' -f3" 2>/dev/null)
+            
+            if [[ -n "${SEMAPHORE_PASS}" ]]; then
+                echo "  Semaphore Password: ${SEMAPHORE_PASS}"
+            else
+                echo "  Semaphore Password: (see /root/.credentials/semaphore_credentials.txt on VM)"
+            fi
             echo ""
             echo "IMPORTANT: Please change the VM password after first login!"
             echo ""
