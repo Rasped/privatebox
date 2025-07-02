@@ -198,15 +198,23 @@ Deploy to a remote Proxmox server:
 
 ### Access Information
 
-After installation completes (5-10 minutes), your services will be available at:
+After installation completes (5-10 minutes), you can access your PrivateBox VM:
 
-- **SSH**: `ssh privatebox@<VM-IP>`
-- **Portainer**: `http://<VM-IP>:9000`
-- **Semaphore**: `http://<VM-IP>:3000`
-
-Default credentials:
+**VM Login Credentials:**
+- SSH: `ssh privatebox@<VM-IP>`
 - Username: `privatebox`
-- Password: `privatebox` (change after first login!)
+- Password: `privatebox` (⚠️ change immediately after first login!)
+
+**Web Services** (available after VM login):
+- **Portainer**: `http://<VM-IP>:9000` - Container management UI
+- **Semaphore**: `http://<VM-IP>:3000` - Ansible automation UI
+
+**Semaphore Login:**
+- Username: `admin`
+- Password: Auto-generated during setup
+- To retrieve: `ssh privatebox@<VM-IP>` then `sudo cat /root/.credentials/semaphore_credentials.txt`
+
+**Note:** The VM credentials above are for logging into the Ubuntu VM, not for Proxmox.
 
 ## Security Considerations
 
