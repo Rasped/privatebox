@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get script directory and save it
+CREATE_VM_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="${CREATE_VM_SCRIPT_DIR}"
 
 # Source common library
 # shellcheck source=../lib/common.sh
@@ -9,6 +10,9 @@ source "${SCRIPT_DIR}/../lib/common.sh" || {
     echo "ERROR: Cannot source common library" >&2
     exit 1
 }
+
+# Restore script directory after sourcing
+SCRIPT_DIR="${CREATE_VM_SCRIPT_DIR}"
 
 # --- Locale Configuration ---
 # Description: Configures the script's locale to ensure consistent output.
