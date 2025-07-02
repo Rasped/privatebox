@@ -570,95 +570,103 @@ ${semaphore_setup_content}
           echo "Some services failed to start properly"
           exit 1
       fi
+  - path: /usr/local/bin/cloud-init-main.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Main cloud-init execution script
+      # This script is executed with bash to ensure proper error handling
+      
+      # Error handling function
+      write_error_status() {
+        local stage="\$1"
+        local error_msg="\$2"
+        local exit_code="\${3:-1}"
+        
+        echo "INSTALLATION_STATUS=failed" > /etc/privatebox-cloud-init-complete
+        echo "ERROR_STAGE=\${stage}" >> /etc/privatebox-cloud-init-complete
+        echo "ERROR_MESSAGE=\${error_msg}" >> /etc/privatebox-cloud-init-complete
+        echo "ERROR_CODE=\${exit_code}" >> /etc/privatebox-cloud-init-complete
+        echo "FAILED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
+        
+        # Also log to cloud-init output
+        echo "ERROR: Installation failed at stage '\${stage}': \${error_msg} (exit code: \${exit_code})"
+        exit \${exit_code}
+      }
+      
+      # Set error trap - this is bash-specific and now safe to use
+      trap 'write_error_status "unknown" "Unexpected error occurred" \$?' ERR
+      
+      # Start installation tracking
+      echo "INSTALLATION_STATUS=running" > /etc/privatebox-cloud-init-complete
+      echo "STARTED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
+      
+      # Locale configuration
+      echo "Configuring locale..."
+      locale-gen en_US.UTF-8 || write_error_status "locale-gen" "Failed to generate locale" \$?
+      update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8 || write_error_status "update-locale" "Failed to update locale" \$?
+      
+      # Podman configuration
+      echo "Configuring Podman for user ${VM_USERNAME}"
+      loginctl enable-linger ${VM_USERNAME} || write_error_status "loginctl" "Failed to enable user linger" \$?
+      mkdir -p /etc/containers || write_error_status "mkdir-containers" "Failed to create containers directory" \$?
+      echo "unqualified-search-registries = ['docker.io']" > /etc/containers/registries.conf || write_error_status "registries-conf" "Failed to configure registries" \$?
+      su - ${VM_USERNAME} -c "podman system migrate || true"
+      
+      # SSH configuration
+      echo "Configuring SSH server..."
+      systemctl enable ssh || write_error_status "ssh-enable" "Failed to enable SSH service" \$?
+      systemctl start ssh || write_error_status "ssh-start" "Failed to start SSH service" \$?
+      ufw allow 22/tcp || write_error_status "ufw-ssh" "Failed to configure firewall for SSH" \$?
+      
+      # Main setup script
+      echo "Executing post-installation setup script..."
+      export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
+      if ! /usr/local/bin/post-install-setup.sh; then
+        write_error_status "post-install-setup" "Post-installation setup script failed" \$?
+      fi
+      
+      # Install netcat for port checking
+      apt-get update && apt-get install -y netcat-openbsd || write_error_status "apt-netcat" "Failed to install netcat" \$?
+      
+      # Use the wait-for-services script to ensure services are fully operational
+      echo "Waiting for services to be fully operational..."
+      if /usr/local/bin/wait-for-services.sh; then
+        echo "All services verified as operational"
+        SERVICES_OK=true
+      else
+        echo "Warning: Some services may not be fully operational"
+        SERVICES_OK=false
+      fi
+      
+      # Clear trap for final status writing
+      trap - ERR
+      
+      # Create completion marker with detailed status
+      echo "COMPLETED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/privatebox-cloud-init-complete
+      echo "PORTAINER_STATUS=\$(systemctl is-active portainer.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
+      echo "SEMAPHORE_STATUS=\$(systemctl is-active semaphore-ui.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
+      
+      # Check if ports are actually listening
+      if command -v nc >/dev/null 2>&1; then
+        nc -z localhost 9000 2>/dev/null && echo "PORTAINER_PORT=listening" >> /etc/privatebox-cloud-init-complete || echo "PORTAINER_PORT=not-listening" >> /etc/privatebox-cloud-init-complete
+        nc -z localhost 3000 2>/dev/null && echo "SEMAPHORE_PORT=listening" >> /etc/privatebox-cloud-init-complete || echo "SEMAPHORE_PORT=not-listening" >> /etc/privatebox-cloud-init-complete
+      fi
+      
+      # Only mark as completed if all services are running and verified
+      if [ "\$SERVICES_OK" = true ]; then
+        echo "INSTALLATION_STATUS=success" >> /etc/privatebox-cloud-init-complete
+        echo "SERVICES_STATUS=completed" >> /etc/privatebox-cloud-init-complete
+        echo "Cloud-init setup completed successfully with all services running and verified"
+      else
+        echo "INSTALLATION_STATUS=partial" >> /etc/privatebox-cloud-init-complete
+        echo "SERVICES_STATUS=partial" >> /etc/privatebox-cloud-init-complete
+        echo "Cloud-init completed but some services may not be fully operational"
+      fi
 
 runcmd:
-  - |
-    # Error handling function
-    write_error_status() {
-      local stage="\$1"
-      local error_msg="\$2"
-      local exit_code="\${3:-1}"
-      
-      echo "INSTALLATION_STATUS=failed" > /etc/privatebox-cloud-init-complete
-      echo "ERROR_STAGE=\${stage}" >> /etc/privatebox-cloud-init-complete
-      echo "ERROR_MESSAGE=\${error_msg}" >> /etc/privatebox-cloud-init-complete
-      echo "ERROR_CODE=\${exit_code}" >> /etc/privatebox-cloud-init-complete
-      echo "FAILED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
-      
-      # Also log to cloud-init output
-      echo "ERROR: Installation failed at stage '\${stage}': \${error_msg} (exit code: \${exit_code})"
-      exit \${exit_code}
-    }
-    
-    # Set error trap
-    trap 'write_error_status "unknown" "Unexpected error occurred" \$?' ERR
-    
-    # Start installation tracking
-    echo "INSTALLATION_STATUS=running" > /etc/privatebox-cloud-init-complete
-    echo "STARTED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
-    
-    # Locale configuration
-    echo "Configuring locale..."
-    locale-gen en_US.UTF-8 || write_error_status "locale-gen" "Failed to generate locale" \$?
-    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8 || write_error_status "update-locale" "Failed to update locale" \$?
-    
-    # Podman configuration
-    echo "Configuring Podman for user ${VM_USERNAME}"
-    loginctl enable-linger ${VM_USERNAME} || write_error_status "loginctl" "Failed to enable user linger" \$?
-    mkdir -p /etc/containers || write_error_status "mkdir-containers" "Failed to create containers directory" \$?
-    echo "unqualified-search-registries = ['docker.io']" > /etc/containers/registries.conf || write_error_status "registries-conf" "Failed to configure registries" \$?
-    su - ${VM_USERNAME} -c "podman system migrate || true"
-    
-    # SSH configuration
-    echo "Configuring SSH server..."
-    systemctl enable ssh || write_error_status "ssh-enable" "Failed to enable SSH service" \$?
-    systemctl start ssh || write_error_status "ssh-start" "Failed to start SSH service" \$?
-    ufw allow 22/tcp || write_error_status "ufw-ssh" "Failed to configure firewall for SSH" \$?
-    
-    # Main setup script
-    echo "Executing post-installation setup script..."
-    export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
-    if ! /usr/local/bin/post-install-setup.sh; then
-      write_error_status "post-install-setup" "Post-installation setup script failed" \$?
-    fi
-    
-    # Install netcat for port checking
-    apt-get update && apt-get install -y netcat-openbsd || write_error_status "apt-netcat" "Failed to install netcat" \$?
-    
-    # Use the wait-for-services script to ensure services are fully operational
-    echo "Waiting for services to be fully operational..."
-    if /usr/local/bin/wait-for-services.sh; then
-      echo "All services verified as operational"
-      SERVICES_OK=true
-    else
-      echo "Warning: Some services may not be fully operational"
-      SERVICES_OK=false
-    fi
-    
-    # Clear trap for final status writing
-    trap - ERR
-    
-    # Create completion marker with detailed status
-    echo "COMPLETED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/privatebox-cloud-init-complete
-    echo "PORTAINER_STATUS=\$(systemctl is-active portainer.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
-    echo "SEMAPHORE_STATUS=\$(systemctl is-active semaphore-ui.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
-    
-    # Check if ports are actually listening
-    if command -v nc >/dev/null 2>&1; then
-      nc -z localhost 9000 2>/dev/null && echo "PORTAINER_PORT=listening" >> /etc/privatebox-cloud-init-complete || echo "PORTAINER_PORT=not-listening" >> /etc/privatebox-cloud-init-complete
-      nc -z localhost 3000 2>/dev/null && echo "SEMAPHORE_PORT=listening" >> /etc/privatebox-cloud-init-complete || echo "SEMAPHORE_PORT=not-listening" >> /etc/privatebox-cloud-init-complete
-    fi
-    
-    # Only mark as completed if all services are running and verified
-    if [ "\$SERVICES_OK" = true ]; then
-      echo "INSTALLATION_STATUS=success" >> /etc/privatebox-cloud-init-complete
-      echo "SERVICES_STATUS=completed" >> /etc/privatebox-cloud-init-complete
-      echo "Cloud-init setup completed successfully with all services running and verified"
-    else
-      echo "INSTALLATION_STATUS=partial" >> /etc/privatebox-cloud-init-complete
-      echo "SERVICES_STATUS=partial" >> /etc/privatebox-cloud-init-complete
-      echo "Cloud-init completed but some services may not be fully operational"
-    fi
+  # Execute the main cloud-init script with bash
+  - ['/bin/bash', '/usr/local/bin/cloud-init-main.sh']
 EOF
 
     # Ensure proper permissions on the user-data file
