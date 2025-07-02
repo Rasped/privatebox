@@ -71,6 +71,11 @@ log() {
     bootstrap_log "INFO" "$1"
 }
 
+# Success log function (same as info but sometimes used separately)
+log_success() {
+    bootstrap_log "INFO" "$1"
+}
+
 # Error exit function
 error_exit() {
     log_error "$1"

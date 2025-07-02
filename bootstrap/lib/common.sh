@@ -5,8 +5,7 @@
 # This is a refactored version that sources specialized modules
 # to avoid code duplication
 
-# Enable strict error handling
-set -euo pipefail
+# Note: Don't set -euo pipefail here as this is a library that gets sourced
 
 # Determine the lib directory
 COMMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,11 +33,12 @@ source "${COMMON_LIB_DIR}/ssh_manager.sh" 2>/dev/null || true
 source "${COMMON_LIB_DIR}/config_manager.sh" 2>/dev/null || true
 
 # Global variables (for backward compatibility)
-SCRIPT_NAME="${SCRIPT_NAME:-$(basename "${BASH_SOURCE[1]}")}"
-LOG_DIR="${LOG_DIR:-${PRIVATEBOX_LOG_DIR:-/var/log/privatebox}}"
-LOG_FILE="${LOG_FILE:-${LOG_DIR}/${SCRIPT_NAME}.log}"
-LOG_LEVEL="${LOG_LEVEL:-INFO}"
-DRY_RUN="${DRY_RUN:-false}"
+# Only set if not already defined
+[[ -z "${SCRIPT_NAME:-}" ]] && SCRIPT_NAME="$(basename "${BASH_SOURCE[1]}")"
+[[ -z "${LOG_DIR:-}" ]] && LOG_DIR="${PRIVATEBOX_LOG_DIR:-/var/log/privatebox}"
+[[ -z "${LOG_FILE:-}" ]] && LOG_FILE="${LOG_DIR}/${SCRIPT_NAME}.log"
+[[ -z "${LOG_LEVEL:-}" ]] && LOG_LEVEL="INFO"
+[[ -z "${DRY_RUN:-}" ]] && DRY_RUN="false"
 
 # Ensure log directory exists
 mkdir -p "${LOG_DIR}"
@@ -228,7 +228,7 @@ validate_config() {
 
 # Export functions for use in other scripts
 # Note: Many of these are now provided by the specialized modules
-export -f log log_info log_warn log_error log_debug
+export -f log log_info log_warn log_error log_debug log_success
 export -f error_exit
 export -f check_command check_root backup_file
 export -f retry_with_backoff is_dry_run execute
