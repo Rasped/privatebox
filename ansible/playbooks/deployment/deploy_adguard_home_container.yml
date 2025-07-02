@@ -1,0 +1,90 @@
+---
+# Deploy AdGuard Home Container
+# This playbook deploys AdGuard Home as a containerized DNS filtering service
+# configured to use Unbound DNS as its upstream resolver
+
+- name: Deploy AdGuard Home DNS Filtering Service
+  hosts: dns_servers
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # Override defaults to ensure AdGuard forwards to Unbound
+    adguard_upstream_dns:
+      - "127.0.0.1:5353"  # Local Unbound instance
+      - "[::1]:5353"      # Local Unbound instance IPv6
+    
+    # Ensure AdGuard listens on standard DNS port
+    adguard_dns_port: 53
+    
+    # Web interface configuration
+    adguard_web_port: 3000
+    
+  pre_tasks:
+    - name: Ensure Podman is installed
+      ansible.builtin.package:
+        name: podman
+        state: present
+      tags:
+        - prerequisites
+    
+    - name: Check if Unbound is running
+      ansible.builtin.systemd:
+        name: unbound
+        state: started
+      register: unbound_status
+      failed_when: false
+      changed_when: false
+      tags:
+        - prerequisites
+    
+    - name: Verify Unbound is accessible
+      ansible.builtin.wait_for:
+        port: 5353
+        host: 127.0.0.1
+        timeout: 5
+      when: unbound_status.status.ActiveState == "active"
+      tags:
+        - prerequisites
+    
+    - name: Display warning if Unbound is not running
+      ansible.builtin.debug:
+        msg: "WARNING: Unbound DNS is not running. AdGuard will use bootstrap DNS servers instead."
+      when: unbound_status.status.ActiveState != "active"
+      tags:
+        - prerequisites
+  
+  roles:
+    - role: adguard_home
+      tags:
+        - adguard
+  
+  post_tasks:
+    - name: Display AdGuard Home access information
+      ansible.builtin.debug:
+        msg:
+          - "AdGuard Home has been deployed successfully!"
+          - "Web Interface: http://{{ ansible_default_ipv4.address }}:{{ adguard_web_port }}"
+          - "DNS Service: {{ ansible_default_ipv4.address }}:{{ adguard_dns_port }}"
+          - "Default credentials: {{ adguard_admin_username }} / [password in vault]"
+          - ""
+          - "To configure clients to use AdGuard Home:"
+          - "  - Set DNS server to: {{ ansible_default_ipv4.address }}"
+          - "  - Ensure firewall allows DNS traffic on port {{ adguard_dns_port }}"
+      tags:
+        - info
+    
+    - name: Test DNS resolution through AdGuard
+      ansible.builtin.command:
+        cmd: "dig @127.0.0.1 -p {{ adguard_dns_port }} example.com +short"
+      register: adguard_dns_test
+      changed_when: false
+      failed_when: false
+      tags:
+        - test
+    
+    - name: Display DNS test results
+      ansible.builtin.debug:
+        msg: "AdGuard DNS resolution test: {{ 'SUCCESS' if adguard_dns_test.rc == 0 else 'FAILED' }}"
+      tags:
+        - test

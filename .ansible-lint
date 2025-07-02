@@ -1,0 +1,54 @@
+---
+# Ansible-lint configuration
+
+# Paths to exclude
+exclude_paths:
+  - .cache/
+  - .github/
+  - molecule/
+  - documentation/
+  - venv/
+  - .venv/
+
+# Enable specific rules
+enable_list:
+  - args
+  - empty-string-compare
+  - no-log-password
+  - no-same-owner
+  - name-match
+
+# Rules to skip
+skip_list:
+  - yaml[line-length]  # Lines can be long in Ansible
+  - name[casing]  # We use underscores in names
+  - fqcn[action-core]  # Allow short module names for built-in modules
+  - var-naming[no-role-prefix]  # Don't require role prefix for all variables
+
+# Warn on these rules instead of error
+warn_list:
+  - experimental
+  - role-name
+  - risky-file-permissions
+
+# Mock modules to prevent "couldn't resolve module" errors
+mock_modules:
+  - proxmoxer
+  - community.general.proxmox
+  - community.general.proxmox_kvm
+  - containers.podman.podman_container
+  - containers.podman.podman_image
+
+# Mock roles
+mock_roles:
+  - opnsense/provision
+  - opnsense/base
+  - opnsense/firewall
+  - opnsense/vpn
+
+# Ansible-lint project settings
+parseable: true
+quiet: false
+strict: false
+use_default_rules: true
+offline: false

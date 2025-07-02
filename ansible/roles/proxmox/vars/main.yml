@@ -1,0 +1,5 @@
+---
+# Vars file for proxmox role
+# These variables have higher precedence than defaults
+# Generally, role vars should be used sparingly
+# Most variables should be defined in defaults/main.yml or passed in by playbooks

@@ -1,0 +1,87 @@
+---
+# File permissions hardening tasks
+
+- name: Set secure permissions on sensitive files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ secure_file_permissions }}"
+
+- name: Find SUID/SGID files
+  ansible.builtin.shell: |
+    find / -path /proc -prune -o -type f \( -perm -4000 -o -perm -2000 \) -print 2>/dev/null
+  register: suid_sgid_files
+  changed_when: false
+  failed_when: false
+
+- name: Create SUID/SGID files report
+  ansible.builtin.copy:
+    content: |
+      SUID/SGID Files Report
+      Generated: {{ ansible_date_time.iso8601 }}
+      
+      {{ suid_sgid_files.stdout }}
+    dest: /var/log/suid_sgid_files.txt
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Find world-writable files
+  ansible.builtin.shell: |
+    find / -path /proc -prune -o -type f -perm -002 -print 2>/dev/null | grep -v '/tmp\|/var/tmp'
+  register: world_writable_files
+  changed_when: false
+  failed_when: false
+
+- name: Find unowned files
+  ansible.builtin.shell: |
+    find / -path /proc -prune -o -nouser -print 2>/dev/null
+  register: unowned_files
+  changed_when: false
+  failed_when: false
+
+- name: Find ungrouped files
+  ansible.builtin.shell: |
+    find / -path /proc -prune -o -nogroup -print 2>/dev/null
+  register: ungrouped_files
+  changed_when: false
+  failed_when: false
+
+- name: Set secure umask in login.defs
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^UMASK\s+'
+    line: 'UMASK           027'
+    state: present
+
+- name: Set secure umask in profile files
+  ansible.builtin.lineinfile:
+    path: "{{ item }}"
+    regexp: '^umask\s+'
+    line: 'umask 027'
+    state: present
+    create: true
+  loop:
+    - /etc/profile
+    - /etc/bash.bashrc
+
+- name: Restrict cron to authorized users
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+    state: touch
+  loop:
+    - /etc/cron.allow
+    - /etc/at.allow
+
+- name: Remove cron.deny and at.deny
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/cron.deny
+    - /etc/at.deny

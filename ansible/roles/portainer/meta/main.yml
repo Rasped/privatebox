@@ -1,0 +1,28 @@
+---
+# meta file for portainer
+galaxy_info:
+  author: PrivateBox Team
+  description: Deploy and configure Portainer container management platform
+  company: PrivateBox
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  galaxy_tags:
+    - docker
+    - container
+    - management
+    - portainer
+    - ui
+
+dependencies: []
+
+collections:
+  - community.docker

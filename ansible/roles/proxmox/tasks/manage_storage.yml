@@ -1,0 +1,197 @@
+---
+# Tasks for managing storage operations in Proxmox
+
+- name: Validate storage management parameters
+  assert:
+    that:
+      - proxmox_storage_operation is defined
+    fail_msg: "Storage operation must be specified"
+    success_msg: "Storage operation validated: {{ proxmox_storage_operation }}"
+
+# ISO Download and Management
+- name: Download ISO to Proxmox storage
+  block:
+    - name: Check if ISO already exists
+      community.general.proxmox_storage_info:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password }}"
+        api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+        api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+        validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+        storage: "{{ proxmox_iso_storage | default('local') }}"
+        content: iso
+      register: storage_contents
+
+    - name: Download ISO if not present
+      community.general.proxmox_template:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password }}"
+        api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+        api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+        validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+        node: "{{ proxmox_iso_node }}"
+        storage: "{{ proxmox_iso_storage | default('local') }}"
+        content_type: iso
+        template: "{{ proxmox_iso_url }}"
+        timeout: "{{ proxmox_iso_download_timeout | default(600) }}"
+      when: proxmox_iso_filename not in (storage_contents.proxmox_storages_info | map(attribute='volid') | list)
+      register: iso_download_result
+
+    - name: Display ISO download result
+      debug:
+        msg: "ISO {{ proxmox_iso_filename }} downloaded successfully to {{ proxmox_iso_storage }}"
+      when: iso_download_result is changed
+  when: proxmox_storage_operation == "download_iso"
+
+# Disk Operations
+- name: Add disk to VM
+  block:
+    - name: Add new disk to VM
+      community.general.proxmox_disk:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password }}"
+        api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+        api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+        validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+        vmid: "{{ proxmox_vm_vmid }}"
+        disk: "{{ proxmox_disk_interface | default('scsi1') }}"
+        storage: "{{ proxmox_disk_storage | default('local-lvm') }}"
+        size: "{{ proxmox_disk_size }}"
+        format: "{{ proxmox_disk_format | default('raw') }}"
+        cache: "{{ proxmox_disk_cache | default('none') }}"
+        backup: "{{ proxmox_disk_backup | default(true) }}"
+        state: present
+      register: disk_add_result
+
+    - name: Display disk addition result
+      debug:
+        msg: "Disk {{ proxmox_disk_interface }} added to VM {{ proxmox_vm_vmid }} with size {{ proxmox_disk_size }}"
+      when: disk_add_result is changed
+  when: proxmox_storage_operation == "add_disk"
+
+# Resize disk
+- name: Resize VM disk
+  block:
+    - name: Resize disk
+      community.general.proxmox_disk:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password }}"
+        api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+        api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+        validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+        vmid: "{{ proxmox_vm_vmid }}"
+        disk: "{{ proxmox_disk_interface }}"
+        size: "{{ proxmox_disk_new_size }}"
+        state: resized
+      register: disk_resize_result
+
+    - name: Display disk resize result
+      debug:
+        msg: "Disk {{ proxmox_disk_interface }} resized to {{ proxmox_disk_new_size }} for VM {{ proxmox_vm_vmid }}"
+      when: disk_resize_result is changed
+  when: proxmox_storage_operation == "resize_disk"
+
+# Backup Configuration
+- name: Configure VM backup
+  block:
+    - name: Create backup job
+      uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/backup"
+        method: POST
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        body_format: json
+        body:
+          vmid: "{{ proxmox_backup_vmids | join(',') }}"
+          storage: "{{ proxmox_backup_storage }}"
+          mode: "{{ proxmox_backup_mode | default('snapshot') }}"
+          compress: "{{ proxmox_backup_compress | default('zstd') }}"
+          dow: "{{ proxmox_backup_dow | default('mon,tue,wed,thu,fri,sat,sun') }}"
+          starttime: "{{ proxmox_backup_starttime | default('03:00') }}"
+          mailto: "{{ proxmox_backup_mailto | default('') }}"
+          mailnotification: "{{ proxmox_backup_mailnotification | default('failure') }}"
+          enabled: "{{ proxmox_backup_enabled | default(true) }}"
+          prune_backups: "{{ proxmox_backup_prune | default('keep-last=3,keep-weekly=2,keep-monthly=1') }}"
+        validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+      when: proxmox_api_token_id is defined and proxmox_api_token_secret is defined
+      register: backup_job_result
+
+    - name: Display backup job creation result
+      debug:
+        msg: "Backup job created for VMs: {{ proxmox_backup_vmids | join(', ') }}"
+      when: backup_job_result is changed
+  when: proxmox_storage_operation == "configure_backup"
+
+# Create manual backup
+- name: Create manual VM backup
+  block:
+    - name: Create backup
+      community.general.proxmox_kvm:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password }}"
+        api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+        api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+        validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+        node: "{{ proxmox_vm_node }}"
+        vmid: "{{ proxmox_vm_vmid }}"
+        state: current
+        backup: yes
+        backup_options:
+          storage: "{{ proxmox_backup_storage }}"
+          mode: "{{ proxmox_backup_mode | default('snapshot') }}"
+          compress: "{{ proxmox_backup_compress | default('zstd') }}"
+          remove: "{{ proxmox_backup_remove | default(false) }}"
+      register: manual_backup_result
+
+    - name: Display manual backup result
+      debug:
+        msg: "Manual backup created for VM {{ proxmox_vm_vmid }}"
+      when: manual_backup_result is changed
+  when: proxmox_storage_operation == "manual_backup"
+
+# Storage pool information
+- name: Get storage pool information
+  block:
+    - name: Get storage info
+      community.general.proxmox_storage_info:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password }}"
+        api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+        api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+        validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+        storage: "{{ proxmox_storage_name | default(omit) }}"
+      register: storage_info
+
+    - name: Display storage information
+      debug:
+        var: storage_info.proxmox_storages_info
+  when: proxmox_storage_operation == "storage_info"
+
+# Example usage:
+# - name: Download OPNsense ISO
+#   include_role:
+#     name: proxmox
+#   vars:
+#     proxmox_operation: manage_storage
+#     proxmox_storage_operation: download_iso
+#     proxmox_iso_node: pve01
+#     proxmox_iso_url: "https://mirror.example.com/opnsense.iso"
+#     proxmox_iso_filename: "opnsense-23.7.iso"
+#     proxmox_iso_storage: local
+#
+# - name: Add disk to VM
+#   include_role:
+#     name: proxmox
+#   vars:
+#     proxmox_operation: manage_storage
+#     proxmox_storage_operation: add_disk
+#     proxmox_vm_vmid: 100
+#     proxmox_disk_size: 50G
+#     proxmox_disk_interface: scsi1
+#     proxmox_disk_storage: local-lvm

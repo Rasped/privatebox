@@ -1,0 +1,107 @@
+---
+# Playbook to provision OPNsense VM on Proxmox
+
+- name: Provision OPNsense VM
+  hosts: proxmox
+  gather_facts: yes
+  become: yes
+  vars:
+    # Override these variables as needed
+    opnsense_vm_name: "opnsense-fw"
+    opnsense_vm_id: 100
+    opnsense_lan_ip: "192.168.1.1"
+    
+  pre_tasks:
+    - name: Verify Proxmox connectivity
+      ansible.builtin.ping:
+      
+    - name: Check available storage
+      ansible.builtin.command: pvesm status
+      register: storage_status
+      changed_when: false
+      
+    - name: Display storage status
+      ansible.builtin.debug:
+        var: storage_status.stdout_lines
+
+  tasks:
+    - name: Provision OPNsense VM
+      include_role:
+        name: opnsense/provision
+      vars:
+        opnsense_vm:
+          name: "{{ opnsense_vm_name }}"
+          vmid: "{{ opnsense_vm_id }}"
+          cores: "{{ opnsense_cores | default(2) }}"
+          memory: "{{ opnsense_memory | default(2048) }}"
+          disk_size: "{{ opnsense_disk_size | default(20) }}"
+          storage: "{{ opnsense_storage | default('local-lvm') }}"
+          onboot: true
+          start_on_create: true
+
+    - name: Wait for manual OPNsense installation
+      ansible.builtin.pause:
+        prompt: |
+          
+          ========================================
+          MANUAL INSTALLATION REQUIRED
+          ========================================
+          
+          1. Open Proxmox web console
+          2. Connect to VM {{ opnsense_vm_id }} console
+          3. Complete OPNsense installation:
+             - Accept defaults for most options
+             - Set root password (save this!)
+             - Configure interfaces:
+               * WAN: vtnet0 (DHCP)
+               * LAN: vtnet1 ({{ opnsense_lan_ip }}/24)
+          4. After installation, remove ISO from VM
+          5. Reboot the VM
+          
+          Press ENTER when installation is complete...
+
+    - name: Remove ISO from VM
+      ansible.builtin.command:
+        cmd: "qm set {{ opnsense_vm_id }} --ide2 none"
+      
+    - name: Reboot OPNsense VM
+      ansible.builtin.command:
+        cmd: "qm reboot {{ opnsense_vm_id }}"
+      ignore_errors: yes
+
+  post_tasks:
+    - name: Display next steps
+      ansible.builtin.debug:
+        msg:
+          - "OPNsense VM provisioning complete!"
+          - "VM ID: {{ opnsense_vm_id }}"
+          - "LAN IP: {{ opnsense_lan_ip }}"
+          - ""
+          - "Next steps:"
+          - "1. Verify OPNsense is accessible at https://{{ opnsense_lan_ip }}"
+          - "2. Run the base configuration playbook:"
+          - "   ansible-playbook -i inventory configure_opnsense_base.yml"
+
+- name: Configure OPNsense base settings
+  hosts: localhost
+  gather_facts: no
+  vars:
+    opnsense_lan_ip: "{{ hostvars[groups['proxmox'][0]]['opnsense_lan_ip'] | default('192.168.1.1') }}"
+    opnsense_admin_password: "{{ vault_opnsense_admin_password | default('opnsense') }}"
+    
+  tasks:
+    - name: Wait before attempting configuration
+      ansible.builtin.pause:
+        seconds: 60
+        prompt: "Waiting for OPNsense to fully boot..."
+
+    - name: Configure OPNsense base settings
+      include_role:
+        name: opnsense/base
+      vars:
+        opnsense_api:
+          host: "{{ opnsense_lan_ip }}"
+          port: 443
+          username: "root"
+          password: "{{ opnsense_admin_password }}"
+          verify_ssl: false

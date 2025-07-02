@@ -1,0 +1,15 @@
+---
+# Encrypted OPNSense secrets
+# This file should be encrypted with ansible-vault encrypt
+
+# OPNSense admin credentials
+vault_opnsense_admin_password: "OPNSenseAdmin123!"
+
+# OPNSense API credentials
+vault_opnsense_api_password: "OPNSenseAPI123!"
+vault_opnsense_api_key: "your_api_key_here"
+vault_opnsense_api_secret: "your_api_secret_here"
+
+# VPN pre-shared keys
+vault_wireguard_private_key: "your_wireguard_private_key_here"
+vault_ipsec_psk: "your_ipsec_preshared_key_here"

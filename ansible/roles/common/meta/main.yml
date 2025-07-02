@@ -1,3 +1,30 @@
 ---
 # meta file for common
+galaxy_info:
+  author: PrivateBox Project
+  description: Common system configuration for PrivateBox infrastructure
+  company: PrivateBox
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: EL
+      versions:
+        - 8
+        - 9
+  galaxy_tags:
+    - system
+    - security
+    - ssh
+    - hardening
+    - common
+    - baseline
+
 dependencies: []

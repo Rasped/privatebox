@@ -1,0 +1,742 @@
+#!/bin/bash
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source common library
+# shellcheck source=../lib/common.sh
+source "${SCRIPT_DIR}/../lib/common.sh" || {
+    echo "ERROR: Cannot source common library" >&2
+    exit 1
+}
+
+# --- Locale Configuration ---
+# Description: Configures the script's locale to ensure consistent output.
+# ---
+# Configure locales
+export LANGUAGE="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
+export LANG="en_US.UTF-8"
+export LC_CTYPE="en_US.UTF-8"
+
+# Ensure locale is available and generated
+if [ -f /etc/locale.gen ]; then
+    sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+    locale-gen
+fi
+
+# --- Script Configuration ---
+# Description: Loads configuration and defines parameters for the Proxmox VM.
+# ---
+
+# Parse command line arguments
+AUTO_DISCOVER=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --auto-discover)
+            AUTO_DISCOVER=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --auto-discover  Automatically discover network configuration"
+            echo "  --help, -h       Show this help message"
+            echo ""
+            echo "The script creates an Ubuntu VM on Proxmox with PrivateBox services."
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Load configuration file
+CONFIG_FILE="$(dirname "${BASH_SOURCE[0]}")/../config/privatebox.conf"
+
+# Run network discovery if requested or if config doesn't exist
+if [[ "$AUTO_DISCOVER" == "true" ]] || [[ ! -f "$CONFIG_FILE" ]]; then
+    log_info "Running network discovery..."
+    NETWORK_DISCOVERY_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/network-discovery.sh"
+    
+    if [[ -f "$NETWORK_DISCOVERY_SCRIPT" ]]; then
+        # Run network discovery to generate config
+        if ! "$NETWORK_DISCOVERY_SCRIPT" --auto; then
+            log_error "Network discovery failed"
+            exit 1
+        fi
+        log_info "Network discovery completed successfully"
+    else
+        log_error "Network discovery script not found: $NETWORK_DISCOVERY_SCRIPT"
+        exit 1
+    fi
+fi
+
+if [[ -f "$CONFIG_FILE" ]]; then
+    log_info "Loading configuration from: $CONFIG_FILE"
+    # shellcheck source=../config/privatebox.conf
+    source "$CONFIG_FILE"
+else
+    log_warn "Configuration file not found, using defaults: $CONFIG_FILE"
+    # Default configuration values
+    VMID=9000
+    UBUNTU_VERSION="24.04"
+    VM_USERNAME="ubuntuadmin"
+    VM_PASSWORD="Changeme123"
+    VM_MEMORY=4096
+    VM_CORES=2
+    STATIC_IP="192.168.1.22"
+    GATEWAY="192.168.1.3"
+    NET_BRIDGE="vmbr0"
+    STORAGE="local-lvm"
+fi
+
+# Allow environment variables to override config file
+VMID="${VMID:-9000}"
+UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
+VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
+VM_PASSWORD="${VM_PASSWORD:-Changeme123}"
+
+# Fixed values
+OSTYPE="l26" # l26 corresponds to a modern Linux Kernel (5.x +)
+
+# Validate Ubuntu version format
+if [[ ! $UBUNTU_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
+    error_exit "Invalid Ubuntu version format: $UBUNTU_VERSION"
+fi
+
+# Construct URLs based on version
+CLOUD_IMG_URL="${CLOUD_IMG_BASE_URL:-https://cloud-images.ubuntu.com/releases}/${UBUNTU_VERSION}/release/ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
+IMAGE_NAME="ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
+
+# Validate configuration
+if ! validate_config; then
+    error_exit "Configuration validation failed. Please fix the errors above."
+fi
+
+# --- Cloud-Init Configuration ---
+# Description: Sets up the directory for cloud-init snippets.
+# ---
+# Ensure persistent storage location for snippets
+SNIPPETS_DIR="/var/lib/vz/snippets" # Proxmox's default snippet location
+USER_DATA_FILE="${SNIPPETS_DIR}/user-data-${VMID}.yaml"
+mkdir -p "${SNIPPETS_DIR}"
+
+# --- Prerequisite Checks ---
+# Description: Verifies that required commands are available.
+# ---
+log_info "Starting PrivateBox VM creation script"
+
+# Check for required commands using common library
+check_root
+check_command "qm" "proxmox-ve"
+check_command "wget" "wget"
+
+# Verify we're on Proxmox
+if ! is_proxmox; then
+    error_exit "This script must be run on a Proxmox VE host"
+fi
+
+# Validate inputs
+if [[ ! $VMID =~ ^[0-9]+$ ]]; then
+    error_exit "VMID must be a number: $VMID"
+fi
+
+# Validate IP addresses using common library
+if ! validate_ip "$STATIC_IP"; then
+    error_exit "Invalid static IP address format: $STATIC_IP"
+fi
+
+if ! validate_ip "$GATEWAY"; then
+    error_exit "Invalid gateway IP address format: $GATEWAY"
+fi
+
+# --- Function Definitions ---
+
+# --- check_and_remove_vm ---
+# Description: Checks if a VM with the specified VMID already exists. If it does,
+#              the function stops and removes it to prevent conflicts.
+# ---
+# Check for existing VM and remove if found
+function check_and_remove_vm() {
+    log_info "Checking for existing VM with ID ${VMID}..."
+    if qm status "${VMID}" >/dev/null 2>&1; then
+        log_warn "Found existing VM with ID ${VMID}"
+        log_info "Stopping existing VM..."
+        if ! qm stop "${VMID}" >/dev/null 2>&1; then
+            log_warn "Failed to stop VM cleanly, forcing stop..."
+            qm stop "${VMID}" -skiplock >/dev/null 2>&1
+        fi
+        
+        log_info "Waiting for VM to stop..."
+        for i in {1..30}; do
+            if ! qm status "${VMID}" | grep -q running; then
+                break
+            fi
+            sleep 1
+        done
+        
+        log_info "Removing existing VM..."
+        if ! qm destroy "${VMID}" >/dev/null 2>&1; then
+            error_exit "Failed to remove existing VM"
+        fi
+        log_info "Existing VM removed successfully."
+    else
+        log_info "No existing VM found with ID ${VMID}"
+    fi
+}
+
+# --- download_image ---
+# Description: Downloads the Ubuntu cloud image. It includes checks for an
+#              existing, complete image and retries on failure.
+# ---
+# Download Ubuntu cloud image
+function download_image() {
+    echo "Downloading Ubuntu ${UBUNTU_VERSION} cloud image..."
+    
+    # Check if image already exists
+    if [ -f "${IMAGE_NAME}" ]; then
+        echo "Found existing image, checking if it's complete..."
+        if wget --spider -q -show-progress "${CLOUD_IMG_URL}" 2>/dev/null; then
+            REMOTE_SIZE=$(wget --spider "${CLOUD_IMG_URL}" 2>&1 | grep Length | awk '{print $2}')
+            LOCAL_SIZE=$(stat -f%z "${IMAGE_NAME}" 2>/dev/null || stat -c%s "${IMAGE_NAME}")
+            
+            if [ "${REMOTE_SIZE}" = "${LOCAL_SIZE}" ]; then
+                echo "Existing image is complete, skipping download"
+                return 0
+            fi
+        fi
+        echo "Existing image is incomplete or corrupted, re-downloading..."
+        rm -f "${IMAGE_NAME}"
+    fi
+    
+    # Download with progress and retry support
+    for i in {1..3}; do
+        echo "Downloading ${IMAGE_NAME}..."
+        if wget -q --continue -O "${IMAGE_NAME}" "${CLOUD_IMG_URL}"; then
+            echo "Download completed."
+            break
+        fi
+        if [ $i -eq 3 ]; then
+            echo "Error: Failed to download cloud image after 3 attempts"
+            exit 1
+        fi
+        echo "Download failed, retrying in 5 seconds..."
+        sleep 5
+    done
+    
+    if [ ! -f "${IMAGE_NAME}" ]; then
+        echo "Error: Failed to download cloud image"
+        exit 1
+    fi
+    
+    echo "Ubuntu cloud image downloaded successfully."
+}
+
+# --- ensure_ssh_key ---
+# Description: Ensures an SSH key exists for the Proxmox host to access VMs
+# ---
+function ensure_ssh_key() {
+    local SSH_KEY_PATH="/root/.ssh/id_rsa"
+    local SSH_PUB_KEY_PATH="${SSH_KEY_PATH}.pub"
+    
+    # Check if SSH key already exists
+    if [ -f "${SSH_PUB_KEY_PATH}" ]; then
+        log_info "Using existing SSH key: ${SSH_PUB_KEY_PATH}"
+        SSH_PUBLIC_KEY=$(cat "${SSH_PUB_KEY_PATH}")
+    else
+        log_info "Generating new SSH key pair for VM access..."
+        
+        # Create .ssh directory if it doesn't exist
+        mkdir -p /root/.ssh
+        chmod 700 /root/.ssh
+        
+        # Generate SSH key with no passphrase
+        ssh-keygen -t rsa -b 4096 -f "${SSH_KEY_PATH}" -N "" -C "privatebox@$(hostname)" >/dev/null 2>&1
+        
+        if [ $? -eq 0 ]; then
+            log_success "SSH key generated successfully"
+            SSH_PUBLIC_KEY=$(cat "${SSH_PUB_KEY_PATH}")
+        else
+            log_error "Failed to generate SSH key"
+            exit 1
+        fi
+    fi
+    
+    # Export for use in cloud-init
+    export SSH_PUBLIC_KEY
+}
+
+# --- generate_cloud_init ---
+# Description: Creates a cloud-init user-data file. This file configures the new VM,
+#              including user setup, package installation, and running setup scripts.
+# ---
+# Generate cloud-init configuration
+function generate_cloud_init() {
+    echo "Generating cloud-init configuration..."
+    
+    # Ensure SSH key exists
+    ensure_ssh_key
+    
+    cat > "${USER_DATA_FILE}" <<EOF
+#cloud-config
+locale: en_US.UTF-8
+locale_configfile: /etc/default/locale
+users:
+  - name: ${VM_USERNAME}
+    plain_text_passwd: ${VM_PASSWORD}
+    lock_passwd: false
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: [adm, sudo]
+    ssh_authorized_keys:
+      - ${SSH_PUBLIC_KEY}
+
+# Enable SSH and configure it
+ssh_pwauth: True
+ssh:
+  install-server: true
+  allow_pw_auth: true
+  ssh_quiet_keygen: true
+  allow_agent_forwarding: true
+  allow_tcp_forwarding: true
+
+# Ensure the password doesn't expire
+chpasswd:
+  expire: False
+packages:
+  - language-pack-en
+  - podman
+  - buildah
+  - skopeo
+  - openssh-server
+
+# Post-installation setup script
+write_files:
+  - path: /usr/local/lib/common.sh
+    permissions: '0644'
+    content: |
+$(cat "${SCRIPT_DIR}/../lib/common.sh" | sed 's/^/      /') # Indent script for YAML
+  - path: /usr/local/bin/post-install-setup.sh
+    permissions: '0755'
+    content: |
+$(cat "${SCRIPT_DIR}/initial-setup.sh" | sed 's/^/      /') # Indent script for YAML
+  - path: /usr/local/bin/portainer-setup.sh
+    permissions: '0755'
+    content: |
+$(cat "${SCRIPT_DIR}/portainer-setup.sh" | sed 's/^/      /') # Indent script for YAML
+  - path: /usr/local/bin/semaphore-setup.sh
+    permissions: '0755'
+    content: |
+$(cat "${SCRIPT_DIR}/semaphore-setup.sh" | sed 's/^/      /') # Indent script for YAML
+  - path: /etc/privatebox-cloud-init-complete
+    permissions: '0644'
+    content: |
+      # Cloud-init completion marker
+      COMPLETED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  - path: /usr/local/bin/wait-for-services.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Helper script to wait for services to be fully operational
+      
+      wait_for_service() {
+          local service="\$1"
+          local port="\$2"
+          local max_wait="\${3:-120}"  # Default 2 minutes
+          local wait_count=0
+          
+          echo "Waiting for \$service to be active..."
+          while [ \$wait_count -lt \$max_wait ]; do
+              if systemctl is-active "\$service" >/dev/null 2>&1; then
+                  # Service is active, now check if port is listening
+                  if [ -n "\$port" ] && command -v nc >/dev/null 2>&1; then
+                      if nc -z localhost "\$port" 2>/dev/null; then
+                          echo "\$service is active and listening on port \$port"
+                          return 0
+                      fi
+                  else
+                      echo "\$service is active"
+                      return 0
+                  fi
+              fi
+              sleep 1
+              wait_count=\$((wait_count + 1))
+              if [ \$((wait_count % 30)) -eq 0 ]; then
+                  echo "Still waiting for \$service... (\$wait_count seconds elapsed)"
+              fi
+          done
+          
+          echo "Timeout waiting for \$service"
+          return 1
+      }
+      
+      # Wait for both services
+      PORTAINER_OK=false
+      SEMAPHORE_OK=false
+      
+      if wait_for_service "portainer.service" "9000" 180; then
+          PORTAINER_OK=true
+      fi
+      
+      if wait_for_service "semaphore-ui.service" "3000" 180; then
+          SEMAPHORE_OK=true
+      fi
+      
+      # Return success only if both services are OK
+      if [ "\$PORTAINER_OK" = true ] && [ "\$SEMAPHORE_OK" = true ]; then
+          echo "All services are operational!"
+          exit 0
+      else
+          echo "Some services failed to start properly"
+          exit 1
+      fi
+
+runcmd:
+  - locale-gen en_US.UTF-8
+  - update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8
+  - echo "Configuring Podman for user ${VM_USERNAME}"
+  - loginctl enable-linger ${VM_USERNAME}
+  - mkdir -p /etc/containers
+  - echo "unqualified-search-registries = ['docker.io']" > /etc/containers/registries.conf
+  - su - ${VM_USERNAME} -c "podman system migrate || true"
+  - echo "Configuring SSH server..."
+  - systemctl enable ssh
+  - systemctl start ssh
+  - ufw allow 22/tcp
+  - echo "Executing post-installation setup script..."
+  - /usr/local/bin/post-install-setup.sh
+  - |
+    # Install netcat for port checking
+    apt-get update && apt-get install -y netcat-openbsd
+    
+    # Use the wait-for-services script to ensure services are fully operational
+    echo "Waiting for services to be fully operational..."
+    if /usr/local/bin/wait-for-services.sh; then
+      echo "All services verified as operational"
+      SERVICES_OK=true
+    else
+      echo "Warning: Some services may not be fully operational"
+      SERVICES_OK=false
+    fi
+    
+    # Create completion marker with detailed status
+    echo "COMPLETED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/privatebox-cloud-init-complete
+    echo "PORTAINER_STATUS=\$(systemctl is-active portainer.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
+    echo "SEMAPHORE_STATUS=\$(systemctl is-active semaphore-ui.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
+    
+    # Check if ports are actually listening
+    if command -v nc >/dev/null 2>&1; then
+      nc -z localhost 9000 2>/dev/null && echo "PORTAINER_PORT=listening" >> /etc/privatebox-cloud-init-complete || echo "PORTAINER_PORT=not-listening" >> /etc/privatebox-cloud-init-complete
+      nc -z localhost 3000 2>/dev/null && echo "SEMAPHORE_PORT=listening" >> /etc/privatebox-cloud-init-complete || echo "SEMAPHORE_PORT=not-listening" >> /etc/privatebox-cloud-init-complete
+    fi
+    
+    # Only mark as completed if all services are running and verified
+    if [ "\$SERVICES_OK" = true ]; then
+      echo "SERVICES_STATUS=completed" >> /etc/privatebox-cloud-init-complete
+      echo "Cloud-init setup completed successfully with all services running and verified"
+    else
+      echo "SERVICES_STATUS=partial" >> /etc/privatebox-cloud-init-complete
+      echo "Cloud-init completed but some services may not be fully operational"
+    fi
+EOF
+
+    # Ensure proper permissions on the user-data file
+    chmod 644 "${USER_DATA_FILE}"
+    echo "Cloud-init configuration generated successfully."
+}
+
+# --- create_base_vm ---
+# Description: Creates a new VM with the basic configuration (memory, cores, network).
+# ---
+# Create base VM with initial configuration
+function create_base_vm() {
+    echo "Creating VM with ID ${VMID}..."
+    
+    # Create the VM with base configuration
+    if ! qm create "${VMID}" \
+        --name "ubuntu-server-${UBUNTU_VERSION}" \
+        --memory 4096 \
+        --cores 2 \
+        --cpu host \
+        --net0 "virtio,bridge=${NET_BRIDGE}" \
+        --scsihw virtio-scsi-pci \
+        --onboot 1 \
+        --ostype "${OSTYPE}"; then
+        echo "Error: Failed to create VM"
+        exit 1
+    fi
+    
+    echo "Base VM created successfully."
+}
+
+# --- import_and_configure_disk ---
+# Description: Imports the downloaded cloud image as a disk for the VM,
+#              attaches it, and resizes it.
+# ---
+# Import and configure disk storage
+function import_and_configure_disk() {
+    echo "Importing disk image..."
+    local IMPORT_OUTPUT
+    if ! IMPORT_OUTPUT=$(qm importdisk "${VMID}" "${IMAGE_NAME}" "${STORAGE}" 2>&1); then
+        echo "Error: Failed to import disk image"
+        echo "Details: ${IMPORT_OUTPUT}"
+        qm destroy "${VMID}"
+        exit 1
+    fi
+    
+    # Configure the imported disk with retries
+    echo "Configuring imported disk..."
+    local RETRY_COUNT=0
+    while [ $RETRY_COUNT -lt 3 ]; do
+        if qm set "${VMID}" --scsi0 "${STORAGE}:vm-${VMID}-disk-0" 2>/dev/null; then
+            break
+        fi
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        echo "Retry ${RETRY_COUNT}/3: Waiting for disk to be available..."
+        sleep 5
+    done
+    
+    if [ $RETRY_COUNT -eq 3 ]; then
+        echo "Error: Failed to configure imported disk after 3 attempts"
+        qm destroy "${VMID}"
+        exit 1
+    fi
+    
+    # Resize disk to add 5GB
+    echo "Resizing disk to add 5GB..."
+    if ! qm resize "${VMID}" scsi0 +5G; then
+        echo "Error: Failed to resize disk"
+        qm destroy "${VMID}"
+        exit 1
+    fi
+    
+    echo "Disk import and configuration completed successfully."
+}
+
+# --- configure_vm_settings ---
+# Description: Configures advanced VM settings, such as boot order, cloud-init drive,
+#              and network settings.
+# ---
+# Configure VM settings (boot, cloud-init, network)
+function configure_vm_settings() {
+    echo "Configuring VM settings..."
+    
+    local CONFIG_COMMANDS=(
+        "qm set ${VMID} --ide2 ${STORAGE}:cloudinit"
+        "qm set ${VMID} --boot c --bootdisk scsi0"
+        "qm set ${VMID} --serial0 socket --vga serial0"
+        "qm set ${VMID} --ipconfig0 ip=${STATIC_IP}/24,gw=${GATEWAY}"
+        "qm set ${VMID} --cicustom \"user=local:snippets/user-data-${VMID}.yaml\""
+    )
+    
+    for CMD in "${CONFIG_COMMANDS[@]}"; do
+        if ! eval "$CMD"; then
+            echo "Error: Failed to execute: $CMD"
+            qm destroy "${VMID}"
+            exit 1
+        fi
+    done
+    
+    echo "VM settings configured successfully."
+}
+
+# --- start_vm ---
+# Description: Starts the VM and waits for it to enter a 'running' state.
+# ---
+# Start VM and wait for it to be running
+function start_vm() {
+    echo "Starting VM..."
+    if ! qm start "${VMID}"; then
+        echo "Error: Failed to start VM"
+        exit 1
+    fi
+    
+    # Wait for VM to start
+    echo "Waiting for VM to start..."
+    local START_TIMEOUT=30
+    while [ $START_TIMEOUT -gt 0 ]; do
+        if qm status "${VMID}" | grep -q running; then
+            echo "VM ${VMID} started successfully."
+            return 0
+        fi
+        sleep 1
+        START_TIMEOUT=$((START_TIMEOUT - 1))
+    done
+    
+    echo "Warning: VM started but status check timed out"
+}
+
+# Wait for cloud-init to complete
+function wait_for_cloud_init() {
+    log_info "Waiting for cloud-init to complete installation..."
+    log_info "This may take 5-10 minutes depending on internet speed..."
+    
+    local MAX_ATTEMPTS=90  # 15 minutes (10 seconds per attempt)
+    local ATTEMPT=0
+    local SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o LogLevel=ERROR -i /root/.ssh/id_rsa"
+    
+    # First wait for SSH to be available
+    log_info "Waiting for SSH to become available..."
+    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+        if ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "echo 'SSH is ready'" 2>/dev/null; then
+            log_info "SSH is now available"
+            break
+        fi
+        
+        ATTEMPT=$((ATTEMPT + 1))
+        if [ $((ATTEMPT % 6)) -eq 0 ]; then
+            log_info "Still waiting for SSH... (${ATTEMPT}0 seconds elapsed)"
+        fi
+        sleep 10
+    done
+    
+    if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+        log_error "Timeout waiting for SSH to become available"
+        return 1
+    fi
+    
+    # Now wait for cloud-init completion
+    log_info "Waiting for cloud-init to finish configuration..."
+    ATTEMPT=0
+    local SERVICES_READY=false
+    
+    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+        # Check for completion marker
+        if ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "test -f /etc/privatebox-cloud-init-complete" 2>/dev/null; then
+            # Read the completion marker to check service status
+            local MARKER_CONTENT=$(ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "cat /etc/privatebox-cloud-init-complete 2>/dev/null" 2>/dev/null || echo "")
+            
+            if [[ "$MARKER_CONTENT" =~ SERVICES_STATUS=completed ]]; then
+                log_info "Cloud-init has completed with all services running!"
+                log_success "All services are running successfully!"
+                return 0
+            elif [[ "$MARKER_CONTENT" =~ SERVICES_STATUS=partial ]]; then
+                # Services are partially running, continue checking
+                log_info "Cloud-init completed but waiting for all services..."
+                
+                # Check actual service status
+                local portainer_status=$(ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "systemctl is-active portainer.service 2>/dev/null || echo 'not-found'" 2>/dev/null || echo "unreachable")
+                local semaphore_status=$(ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "systemctl is-active semaphore-ui.service 2>/dev/null || echo 'not-found'" 2>/dev/null || echo "unreachable")
+                
+                # Only show detailed status every 30 seconds
+                if [ $((ATTEMPT % 3)) -eq 0 ]; then
+                    log_info "Services status:"
+                    log_info "  - Portainer: $portainer_status"
+                    log_info "  - Semaphore: $semaphore_status"
+                fi
+                
+                # Check if both services are now active
+                if [ "$portainer_status" = "active" ] && [ "$semaphore_status" = "active" ]; then
+                    log_success "All services are now running successfully!"
+                    return 0
+                fi
+            else
+                # Marker exists but doesn't have expected content, still initializing
+                log_info "Cloud-init is still initializing services..."
+            fi
+        fi
+        
+        ATTEMPT=$((ATTEMPT + 1))
+        if [ $((ATTEMPT % 6)) -eq 0 ]; then
+            log_info "Still waiting for cloud-init... (${ATTEMPT}0 seconds elapsed)"
+        fi
+        sleep 10
+    done
+    
+    log_error "Timeout waiting for cloud-init to complete"
+    return 1
+}
+
+# --- create_vm ---
+# Description: Orchestrates the VM creation process by calling the necessary
+#              functions in the correct order.
+# ---
+# Main VM creation orchestration function
+function create_vm() {
+    generate_cloud_init
+    create_base_vm
+    import_and_configure_disk
+    configure_vm_settings
+    start_vm
+    
+    # Optional: wait for cloud-init if requested
+    if [[ "${WAIT_FOR_CLOUD_INIT:-false}" == "true" ]]; then
+        wait_for_cloud_init || {
+            log_error "Cloud-init failed to complete"
+            exit 1
+        }
+    fi
+}
+
+# --- cleanup ---
+# Description: Cleans up resources upon script exit. It removes the downloaded
+#              image and, on failure, destroys the partially created VM.
+# ---
+# Cleanup function
+cleanup() {
+    local EXIT_CODE=$?
+    if [ -f "${IMAGE_NAME}" ]; then
+        echo "Cleaning up downloaded image..."
+        rm -f "${IMAGE_NAME}"
+    fi
+    
+    # Don't clean up user-data file as it needs to persist
+    
+    if [ $EXIT_CODE -ne 0 ]; then
+        echo "Script failed with exit code: ${EXIT_CODE}"
+        if qm status "${VMID}" >/dev/null 2>&1; then
+            echo "Cleaning up failed VM..."
+            qm stop "${VMID}" -skiplock >/dev/null 2>&1
+            qm destroy "${VMID}" >/dev/null 2>&1
+        fi
+    fi
+    exit $EXIT_CODE
+}
+
+# Set up trap for cleanup
+trap cleanup EXIT
+
+# --- Main Execution ---
+# Description: The main entry point of the script. It logs the progress and
+#              calls the main VM creation function.
+# ---
+# Main execution
+{
+    echo "========================================="
+    echo "Starting Ubuntu ${UBUNTU_VERSION} VM Creation"
+    echo "========================================="
+    echo "VM ID: ${VMID}"
+    echo "Storage: ${STORAGE}"
+    echo "Network Bridge: ${NET_BRIDGE}"
+    echo "Static IP: ${STATIC_IP}"
+    echo "Gateway: ${GATEWAY}"
+    echo "----------------------------------------"
+    
+    check_and_remove_vm
+    download_image
+    create_vm
+    
+    echo "========================================="
+    echo "VM Creation Successfully Completed!"
+    echo "----------------------------------------"
+    echo "Access Information:"
+    echo "  Username: ${VM_USERNAME}"
+    echo "  Password: ${VM_PASSWORD}"
+    echo "  IP Address: ${STATIC_IP}"
+    echo "  Gateway: ${GATEWAY}"
+    echo ""
+    echo "You can access the VM console with:"
+    echo "  qm terminal ${VMID}"
+    echo "You can access the VM via SSH with:"
+    echo "  ssh ${VM_USERNAME}@${STATIC_IP}"
+    echo "Podman is installed and ready to use."
+    echo "Portainer is accessible at http://${STATIC_IP}:9000"
+    echo "========================================="
+} 2>&1 | tee vm_creation_${VMID}.log
+
+exit 0

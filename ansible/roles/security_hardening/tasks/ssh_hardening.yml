@@ -1,0 +1,84 @@
+---
+# SSH hardening tasks
+
+- name: Backup original SSH configuration
+  ansible.builtin.copy:
+    src: /etc/ssh/sshd_config
+    dest: /etc/ssh/sshd_config.backup
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0600'
+  changed_when: false
+
+- name: Ensure SSH group exists
+  ansible.builtin.group:
+    name: ssh-users
+    state: present
+    system: true
+
+- name: Configure SSH daemon
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    backup: true
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: restart sshd
+
+- name: Generate SSH host keys if missing
+  ansible.builtin.command: ssh-keygen -A
+  args:
+    creates: /etc/ssh/ssh_host_rsa_key
+
+- name: Set permissions on SSH host keys
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+  with_fileglob:
+    - "/etc/ssh/ssh_host_*_key"
+
+- name: Set permissions on SSH host public keys
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  with_fileglob:
+    - "/etc/ssh/ssh_host_*_key.pub"
+
+- name: Remove weak SSH host keys
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/ssh/ssh_host_dsa_key
+    - /etc/ssh/ssh_host_dsa_key.pub
+    - /etc/ssh/ssh_host_ecdsa_key
+    - /etc/ssh/ssh_host_ecdsa_key.pub
+
+- name: Create SSH banner
+  ansible.builtin.copy:
+    content: |
+      ******************************************************************
+      *                        PRIVATE SYSTEM                          *
+      *                     AUTHORIZED ACCESS ONLY                     *
+      * Unauthorized access to this system is forbidden and will be    *
+      * prosecuted by law. By accessing this system, you consent that  *
+      * your actions may be monitored if unauthorized usage is         *
+      * suspected.                                                      *
+      ******************************************************************
+    dest: /etc/ssh/banner
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure SSH daemon is enabled and started
+  ansible.builtin.systemd:
+    name: sshd
+    state: started
+    enabled: true

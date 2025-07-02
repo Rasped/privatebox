@@ -1,0 +1,19 @@
+---
+# Encrypted Ubuntu server secrets
+# This file should be encrypted with ansible-vault encrypt
+
+# Ubuntu default password
+vault_ubuntu_default_password: "UbuntuDefault123!"
+
+# Service passwords
+vault_adguard_admin_password: "AdGuardAdmin123!"
+vault_portainer_admin_password: "PortainerAdmin123!"
+vault_semaphore_admin_password: "SemaphoreAdmin123!"
+
+# Database passwords
+vault_postgres_root_password: "PostgresRoot123!"
+vault_semaphore_db_password: "SemaphoreDB123!"
+
+# Container registry credentials (if using private registry)
+vault_registry_username: ""
+vault_registry_password: ""

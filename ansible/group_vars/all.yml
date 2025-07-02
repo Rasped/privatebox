@@ -1,0 +1,159 @@
+---
+# Common variables for all hosts
+
+# Project metadata
+project_name: privatebox
+environment: "{{ inventory_dir | basename }}"
+
+# Common timezone
+timezone: UTC
+
+# Common packages to install on all systems
+common_packages:
+  - curl
+  - wget
+  - vim
+  - htop
+  - net-tools
+  - dnsutils
+  - iotop
+  - iftop
+  - tcpdump
+  - git
+
+# SSH configuration
+ssh_port: 22
+ssh_password_authentication: "no"
+ssh_permit_root_login: "no"
+
+# DNS settings
+dns_servers:
+  - 1.1.1.1
+  - 8.8.8.8
+
+# NTP servers
+ntp_servers:
+  - pool.ntp.org
+  - time.cloudflare.com
+
+# Logging configuration
+log_retention_days: 30
+syslog_server: ""  # Set if centralized logging is used
+
+# Update management
+automatic_updates_enabled: false
+update_reboot_enabled: false
+
+# Monitoring
+enable_monitoring: true
+monitoring_interval: 60
+
+# Backup settings
+backup_enabled: false
+backup_retention_days: 7
+backup_location: /var/backups/privatebox
+
+# Security settings
+fail2ban_enabled: true
+firewall_enabled: true
+
+# Network settings
+mtu_size: 1500
+
+# Resource limits
+ulimit_nofile: 65536
+ulimit_nproc: 32768
+
+# Ansible settings
+ansible_python_interpreter: /usr/bin/python3
+
+# Proxmox API Configuration
+proxmox_api_host: "{{ vault_proxmox_api_host }}"
+proxmox_api_user: "{{ vault_proxmox_api_user }}"
+proxmox_api_password: "{{ vault_proxmox_api_password }}"
+proxmox_api_validate_certs: false
+proxmox_node: "{{ vault_proxmox_node | default('pve') }}"
+
+# Network Configuration
+proxmox_networks:
+  management:
+    subnet: "10.10.10.0/24"
+    vlan: 10
+    gateway: "10.10.10.1"
+    description: "Management network for administrative access"
+  services:
+    subnet: "10.10.20.0/24"
+    vlan: 20
+    gateway: "10.10.20.1"
+    description: "Internal services network"
+  privacy:
+    subnet: "10.10.30.0/24"
+    vlan: 30
+    gateway: "10.10.30.1"
+    description: "Privacy services network (AdGuard, Unbound)"
+  dmz:
+    subnet: "10.10.40.0/24"
+    vlan: 40
+    gateway: "10.10.40.1"
+    description: "DMZ for external-facing services"
+
+# Bridge Configuration
+# IMPORTANT: Set proxmox_physical_interface in your inventory or host_vars
+# Example: proxmox_physical_interface: "eno1" or "enp1s0"
+proxmox_bridges:
+  - name: vmbr0
+    ports: "{{ proxmox_physical_interface }}"  # REQUIRED - no default!
+    comment: "WAN Bridge"
+  - name: vmbr1
+    ports: "none"
+    comment: "Internal LAN Bridge (VLAN aware)"
+  - name: vmbr2
+    ports: "none"
+    comment: "Management Bridge"
+
+# VLAN Configuration
+proxmox_vlans:
+  - id: 10
+    name: management
+    device: vmbr1
+    subnet: "{{ proxmox_networks.management.subnet }}"
+  - id: 20
+    name: services
+    device: vmbr1
+    subnet: "{{ proxmox_networks.services.subnet }}"
+  - id: 30
+    name: privacy
+    device: vmbr1
+    subnet: "{{ proxmox_networks.privacy.subnet }}"
+  - id: 40
+    name: dmz
+    device: vmbr1
+    subnet: "{{ proxmox_networks.dmz.subnet }}"
+
+# VLAN-aware bridges
+proxmox_vlan_aware_bridges:
+  - name: vmbr1
+
+# Storage Configuration
+proxmox_default_storage: "local-lvm"
+proxmox_iso_storage: "local"
+proxmox_backup_storage: "local"
+
+# VM/Container defaults
+proxmox_vm_defaults:
+  cores: 2
+  memory: 2048
+  balloon: 0
+  onboot: 1
+  agent: 1
+  cpu: "host"
+
+proxmox_container_defaults:
+  cores: 1
+  memory: 512
+  swap: 512
+  onboot: 1
+  unprivileged: 1
+
+# Container runtime for services
+container_runtime: "podman"  # or "docker"
