@@ -9,20 +9,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source the bootstrap logger for early logging
-source "${SCRIPT_DIR}/lib/bootstrap_logger.sh" 2>/dev/null || {
-    # Fallback if bootstrap_logger.sh is not available
-    log_msg() {
-        local level="$1"
-        shift
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*"
-    }
-    log_info() { log_msg "INFO" "$@"; }
-    log_error() { log_msg "ERROR" "$@" >&2; }
-    log_warn() { log_msg "WARN" "$@" >&2; }
-}
+source "${SCRIPT_DIR}/lib/bootstrap_logger.sh"
 
 # Source constants for shared values
-source "${SCRIPT_DIR}/lib/constants.sh" 2>/dev/null || true
+source "${SCRIPT_DIR}/lib/constants.sh"
 
 # Print banner
 print_banner() {
