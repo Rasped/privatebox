@@ -29,10 +29,18 @@ CLEANUP_AFTER=false
 SKIP_CONFIRMATION=false
 
 # Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m' # No Color
+else
+    # No colors for non-terminal output
+    RED=''
+    GREEN=''
+    YELLOW=''
+    NC=''
+fi
 
 # Functions
 print_banner() {
