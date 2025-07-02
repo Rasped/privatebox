@@ -298,11 +298,77 @@ function generate_cloud_init() {
     # Ensure SSH key exists
     ensure_ssh_key
     
-    # Read the setup scripts into variables to ensure they're available
+    # Read all lib files and setup scripts into variables to ensure they're available
     local initial_setup_content
     local portainer_setup_content
     local semaphore_setup_content
+    local common_lib_content
+    local bootstrap_logger_content
+    local constants_content
+    local validation_content
+    local error_handler_content
+    local service_manager_content
+    local ssh_manager_content
+    local config_manager_content
     
+    # Read lib files
+    if [[ -f "${SCRIPT_DIR}/../lib/common.sh" ]]; then
+        common_lib_content=$(cat "${SCRIPT_DIR}/../lib/common.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find common.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/bootstrap_logger.sh" ]]; then
+        bootstrap_logger_content=$(cat "${SCRIPT_DIR}/../lib/bootstrap_logger.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find bootstrap_logger.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/constants.sh" ]]; then
+        constants_content=$(cat "${SCRIPT_DIR}/../lib/constants.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find constants.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/validation.sh" ]]; then
+        validation_content=$(cat "${SCRIPT_DIR}/../lib/validation.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find validation.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/error_handler.sh" ]]; then
+        error_handler_content=$(cat "${SCRIPT_DIR}/../lib/error_handler.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find error_handler.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/service_manager.sh" ]]; then
+        service_manager_content=$(cat "${SCRIPT_DIR}/../lib/service_manager.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find service_manager.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/ssh_manager.sh" ]]; then
+        ssh_manager_content=$(cat "${SCRIPT_DIR}/../lib/ssh_manager.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find ssh_manager.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/config_manager.sh" ]]; then
+        config_manager_content=$(cat "${SCRIPT_DIR}/../lib/config_manager.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find config_manager.sh"
+        return 1
+    fi
+    
+    # Read setup scripts
     if [[ -f "${SCRIPT_DIR}/initial-setup.sh" ]]; then
         initial_setup_content=$(cat "${SCRIPT_DIR}/initial-setup.sh" | sed 's/^/      /')
     else
@@ -363,10 +429,38 @@ write_files:
     permissions: '0600'
     content: |
       SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
+  - path: /usr/local/lib/bootstrap_logger.sh
+    permissions: '0644'
+    content: |
+${bootstrap_logger_content}
+  - path: /usr/local/lib/constants.sh
+    permissions: '0644'
+    content: |
+${constants_content}
+  - path: /usr/local/lib/validation.sh
+    permissions: '0644'
+    content: |
+${validation_content}
+  - path: /usr/local/lib/error_handler.sh
+    permissions: '0644'
+    content: |
+${error_handler_content}
+  - path: /usr/local/lib/service_manager.sh
+    permissions: '0644'
+    content: |
+${service_manager_content}
+  - path: /usr/local/lib/ssh_manager.sh
+    permissions: '0644'
+    content: |
+${ssh_manager_content}
+  - path: /usr/local/lib/config_manager.sh
+    permissions: '0644'
+    content: |
+${config_manager_content}
   - path: /usr/local/lib/common.sh
     permissions: '0644'
     content: |
-$(cat "${SCRIPT_DIR}/../lib/common.sh" | sed 's/^/      /') # Indent script for YAML
+${common_lib_content}
   - path: /usr/local/bin/post-install-setup.sh
     permissions: '0755'
     content: |
