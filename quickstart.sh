@@ -25,7 +25,7 @@ set -euo pipefail
 REPO_URL="https://github.com/Rasped/privatebox"
 REPO_BRANCH="main"
 TEMP_DIR="/tmp/privatebox-quickstart"
-CLEANUP_AFTER=false
+CLEANUP_AFTER=true  # Default to cleaning up
 SKIP_CONFIRMATION=false
 
 # Color codes for output
@@ -73,7 +73,7 @@ Options:
     --ip <IP>           Set static IP for the VM
     --gateway <IP>      Set gateway IP  
     --no-auto          Skip network auto-discovery
-    --cleanup          Remove downloaded files after installation
+    --no-cleanup       Keep downloaded files after installation
     --branch <branch>  Use specific git branch (default: main)
     --yes, -y          Skip confirmation prompt
     --help             Show this help message
@@ -228,16 +228,23 @@ run_bootstrap() {
 
 cleanup() {
     if [[ "$CLEANUP_AFTER" == "true" ]]; then
-        print_info "Cleaning up temporary files..."
-        rm -rf "$TEMP_DIR"
+        if [[ -d "$TEMP_DIR" ]]; then
+            print_info "Cleaning up temporary files..."
+            rm -rf "$TEMP_DIR"
+        fi
     else
         print_info "Installation files retained at: $TEMP_DIR"
-        print_info "To remove: rm -rf $TEMP_DIR"
+        print_info "To remove manually: rm -rf $TEMP_DIR"
     fi
 }
 
 # Main execution
 main() {
+    # Clean up any existing installation directory first
+    if [[ -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+    fi
+    
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -253,8 +260,8 @@ main() {
                 USE_AUTO_DISCOVERY=false
                 shift
                 ;;
-            --cleanup)
-                CLEANUP_AFTER=true
+            --no-cleanup)
+                CLEANUP_AFTER=false
                 shift
                 ;;
             --branch)
@@ -336,8 +343,20 @@ main() {
     print_info "Check the output above for connection details."
 }
 
-# Trap to ensure cleanup on error
-trap 'print_error "Installation failed. Check $TEMP_DIR/bootstrap/logs for details."' ERR
+# Cleanup function for traps
+cleanup_on_exit() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        print_error "Installation failed with exit code: $exit_code"
+    fi
+    # Always clean up unless --cleanup=false was explicitly set
+    if [[ "$CLEANUP_AFTER" != "false" ]] && [[ -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+    fi
+}
+
+# Trap to ensure cleanup on any exit
+trap cleanup_on_exit EXIT
 
 # Run main function
 main "$@"
