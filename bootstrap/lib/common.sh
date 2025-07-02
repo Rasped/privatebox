@@ -209,15 +209,15 @@ generate_password() {
     local password=""
     
     # Ensure we have required character types
-    # Note: Excluded % $ and \ to avoid systemd unit file parsing issues
+    # Note: Excluded % $ \ and ^ to avoid systemd unit file parsing issues
     local upper=$(tr -dc 'A-Z' < /dev/urandom | head -c 1)
     local lower=$(tr -dc 'a-z' < /dev/urandom | head -c 1)
     local digit=$(tr -dc '0-9' < /dev/urandom | head -c 1)
-    local special=$(tr -dc '!@#^&*()_+=<>?-' < /dev/urandom | head -c 1)
+    local special=$(tr -dc '!@#&*()_+=<>?-' < /dev/urandom | head -c 1)
     
     # Generate remaining characters
     local remaining=$((length - 4))
-    local rest=$(tr -dc 'A-Za-z0-9!@#^&*()_+=<>?-' < /dev/urandom | head -c "${remaining}")
+    local rest=$(tr -dc 'A-Za-z0-9!@#&*()_+=<>?-' < /dev/urandom | head -c "${remaining}")
     
     # Combine and shuffle
     password="${upper}${lower}${digit}${special}${rest}"
