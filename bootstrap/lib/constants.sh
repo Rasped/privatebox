@@ -4,6 +4,10 @@
 # This module contains all shared constants, default values, and configuration
 # parameters used across the bootstrap scripts.
 
+# Prevent multiple sourcing
+[[ -n "${CONSTANTS_SOURCED:-}" ]] && return 0
+readonly CONSTANTS_SOURCED=true
+
 # Script information
 readonly PRIVATEBOX_VERSION="1.0.0"
 readonly SCRIPT_NAME="PrivateBox Bootstrap"

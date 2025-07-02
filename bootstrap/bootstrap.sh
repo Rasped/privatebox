@@ -8,11 +8,8 @@ set -euo pipefail
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source the bootstrap logger for early logging
-source "${SCRIPT_DIR}/lib/bootstrap_logger.sh"
-
-# Source constants for shared values
-source "${SCRIPT_DIR}/lib/constants.sh"
+# Source common library which provides all functions and constants
+source "${SCRIPT_DIR}/lib/common.sh"
 
 # Print banner
 print_banner() {
