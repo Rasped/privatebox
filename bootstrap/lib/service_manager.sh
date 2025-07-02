@@ -4,10 +4,8 @@
 # This module provides functions for managing services, including
 # waiting for services to start, checking health, and monitoring.
 
-# Source required modules
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/bootstrap_logger.sh" 2>/dev/null || true
-source "${SCRIPT_DIR}/constants.sh" 2>/dev/null || true
+# Note: This file expects constants.sh and bootstrap_logger.sh to be sourced before it
+# All dependencies should come from common.sh
 
 # Wait for a service to be ready on a specific port
 wait_for_service() {

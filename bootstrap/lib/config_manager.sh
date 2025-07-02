@@ -4,11 +4,8 @@
 # This module provides functions for loading, validating, and managing
 # configuration files across the PrivateBox bootstrap system.
 
-# Source required modules
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/bootstrap_logger.sh" 2>/dev/null || true
-source "${SCRIPT_DIR}/constants.sh" 2>/dev/null || true
-source "${SCRIPT_DIR}/validation.sh" 2>/dev/null || true
+# Note: This file expects constants.sh, bootstrap_logger.sh, and validation.sh to be sourced before it
+# All dependencies should come from common.sh
 
 # Default configuration paths
 CONFIG_SEARCH_PATHS=(
