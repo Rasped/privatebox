@@ -8,8 +8,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh" || {
     exit 1
 }
 
-# Default Git repository for Sample Ansible project
-SAMPLE_ANSIBLE_GIT_URL="https://github.com/Rasped/privatebox-ansible.git"
+# Default Git repository for PrivateBox project
+PRIVATEBOX_GIT_URL="https://github.com/Rasped/privatebox.git"
 
 # Global variable for automation user password
 AUTOMATION_USER_PASSWORD=""
@@ -779,27 +779,34 @@ handle_missing_semaphore_service() {
 
 # Create automation user and default projects
 create_automation_user_and_projects() {
+    log_info "Setting up automation user and projects..."
+    
+    # Ensure tools are installed and API is ready (do this once for all operations)
+    ensure_semaphore_tools || return 1
+    wait_for_semaphore_api || return 1
+    
+    # Get admin session once for all operations
+    local admin_session=$(get_admin_session "user and project setup")
+    if [ $? -ne 0 ]; then
+        log_error "Failed to get admin session for setup"
+        return 1
+    fi
+    
     # Generate secure password for automation user (assign to global variable)
     AUTOMATION_USER_PASSWORD=$(generate_password)
     
     # Create automation user
-    create_semaphore_user "automation" "$AUTOMATION_USER_PASSWORD" "auto@example.com" "Automation User"
+    create_semaphore_user "automation" "$AUTOMATION_USER_PASSWORD" "auto@example.com" "Automation User" "$admin_session"
     
     # Save automation user credentials to the secure file
     echo "Automation User Password: $AUTOMATION_USER_PASSWORD" >> /root/.credentials/semaphore_credentials.txt
     
-    # Create default infrastructure project and add SSH key
-    create_infrastructure_project_with_ssh_key
-    
-    # Create a sample Ansible project with your Git repository variable and SSH key
-    create_ansible_project_with_ssh_key
+    # Create PrivateBox project and add SSH key
+    create_infrastructure_project_with_ssh_key "$admin_session"
     
     # Deploy SSH public key to Proxmox host if configured
     deploy_ssh_key_to_proxmox
 }
-
-# Default Git repository for Sample Ansible project
-SAMPLE_ANSIBLE_GIT_URL="https://github.com/Rasped/privatebox-ansible.git"
 
 # Ensure required tools are installed
 ensure_semaphore_tools() {
@@ -1008,13 +1015,17 @@ create_semaphore_user() {
     local password="$2"
     local email="$3"
     local full_name="$4"
+    local admin_session="${5:-}"  # Optional parameter
 
-    ensure_semaphore_tools || return 1
-    wait_for_semaphore_api || return 1
-    
-    local admin_session=$(get_admin_session "user creation")
-    if [ $? -ne 0 ]; then
-        return 1
+    # If admin session not provided, get it
+    if [ -z "$admin_session" ]; then
+        ensure_semaphore_tools || return 1
+        wait_for_semaphore_api || return 1
+        
+        admin_session=$(get_admin_session "user creation")
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
     fi
 
     log_info "Creating user: $username..."
@@ -1063,15 +1074,19 @@ create_semaphore_project() {
     local project_name="$1"
     local project_description="$2"
     local git_url="${3:-}"  # Optional parameter for Git repository URL
+    local admin_session="${4:-}"  # Optional parameter for admin session
     
     log_info "Creating Semaphore project: $project_name"
     
-    ensure_semaphore_tools || return 1
-    wait_for_semaphore_api || return 1
-    
-    local admin_session=$(get_admin_session "project creation")
-    if [ $? -ne 0 ]; then
-        return 1
+    # If admin session not provided, get it
+    if [ -z "$admin_session" ]; then
+        ensure_semaphore_tools || return 1
+        wait_for_semaphore_api || return 1
+        
+        admin_session=$(get_admin_session "project creation")
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
     fi
     
     # Create project payload
@@ -1206,15 +1221,19 @@ create_semaphore_ssh_key() {
     local project_id="$1"
     local key_name="$2"
     local key_type="${3:-ssh}"  # Default to ssh type
+    local admin_session="${4:-}"  # Optional parameter
     
     log_info "Creating SSH key '$key_name' for project ID $project_id..."
     
-    ensure_semaphore_tools || return 1
-    wait_for_semaphore_api || return 1
-    
-    local admin_session=$(get_admin_session "SSH key creation")
-    if [ $? -ne 0 ]; then
-        return 1
+    # If admin session not provided, get it
+    if [ -z "$admin_session" ]; then
+        ensure_semaphore_tools || return 1
+        wait_for_semaphore_api || return 1
+        
+        admin_session=$(get_admin_session "SSH key creation")
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
     fi
     
     # Read the private key content
@@ -1284,84 +1303,36 @@ create_semaphore_ssh_key() {
     fi
 }
 
-# Create infrastructure project with SSH key
+# Create PrivateBox project with SSH key
 create_infrastructure_project_with_ssh_key() {
-    log_info "Creating Infrastructure project with SSH key..."
+    local admin_session="${1:-}"  # Optional parameter
+    
+    log_info "Creating PrivateBox project with SSH key..."
     
     # Create the project first
-    local project_name="Infrastructure"
-    local project_description="Core infrastructure management project"
+    local project_name="PrivateBox"
+    local project_description="PrivateBox infrastructure automation"
     
-    ensure_semaphore_tools || return 1
-    wait_for_semaphore_api || return 1
-    
-    local admin_session=$(get_admin_session "infrastructure project creation")
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
-    
-    # Create project payload
-    local project_payload=$(jq -n \
-        --arg name "$project_name" \
-        --arg desc "$project_description" \
-        '{name: $name, description: $desc}')
-    
-    # Create project
-    local api_result=$(make_api_request "POST" "http://localhost:3000/api/projects" "$project_payload" "$admin_session" "Creating infrastructure project")
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
-    
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
-    
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
-        local project_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
-        if [ -n "$project_id" ] && [ "$project_id" != "null" ]; then
-            log_info "Infrastructure project created with ID: $project_id"
-            
-            # Create default inventory
-            create_default_inventory "$project_name" "$project_id" "$admin_session"
-            
-            # Create SSH key for this project
-            create_semaphore_ssh_key "$project_id" "Proxmox-SSH-Key" "ssh"
-            
-            return 0
-        else
-            log_info "WARNING: Infrastructure project created but couldn't extract project ID"
+    # If admin session not provided, get it
+    if [ -z "$admin_session" ]; then
+        ensure_semaphore_tools || return 1
+        wait_for_semaphore_api || return 1
+        
+        admin_session=$(get_admin_session "privatebox project creation")
+        if [ $? -ne 0 ]; then
             return 1
         fi
-    else
-        log_info "ERROR: Failed to create Infrastructure project. Status: $status_code"
-        return 1
-    fi
-}
-
-# Create Ansible project with SSH key
-create_ansible_project_with_ssh_key() {
-    log_info "Creating Sample Ansible project with SSH key..."
-    
-    # Create the project first
-    local project_name="Sample Ansible"
-    local project_description="Sample Ansible playbooks project"
-    
-    ensure_semaphore_tools || return 1
-    wait_for_semaphore_api || return 1
-    
-    local admin_session=$(get_admin_session "ansible project creation")
-    if [ $? -ne 0 ]; then
-        return 1
     fi
     
     # Create project payload with Git repository
     local project_payload=$(jq -n \
         --arg name "$project_name" \
         --arg desc "$project_description" \
-        --arg git "$SAMPLE_ANSIBLE_GIT_URL" \
+        --arg git "$PRIVATEBOX_GIT_URL" \
         '{name: $name, description: $desc, git_url: $git, git_branch: "main"}')
     
     # Create project
-    local api_result=$(make_api_request "POST" "http://localhost:3000/api/projects" "$project_payload" "$admin_session" "Creating ansible project")
+    local api_result=$(make_api_request "POST" "http://localhost:3000/api/projects" "$project_payload" "$admin_session" "Creating privatebox project")
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -1372,24 +1343,25 @@ create_ansible_project_with_ssh_key() {
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local project_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$project_id" ] && [ "$project_id" != "null" ]; then
-            log_info "Sample Ansible project created with ID: $project_id"
+            log_info "PrivateBox project created with ID: $project_id"
             
             # Create default inventory
             create_default_inventory "$project_name" "$project_id" "$admin_session"
             
             # Create SSH key for this project
-            create_semaphore_ssh_key "$project_id" "Ansible-SSH-Key" "ssh"
+            create_semaphore_ssh_key "$project_id" "Proxmox-SSH-Key" "ssh" "$admin_session"
             
             return 0
         else
-            log_info "WARNING: Sample Ansible project created but couldn't extract project ID"
+            log_info "WARNING: PrivateBox project created but couldn't extract project ID"
             return 1
         fi
     else
-        log_info "ERROR: Failed to create Sample Ansible project. Status: $status_code"
+        log_info "ERROR: Failed to create PrivateBox project. Status: $status_code"
         return 1
     fi
 }
+
 
 # Function to deploy SSH public key to Proxmox host
 deploy_ssh_key_to_proxmox() {
