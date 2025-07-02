@@ -119,14 +119,12 @@ main() {
             echo "  Portainer: http://${STATIC_IP}:9000"
             echo "  Semaphore: http://${STATIC_IP}:3000"
             echo ""
-            echo "Service Credentials:"
+            echo "Semaphore Credentials:"
             echo "  Semaphore Admin: admin"
             
-            # Try to retrieve Semaphore password from VM
-            SEMAPHORE_PASS=$(sshpass -p "${VM_PASSWORD}" ssh -o StrictHostKeyChecking=no ${VM_USERNAME}@${STATIC_IP} "sudo grep 'Admin Password:' /root/.credentials/semaphore_credentials.txt 2>/dev/null | cut -d' ' -f3" 2>/dev/null)
-            
-            if [[ -n "${SEMAPHORE_PASS}" ]]; then
-                echo "  Semaphore Password: ${SEMAPHORE_PASS}"
+            # Try to get Semaphore password from config
+            if [[ -n "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
+                echo "  Semaphore Password: ${SEMAPHORE_ADMIN_PASSWORD}"
             else
                 echo "  Semaphore Password: (see /root/.credentials/semaphore_credentials.txt on VM)"
             fi

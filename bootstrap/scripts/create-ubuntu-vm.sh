@@ -101,6 +101,18 @@ UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
 VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
 VM_PASSWORD="${VM_PASSWORD:-Changeme123}"
 
+# Generate Semaphore admin password if not already set
+if [[ -z "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
+    SEMAPHORE_ADMIN_PASSWORD=$(generate_password)
+    log_info "Generated Semaphore admin password"
+    
+    # Save to config file if it exists
+    if [[ -f "$CONFIG_FILE" ]]; then
+        echo "SEMAPHORE_ADMIN_PASSWORD=\"${SEMAPHORE_ADMIN_PASSWORD}\"" >> "$CONFIG_FILE"
+        log_info "Saved Semaphore password to config file"
+    fi
+fi
+
 # Fixed values
 OSTYPE="l26" # l26 corresponds to a modern Linux Kernel (5.x +)
 
@@ -317,6 +329,10 @@ packages:
 
 # Post-installation setup script
 write_files:
+  - path: /etc/privatebox-semaphore-password
+    permissions: '0600'
+    content: |
+      SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
   - path: /usr/local/lib/common.sh
     permissions: '0644'
     content: |
@@ -409,6 +425,7 @@ runcmd:
   - systemctl start ssh
   - ufw allow 22/tcp
   - echo "Executing post-installation setup script..."
+  - export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
   - /usr/local/bin/post-install-setup.sh
   - |
     # Install netcat for port checking
