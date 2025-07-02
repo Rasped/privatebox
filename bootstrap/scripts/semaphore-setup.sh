@@ -89,10 +89,22 @@ display_final_status() {
 generate_and_save_credentials() {
     log_info "Generating secure credentials..."
 
+    # Check if Semaphore admin password was provided (from cloud-init)
+    if [[ -f /etc/privatebox-semaphore-password ]]; then
+        source /etc/privatebox-semaphore-password
+        log_info "Using provided Semaphore admin password"
+    fi
+
     # Generate secure random passwords with mixed character types
     MYSQL_ROOT_PASSWORD=$(generate_password)
     MYSQL_SEMAPHORE_PASSWORD=$(generate_password)
-    SEMAPHORE_ADMIN_PASSWORD=$(generate_password)
+    
+    # Generate password if not provided
+    if [[ -z "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
+        SEMAPHORE_ADMIN_PASSWORD=$(generate_password)
+        log_info "Generated new Semaphore admin password"
+    fi
+    
     # Generate strong encryption key as per Semaphore documentation
     SEMAPHORE_ACCESS_KEY_ENCRYPTION_KEY=$(head -c32 /dev/urandom | base64)
 
