@@ -16,8 +16,31 @@ else
     log_info() { log "INFO: $*"; }
     log_warn() { log "WARN: $*"; }
     log_error() { log "ERROR: $*"; }
-    error_exit() { log_error "$1"; exit "${2:-1}"; }
+    error_exit() { 
+        log_error "$1"
+        # Write error to status file for Proxmox to see
+        if [[ -w /etc/privatebox-cloud-init-complete ]]; then
+            echo "POST_INSTALL_ERROR=$1" >> /etc/privatebox-cloud-init-complete
+            echo "POST_INSTALL_EXIT_CODE=${2:-1}" >> /etc/privatebox-cloud-init-complete
+        fi
+        exit "${2:-1}"
+    }
 fi
+
+# Error handler for the script
+handle_error() {
+    local exit_code=$?
+    local line_number=$1
+    log_error "Script failed at line $line_number with exit code $exit_code"
+    if [[ -w /etc/privatebox-cloud-init-complete ]]; then
+        echo "POST_INSTALL_ERROR=Script failed at line $line_number" >> /etc/privatebox-cloud-init-complete
+        echo "POST_INSTALL_EXIT_CODE=$exit_code" >> /etc/privatebox-cloud-init-complete
+    fi
+    exit $exit_code
+}
+
+# Set error trap
+trap 'handle_error ${LINENO}' ERR
 
 # Source setup scripts
 source /usr/local/bin/portainer-setup.sh
