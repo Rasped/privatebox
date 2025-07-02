@@ -21,7 +21,7 @@
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_NAME="deploy-to-server"
-REMOTE_DEPLOY_DIR="/tmp/privatebox-bootstrap-$(date +%Y%m%d-%H%M%S)"
+REMOTE_DEPLOY_DIR="/tmp/privatebox-bootstrap"
 DEFAULT_USERNAME="root"
 
 # Set log directory for non-root users
@@ -171,8 +171,8 @@ validate_ssh_connection() {
 deploy_files() {
     log_info "Deploying bootstrap files to ${SERVER}:${REMOTE_DEPLOY_DIR}..."
     
-    # Create remote directory
-    ssh "${USERNAME}@${SERVER}" "mkdir -p ${REMOTE_DEPLOY_DIR}" || {
+    # Clean up any existing directory and create new one
+    ssh "${USERNAME}@${SERVER}" "rm -rf ${REMOTE_DEPLOY_DIR} && mkdir -p ${REMOTE_DEPLOY_DIR}" || {
         log_error "Failed to create remote directory"
         return ${EXIT_SSH_FAILED}
     }
