@@ -38,6 +38,9 @@ export LC_ALL="en_US.UTF-8"
 export LANG="en_US.UTF-8"
 export LC_CTYPE="en_US.UTF-8"
 
+# Define image cache directory
+IMAGE_CACHE_DIR="/var/cache/privatebox/images"
+
 # Ensure locale is available and generated
 if [ -f /etc/locale.gen ]; then
     sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
@@ -231,26 +234,37 @@ function check_and_remove_vm() {
 function download_image() {
     echo "Downloading Ubuntu ${UBUNTU_VERSION} cloud image..."
     
-    # Check if image already exists
-    if [ -f "${IMAGE_NAME}" ]; then
-        echo "Found existing image, checking if it's complete..."
+    # Create cache directory if it doesn't exist
+    if [[ ! -d "${IMAGE_CACHE_DIR}" ]]; then
+        log_info "Creating image cache directory: ${IMAGE_CACHE_DIR}"
+        mkdir -p "${IMAGE_CACHE_DIR}" || check_result $? "Failed to create cache directory"
+    fi
+    
+    # Define cached image path
+    local cached_image="${IMAGE_CACHE_DIR}/${IMAGE_NAME}"
+    
+    # Check if image already exists in cache
+    if [ -f "${cached_image}" ]; then
+        echo "Found existing image in cache, checking if it's complete..."
         if wget --spider -q -show-progress "${CLOUD_IMG_URL}" 2>/dev/null; then
             REMOTE_SIZE=$(wget --spider "${CLOUD_IMG_URL}" 2>&1 | grep Length | awk '{print $2}')
-            LOCAL_SIZE=$(stat -f%z "${IMAGE_NAME}" 2>/dev/null || stat -c%s "${IMAGE_NAME}")
+            LOCAL_SIZE=$(stat -f%z "${cached_image}" 2>/dev/null || stat -c%s "${cached_image}")
             
             if [ "${REMOTE_SIZE}" = "${LOCAL_SIZE}" ]; then
-                echo "Existing image is complete, skipping download"
+                echo "Cached image is complete, using cached version"
+                # Create a symlink or copy to current directory for VM creation
+                ln -sf "${cached_image}" "${IMAGE_NAME}" || cp "${cached_image}" "${IMAGE_NAME}"
                 return 0
             fi
         fi
-        echo "Existing image is incomplete or corrupted, re-downloading..."
-        rm -f "${IMAGE_NAME}"
+        echo "Cached image is incomplete or corrupted, re-downloading..."
+        rm -f "${cached_image}"
     fi
     
     # Download with progress and retry support
     for i in {1..3}; do
-        echo "Downloading ${IMAGE_NAME}..."
-        if wget -q --continue -O "${IMAGE_NAME}" "${CLOUD_IMG_URL}"; then
+        echo "Downloading ${IMAGE_NAME} to cache..."
+        if wget -q --continue -O "${cached_image}" "${CLOUD_IMG_URL}"; then
             echo "Download completed."
             break
         fi
@@ -262,12 +276,15 @@ function download_image() {
         sleep 5
     done
     
-    if [ ! -f "${IMAGE_NAME}" ]; then
+    if [ ! -f "${cached_image}" ]; then
         echo "Error: Failed to download cloud image"
         exit 1
     fi
     
-    echo "Ubuntu cloud image downloaded successfully."
+    echo "Ubuntu cloud image downloaded successfully to cache."
+    
+    # Create a symlink or copy to current directory for VM creation
+    ln -sf "${cached_image}" "${IMAGE_NAME}" || cp "${cached_image}" "${IMAGE_NAME}"
 }
 
 # --- ensure_ssh_key ---
@@ -921,10 +938,15 @@ cleanup_vm_on_failure() {
 
 # Image cleanup function
 cleanup_downloaded_image() {
-    if [[ -f "${IMAGE_NAME:-}" ]]; then
-        log_info "Cleaning up downloaded image..."
-        rm -f "${IMAGE_NAME}" || true
+    # Only clean up the local symlink/copy, not the cached image
+    if [[ -L "${IMAGE_NAME:-}" ]] || [[ -f "${IMAGE_NAME:-}" ]]; then
+        # Check if it's a symlink or a regular file in current directory
+        if [[ "$(dirname "${IMAGE_NAME}")" == "." ]] || [[ "$(dirname "${IMAGE_NAME}")" == "$(pwd)" ]]; then
+            log_info "Cleaning up local image reference..."
+            rm -f "${IMAGE_NAME}" || true
+        fi
     fi
+    # The cached image in IMAGE_CACHE_DIR is preserved for future use
 }
 
 # Register cleanup functions
