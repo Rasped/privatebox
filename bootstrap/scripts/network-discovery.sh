@@ -35,8 +35,11 @@
 # 3. Checks for DHCP server conflicts
 # 4. Validates network connectivity
 # 5. Generates network configuration
-
-set -euo pipefail
+#
+# Exit codes:
+#   0 - Success
+#   1 - General error
+#   2 - Missing dependencies
 
 # Source common library for logging
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,6 +49,9 @@ source "${SCRIPT_DIR}/../lib/common.sh" || {
     exit 1
 }
 
+# Setup standardized error handling
+setup_error_handling
+
 # Source validation library
 if [[ -f "${SCRIPT_DIR}/../lib/validation.sh" ]]; then
     # shellcheck source=../lib/validation.sh
@@ -53,6 +59,11 @@ if [[ -f "${SCRIPT_DIR}/../lib/validation.sh" ]]; then
 else
     log_warn "Validation library not found, using basic validation"
 fi
+
+# Check required commands
+require_command "ip" "iproute2 package is required"
+require_command "ping" "ping command is required"
+require_command "awk" "awk is required for text processing"
 
 # =============================================================================
 # CONFIGURATION
@@ -129,7 +140,7 @@ detect_interfaces() {
     
     if [[ ${#interfaces[@]} -eq 0 ]]; then
         log_error "No suitable network interfaces found" >&2
-        return 1
+        return ${EXIT_ERROR}
     fi
     
     # Return best interface (first non-virtual with IP)
@@ -167,7 +178,7 @@ get_network_info() {
     
     if [[ -z "$NETWORK_BASE" ]]; then
         log_error "Could not determine network base for $interface"
-        return 1
+        return ${EXIT_ERROR}
     fi
 }
 
@@ -342,7 +353,7 @@ validate_network_config() {
 save_network_config() {
     log_info "Saving network configuration to $CONFIG_FILE"
     
-    mkdir -p "$(dirname "$CONFIG_FILE")"
+    mkdir -p "$(dirname "$CONFIG_FILE")" || check_result $? "Failed to create config directory"
     
     # Get current host IP
     local current_ip=$(ip addr show "$NETWORK_INTERFACE" | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1 | head -1)
@@ -474,10 +485,7 @@ parse_arguments() {
                 ;;
             --server-ip)
                 if command -v validate_input >/dev/null 2>&1; then
-                    if ! validate_input "$2" "ip"; then
-                        echo "Error: Invalid IP address: $2" >&2
-                        exit 1
-                    fi
+                    validate_input "$2" "ip" || check_result $? "Invalid IP address: $2"
                 fi
                 SERVER_IP="$2"
                 shift 2
@@ -489,17 +497,17 @@ parse_arguments() {
             --network-base)
                 # Validate network base format (e.g., 192.168.1)
                 if [[ ! "$2" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-                    echo "Error: Invalid network base format: $2" >&2
-                    echo "Expected format: xxx.xxx.xxx (e.g., 192.168.1)" >&2
-                    exit 1
+                    log_error "Invalid network base format: $2"
+                    log_error "Expected format: xxx.xxx.xxx (e.g., 192.168.1)"
+                    exit ${EXIT_ERROR}
                 fi
                 NETWORK_BASE="$2"
                 shift 2
                 ;;
             *)
-                echo "Unknown argument: $1" >&2
-                echo "Use --help for usage information" >&2
-                exit 1
+                log_error "Unknown argument: $1"
+                log_error "Use --help for usage information"
+                exit ${EXIT_ERROR}
                 ;;
         esac
     done
@@ -545,7 +553,7 @@ EOF
 main() {
     parse_arguments "$@"
     
-    mkdir -p "$WORK_DIR"
+    mkdir -p "$WORK_DIR" || check_result $? "Failed to create work directory"
     
     log_info "Starting network discovery"
     log_debug "Auto mode: $AUTO_MODE"
@@ -553,22 +561,22 @@ main() {
     log_debug "Dry run: $DRY_RUN"
     
     if [[ "$AUTO_MODE" == "true" ]]; then
-        auto_discover || exit 1
+        auto_discover || check_result $? "Auto-discovery failed"
     elif [[ "$VALIDATE_MODE" == "true" ]]; then
         if [[ -z "$SERVER_IP" ]] || [[ -z "$NETWORK_INTERFACE" ]]; then
             log_error "Validation mode requires --server-ip and --interface"
-            exit 1
+            exit ${EXIT_ERROR}
         fi
         
-        validate_network_config "$SERVER_IP" "$NETWORK_INTERFACE" || exit 1
+        validate_network_config "$SERVER_IP" "$NETWORK_INTERFACE" || check_result $? "Network validation failed"
         
         # Get network info and save config
         local current_ip=$(ip addr show "$NETWORK_INTERFACE" | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1 | head -1)
-        get_network_info "$NETWORK_INTERFACE" "$current_ip" || exit 1
+        get_network_info "$NETWORK_INTERFACE" "$current_ip" || check_result $? "Failed to get network information"
         save_network_config
     else
         log_error "Must specify either --auto or --validate mode"
-        exit 1
+        exit ${EXIT_ERROR}
     fi
     
     log_success "Network discovery completed successfully"
@@ -577,4 +585,5 @@ main() {
 # Execute main function if script is run directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
+    exit $?
 fi

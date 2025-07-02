@@ -1,8 +1,16 @@
 #!/bin/bash
+# Create Ubuntu VM Script
+# Creates an Ubuntu VM on Proxmox with PrivateBox services pre-installed
+#
+# Exit codes:
+#   0 - Success
+#   1 - General error
+#   2 - Missing dependencies
+#   3 - Invalid configuration
+#   4 - VM operations failed
 
-# Get script directory and save it
-CREATE_VM_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_DIR="${CREATE_VM_SCRIPT_DIR}"
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source common library
 # shellcheck source=../lib/common.sh
@@ -11,8 +19,15 @@ source "${SCRIPT_DIR}/../lib/common.sh" || {
     exit 1
 }
 
-# Restore script directory after sourcing
-SCRIPT_DIR="${CREATE_VM_SCRIPT_DIR}"
+# Setup standardized error handling
+setup_error_handling
+
+# Check required commands
+require_command "qm" "qm command is required (Proxmox VE)"
+require_command "wget" "wget is required for downloading images"
+require_command "pvesm" "pvesm command is required (Proxmox storage)"
+require_command "cat" "cat command is required"
+require_command "sed" "sed is required for text processing"
 
 # --- Locale Configuration ---
 # Description: Configures the script's locale to ensure consistent output.
@@ -54,7 +69,7 @@ while [[ $# -gt 0 ]]; do
         *)
             log_error "Unknown option: $1"
             echo "Use --help for usage information"
-            exit 1
+            exit ${EXIT_ERROR}
             ;;
     esac
 done
@@ -69,14 +84,11 @@ if [[ "$AUTO_DISCOVER" == "true" ]] || [[ ! -f "$CONFIG_FILE" ]]; then
     
     if [[ -f "$NETWORK_DISCOVERY_SCRIPT" ]]; then
         # Run network discovery to generate config
-        if ! "$NETWORK_DISCOVERY_SCRIPT" --auto; then
-            log_error "Network discovery failed"
-            exit 1
-        fi
+        "$NETWORK_DISCOVERY_SCRIPT" --auto || check_result $? "Network discovery failed"
         log_info "Network discovery completed successfully"
     else
         log_error "Network discovery script not found: $NETWORK_DISCOVERY_SCRIPT"
-        exit 1
+        exit ${EXIT_ERROR}
     fi
 fi
 
@@ -122,7 +134,8 @@ OSTYPE="l26" # l26 corresponds to a modern Linux Kernel (5.x +)
 
 # Validate Ubuntu version format
 if [[ ! $UBUNTU_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
-    error_exit "Invalid Ubuntu version format: $UBUNTU_VERSION"
+    log_error "Invalid Ubuntu version format: $UBUNTU_VERSION"
+    exit ${EXIT_INVALID_CONFIG:-3}
 fi
 
 # Construct URLs based on version
@@ -131,7 +144,8 @@ IMAGE_NAME="ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
 
 # Validate configuration
 if ! validate_config; then
-    error_exit "Configuration validation failed. Please fix the errors above."
+    log_error "Configuration validation failed. Please fix the errors above."
+    exit ${EXIT_INVALID_CONFIG:-3}
 fi
 
 # --- Cloud-Init Configuration ---
@@ -140,35 +154,37 @@ fi
 # Ensure persistent storage location for snippets
 SNIPPETS_DIR="/var/lib/vz/snippets" # Proxmox's default snippet location
 USER_DATA_FILE="${SNIPPETS_DIR}/user-data-${VMID}.yaml"
-mkdir -p "${SNIPPETS_DIR}"
+mkdir -p "${SNIPPETS_DIR}" || check_result $? "Failed to create snippets directory"
 
 # --- Prerequisite Checks ---
 # Description: Verifies that required commands are available.
 # ---
 log_info "Starting PrivateBox VM creation script"
 
-# Check for required commands using common library
+# Check for root permissions
 check_root
-check_command "qm" "proxmox-ve"
-check_command "wget" "wget"
 
 # Verify we're on Proxmox
 if ! is_proxmox; then
-    error_exit "This script must be run on a Proxmox VE host"
+    log_error "This script must be run on a Proxmox VE host"
+    exit ${EXIT_NOT_PROXMOX}
 fi
 
 # Validate inputs
 if [[ ! $VMID =~ ^[0-9]+$ ]]; then
-    error_exit "VMID must be a number: $VMID"
+    log_error "VMID must be a number: $VMID"
+    exit ${EXIT_INVALID_CONFIG:-3}
 fi
 
 # Validate IP addresses using common library
 if ! validate_ip "$STATIC_IP"; then
-    error_exit "Invalid static IP address format: $STATIC_IP"
+    log_error "Invalid static IP address format: $STATIC_IP"
+    exit ${EXIT_INVALID_CONFIG:-3}
 fi
 
 if ! validate_ip "$GATEWAY"; then
-    error_exit "Invalid gateway IP address format: $GATEWAY"
+    log_error "Invalid gateway IP address format: $GATEWAY"
+    exit ${EXIT_INVALID_CONFIG:-3}
 fi
 
 # --- Function Definitions ---
@@ -198,7 +214,8 @@ function check_and_remove_vm() {
         
         log_info "Removing existing VM..."
         if ! qm destroy "${VMID}" >/dev/null 2>&1; then
-            error_exit "Failed to remove existing VM"
+            log_error "Failed to remove existing VM"
+            exit ${EXIT_VM_OPERATION_FAILED:-4}
         fi
         log_info "Existing VM removed successfully."
     else
@@ -887,29 +904,31 @@ function create_vm() {
 # Description: Cleans up resources upon script exit. It removes the downloaded
 #              image and, on failure, destroys the partially created VM.
 # ---
-# Cleanup function
-cleanup() {
-    local EXIT_CODE=$?
-    if [ -f "${IMAGE_NAME}" ]; then
-        echo "Cleaning up downloaded image..."
-        rm -f "${IMAGE_NAME}"
-    fi
+# VM cleanup function
+cleanup_vm_on_failure() {
+    local exit_code=$?
     
-    # Don't clean up user-data file as it needs to persist
-    
-    if [ $EXIT_CODE -ne 0 ]; then
-        echo "Script failed with exit code: ${EXIT_CODE}"
+    # Only clean up VM on failure
+    if [[ ${exit_code} -ne 0 ]] && [[ -n "${VMID:-}" ]]; then
         if qm status "${VMID}" >/dev/null 2>&1; then
-            echo "Cleaning up failed VM..."
-            qm stop "${VMID}" -skiplock >/dev/null 2>&1
-            qm destroy "${VMID}" >/dev/null 2>&1
+            log_info "Cleaning up failed VM..."
+            qm stop "${VMID}" -skiplock >/dev/null 2>&1 || true
+            qm destroy "${VMID}" >/dev/null 2>&1 || true
         fi
     fi
-    exit $EXIT_CODE
 }
 
-# Set up trap for cleanup
-trap cleanup EXIT
+# Image cleanup function
+cleanup_downloaded_image() {
+    if [[ -f "${IMAGE_NAME:-}" ]]; then
+        log_info "Cleaning up downloaded image..."
+        rm -f "${IMAGE_NAME}" || true
+    fi
+}
+
+# Register cleanup functions
+register_cleanup cleanup_downloaded_image
+register_cleanup cleanup_vm_on_failure
 
 # --- Main Execution ---
 # Description: The main entry point of the script. It logs the progress and
@@ -949,4 +968,7 @@ trap cleanup EXIT
     echo "========================================="
 } 2>&1 | tee vm_creation_${VMID}.log
 
-exit 0
+# Register the log file for cleanup
+register_temp_file "vm_creation_${VMID}.log"
+
+exit ${EXIT_SUCCESS}

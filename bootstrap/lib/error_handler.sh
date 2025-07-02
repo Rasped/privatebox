@@ -7,6 +7,24 @@
 # Note: This file expects constants.sh and bootstrap_logger.sh to be sourced before it
 # All dependencies should come from common.sh
 
+# Check if we're running in a minimal environment (e.g., cloud-init)
+# This allows error_handler.sh to work even without full common.sh
+if ! type -t log_error &> /dev/null; then
+    # Minimal logging functions for standalone use
+    log_error() { echo "[ERROR] $*" >&2; }
+    log_warn() { echo "[WARN] $*" >&2; }
+    log_info() { echo "[INFO] $*"; }
+    log_debug() { [[ "${DEBUG:-0}" -eq 1 ]] && echo "[DEBUG] $*"; }
+fi
+
+# Define default exit codes if not already defined
+: ${EXIT_SUCCESS:=0}
+: ${EXIT_ERROR:=1}
+: ${EXIT_MISSING_DEPS:=2}
+
+# Cloud-init status file for error reporting
+CLOUD_INIT_STATUS_FILE="/tmp/privatebox-install-status"
+
 # Global variables for cleanup tracking
 declare -a CLEANUP_FUNCTIONS=()
 declare -a TEMP_FILES=()
@@ -106,15 +124,20 @@ error_handler() {
         return
     fi
     
-    log_error "Error occurred in script"
+    # Build error message
+    local error_msg="Error occurred in script"
+    
+    log_error "${error_msg}"
     log_error "Exit code: ${exit_code}"
     
     if [[ -n "${line_no}" ]]; then
         log_error "Line number: ${line_no}"
+        error_msg="${error_msg} at line ${line_no}"
     fi
     
     if [[ -n "${last_command}" ]]; then
         log_error "Last command: ${last_command}"
+        error_msg="${error_msg}: ${last_command}"
     fi
     
     if [[ ${#func_stack[@]} -gt 0 ]]; then
@@ -123,6 +146,9 @@ error_handler() {
             log_error "  - ${func}"
         done
     fi
+    
+    # Write to cloud-init status file if applicable
+    write_error_status "${error_msg}" ${exit_code}
     
     # Trigger cleanup
     cleanup_handler
@@ -248,6 +274,51 @@ rollback_checkpoint() {
     else
         log_error "Checkpoint not found: ${name}"
         return 1
+    fi
+}
+
+# Write error status for cloud-init
+write_error_status() {
+    local error_msg="${1:-Unknown error}"
+    local exit_code="${2:-1}"
+    
+    if [[ -n "${CLOUD_INIT_STATUS_FILE}" ]]; then
+        cat > "${CLOUD_INIT_STATUS_FILE}" <<EOF
+ERROR
+${error_msg}
+Exit code: ${exit_code}
+Time: $(date +"%Y-%m-%d %H:%M:%S")
+EOF
+        log_debug "Wrote error status to ${CLOUD_INIT_STATUS_FILE}"
+    fi
+}
+
+# Setup error handling for cloud-init scripts
+setup_cloud_init_error_handling() {
+    # Use basic error handling suitable for cloud-init
+    set -euo pipefail
+    
+    # Simple error trap that writes to status file
+    trap 'write_error_status "Script failed at line $LINENO" $?; exit 1' ERR
+    
+    # Cleanup trap
+    trap 'cleanup_handler' EXIT INT TERM
+    
+    log_debug "Cloud-init error handling configured"
+}
+
+# Safe command execution with fallback error handling
+safe_execute() {
+    local cmd=("$@")
+    local result
+    
+    if "${cmd[@]}"; then
+        return 0
+    else
+        result=$?
+        log_error "Command failed: ${cmd[*]}"
+        write_error_status "Command failed: ${cmd[*]}" ${result}
+        return ${result}
     fi
 }
 
