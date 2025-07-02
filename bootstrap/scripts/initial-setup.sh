@@ -1,21 +1,42 @@
 #!/bin/bash
-
 # VM post-installation setup script
 # This script runs after cloud-init completes
+#
+# Exit codes:
+#   0 - Success
+#   1 - General error
+#   2 - Missing dependencies
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Define cloud-init status file
+export CLOUD_INIT_STATUS_FILE="/tmp/privatebox-install-status"
 
 # Source common library if available (fallback to basic logging)
-if [[ -f "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh" ]]; then
+if [[ -f "${SCRIPT_DIR}/../lib/common.sh" ]]; then
     # shellcheck source=../lib/common.sh
-    source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+    source "${SCRIPT_DIR}/../lib/common.sh"
+    # Use cloud-init error handling if available
+    if type -t setup_cloud_init_error_handling &> /dev/null; then
+        setup_cloud_init_error_handling
+    else
+        setup_error_handling
+    fi
 else
-    # Fallback logging function for embedded environment
+    # Fallback for embedded environment
+    # Define minimal error handling functions
     log() {
         local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
         echo "[$timestamp] $1"
     }
     log_info() { log "INFO: $*"; }
     log_warn() { log "WARN: $*"; }
-    log_error() { log "ERROR: $*"; }
+    log_error() { log "ERROR: $*" >&2; }
+    log_success() { log "SUCCESS: $*"; }
+    log_debug() { [[ "${DEBUG:-0}" -eq 1 ]] && log "DEBUG: $*"; }
+    
+    # Error exit with status file update
     error_exit() { 
         log_error "$1"
         # Write error to status file for Proxmox to see
@@ -23,28 +44,63 @@ else
             echo "POST_INSTALL_ERROR=$1" >> /etc/privatebox-cloud-init-complete
             echo "POST_INSTALL_EXIT_CODE=${2:-1}" >> /etc/privatebox-cloud-init-complete
         fi
+        # Also write to cloud-init status file
+        if [[ -n "${CLOUD_INIT_STATUS_FILE}" ]]; then
+            cat > "${CLOUD_INIT_STATUS_FILE}" <<EOF
+ERROR
+$1
+Exit code: ${2:-1}
+Time: $(date +"%Y-%m-%d %H:%M:%S")
+EOF
+        fi
         exit "${2:-1}"
     }
+    
+    # Error handler for the script
+    handle_error() {
+        local exit_code=$?
+        local line_number=$1
+        local error_msg="Script failed at line $line_number with exit code $exit_code"
+        log_error "$error_msg"
+        
+        # Update status files
+        if [[ -w /etc/privatebox-cloud-init-complete ]]; then
+            echo "POST_INSTALL_ERROR=$error_msg" >> /etc/privatebox-cloud-init-complete
+            echo "POST_INSTALL_EXIT_CODE=$exit_code" >> /etc/privatebox-cloud-init-complete
+        fi
+        if [[ -n "${CLOUD_INIT_STATUS_FILE}" ]]; then
+            cat > "${CLOUD_INIT_STATUS_FILE}" <<EOF
+ERROR
+$error_msg
+Exit code: $exit_code
+Time: $(date +"%Y-%m-%d %H:%M:%S")
+EOF
+        fi
+        exit $exit_code
+    }
+    
+    # Set error trap
+    trap 'handle_error ${LINENO}' ERR
+    set -euo pipefail
+    
+    # Define exit codes
+    EXIT_SUCCESS=0
+    EXIT_ERROR=1
+    EXIT_MISSING_DEPS=2
 fi
 
-# Error handler for the script
-handle_error() {
-    local exit_code=$?
-    local line_number=$1
-    log_error "Script failed at line $line_number with exit code $exit_code"
-    if [[ -w /etc/privatebox-cloud-init-complete ]]; then
-        echo "POST_INSTALL_ERROR=Script failed at line $line_number" >> /etc/privatebox-cloud-init-complete
-        echo "POST_INSTALL_EXIT_CODE=$exit_code" >> /etc/privatebox-cloud-init-complete
-    fi
-    exit $exit_code
-}
-
-# Set error trap
-trap 'handle_error ${LINENO}' ERR
-
 # Source setup scripts
-source /usr/local/bin/portainer-setup.sh
-source /usr/local/bin/semaphore-setup.sh
+if [[ -f /usr/local/bin/portainer-setup.sh ]]; then
+    source /usr/local/bin/portainer-setup.sh
+else
+    error_exit "portainer-setup.sh not found" ${EXIT_MISSING_DEPS}
+fi
+
+if [[ -f /usr/local/bin/semaphore-setup.sh ]]; then
+    source /usr/local/bin/semaphore-setup.sh
+else
+    error_exit "semaphore-setup.sh not found" ${EXIT_MISSING_DEPS}
+fi
 
 log_info "Starting VM post-installation setup..."
 
@@ -125,4 +181,11 @@ if [ -f /etc/systemd/system/podman-volumes.service ]; then
 fi
 
 log_info "VM setup completed successfully!"
-exit 0
+
+# Write success status
+if [[ -w /etc/privatebox-cloud-init-complete ]]; then
+    echo "POST_INSTALL_SUCCESS=true" >> /etc/privatebox-cloud-init-complete
+    echo "POST_INSTALL_EXIT_CODE=0" >> /etc/privatebox-cloud-init-complete
+fi
+
+exit ${EXIT_SUCCESS}

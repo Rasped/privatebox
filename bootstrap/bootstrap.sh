@@ -2,14 +2,22 @@
 # PrivateBox Bootstrap Script
 # This is the single entry point for complete PrivateBox installation
 # It handles everything from network discovery to service verification
-
-set -euo pipefail
+#
+# Exit codes:
+#   0 - Success
+#   1 - General error
+#   2 - Missing dependencies
+#   4 - Not running as root
+#   5 - Not running on Proxmox
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source common library which provides all functions and constants
 source "${SCRIPT_DIR}/lib/common.sh"
+
+# Setup standardized error handling
+setup_error_handling
 
 # Print banner
 print_banner() {
@@ -22,16 +30,24 @@ print_banner() {
 
 # Check if running as root
 check_root() {
+    require_command "id" "id command is required"
+    
     if [[ "${EUID}" -ne 0 ]]; then
         log_error "This script must be run as root"
-        exit ${EXIT_NOT_ROOT:-4}
+        exit ${EXIT_NOT_ROOT}
     fi
 }
 
 # Make all scripts executable
 make_scripts_executable() {
     log_info "Making scripts executable..."
-    chmod +x "${SCRIPT_DIR}/scripts"/*.sh
+    
+    # Check if scripts directory exists
+    require_dir "${SCRIPT_DIR}/scripts" "Scripts directory not found"
+    
+    # Make scripts executable
+    chmod +x "${SCRIPT_DIR}/scripts"/*.sh || check_result $? "Failed to make scripts executable"
+    
     log_info "Scripts are now executable"
 }
 
@@ -48,7 +64,7 @@ main() {
     # Check if we're on Proxmox
     if [[ ! -f /etc/pve/pve-root-ca.pem ]] && [[ ! -d /etc/pve ]]; then
         log_error "This script must be run on a Proxmox VE host"
-        exit ${EXIT_NOT_PROXMOX:-5}
+        exit ${EXIT_NOT_PROXMOX}
     fi
     
     log_info "Starting PrivateBox installation..."
@@ -74,7 +90,7 @@ main() {
     
     # Load the generated config to show access info
     if [[ -f "${SCRIPT_DIR}/config/privatebox.conf" ]]; then
-        source "${SCRIPT_DIR}/config/privatebox.conf"
+        source "${SCRIPT_DIR}/config/privatebox.conf" || check_result $? "Failed to load configuration file"
         
         # Check for installation errors first
         if [[ -n "${INSTALLATION_ERROR_STAGE:-}" ]]; then
@@ -98,7 +114,7 @@ main() {
             echo "  3. Check status file: cat /etc/privatebox-cloud-init-complete"
             echo ""
             log_error "Installation failed at stage: ${INSTALLATION_ERROR_STAGE}"
-            return 1
+            return ${EXIT_ERROR}
         elif [[ $exit_code -eq 0 ]]; then
             echo "     Installation Complete!"
             echo "==========================================="
@@ -152,11 +168,12 @@ main() {
         echo "     Installation Failed"
         echo "==========================================="
         log_error "Installation failed. Please check the logs."
-        return 1
+        return ${EXIT_ERROR}
     fi
     
-    return 0
+    return ${EXIT_SUCCESS}
 }
 
 # Run main function
 main "$@"
+exit $?
