@@ -5,22 +5,9 @@
 # before common.sh is available. It's designed to be sourced by scripts
 # that need logging during early initialization.
 
-# Determine if we're in a terminal
-if [[ -t 1 ]]; then
-    # Terminal supports colors
-    BOOTSTRAP_RED='\033[0;31m'
-    BOOTSTRAP_GREEN='\033[0;32m'
-    BOOTSTRAP_YELLOW='\033[1;33m'
-    BOOTSTRAP_BLUE='\033[0;34m'
-    BOOTSTRAP_NC='\033[0m' # No Color
-else
-    # No terminal or redirected output - no colors
-    BOOTSTRAP_RED=''
-    BOOTSTRAP_GREEN=''
-    BOOTSTRAP_YELLOW=''
-    BOOTSTRAP_BLUE=''
-    BOOTSTRAP_NC=''
-fi
+# Source constants for color definitions
+BOOTSTRAP_LOGGER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${BOOTSTRAP_LOGGER_DIR}/constants.sh"
 
 # Core logging function
 bootstrap_log() {
@@ -30,17 +17,17 @@ bootstrap_log() {
     
     case "$level" in
         ERROR)
-            echo -e "${BOOTSTRAP_RED}[$timestamp] [ERROR]${BOOTSTRAP_NC} $message" >&2
+            echo -e "${RED}[$timestamp] [ERROR]${NC} $message" >&2
             ;;
         WARN)
-            echo -e "${BOOTSTRAP_YELLOW}[$timestamp] [WARN]${BOOTSTRAP_NC} $message" >&2
+            echo -e "${YELLOW}[$timestamp] [WARN]${NC} $message" >&2
             ;;
         INFO)
-            echo -e "${BOOTSTRAP_GREEN}[$timestamp] [INFO]${BOOTSTRAP_NC} $message"
+            echo -e "${GREEN}[$timestamp] [INFO]${NC} $message"
             ;;
         DEBUG)
             if [[ "${DEBUG:-false}" == "true" ]]; then
-                echo -e "${BOOTSTRAP_BLUE}[$timestamp] [DEBUG]${BOOTSTRAP_NC} $message"
+                echo -e "${BLUE}[$timestamp] [DEBUG]${NC} $message"
             fi
             ;;
         *)
@@ -89,17 +76,17 @@ log_msg() {
     
     case "$level" in
         ERROR)
-            echo -e "${BOOTSTRAP_RED}[ERROR]${BOOTSTRAP_NC} $message" >&2
+            echo -e "${RED}[ERROR]${NC} $message" >&2
             ;;
         WARN)
-            echo -e "${BOOTSTRAP_YELLOW}[WARN]${BOOTSTRAP_NC} $message" >&2
+            echo -e "${YELLOW}[WARN]${NC} $message" >&2
             ;;
         INFO)
-            echo -e "${BOOTSTRAP_GREEN}[INFO]${BOOTSTRAP_NC} $message"
+            echo -e "${GREEN}[INFO]${NC} $message"
             ;;
         DEBUG)
             if [[ "${DEBUG:-false}" == "true" ]]; then
-                echo -e "${BOOTSTRAP_BLUE}[DEBUG]${BOOTSTRAP_NC} $message"
+                echo -e "${BLUE}[DEBUG]${NC} $message"
             fi
             ;;
         *)
