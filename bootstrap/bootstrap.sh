@@ -8,35 +8,21 @@ set -euo pipefail
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Colors for output
-readonly COLOR_RED='\033[0;31m'
-readonly COLOR_GREEN='\033[0;32m'
-readonly COLOR_YELLOW='\033[1;33m'
-readonly COLOR_BLUE='\033[0;34m'
-readonly COLOR_NC='\033[0m' # No Color
-
-# Simple logging functions (before sourcing common.sh)
-log_msg() {
-    local level="$1"
-    shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    case "${level}" in
-        ERROR)
-            echo -e "${COLOR_RED}[${timestamp}] [${level}] ${message}${COLOR_NC}" >&2
-            ;;
-        WARN)
-            echo -e "${COLOR_YELLOW}[${timestamp}] [${level}] ${message}${COLOR_NC}" >&2
-            ;;
-        INFO)
-            echo -e "${COLOR_GREEN}[${timestamp}] [${level}] ${message}${COLOR_NC}"
-            ;;
-        *)
-            echo "[${timestamp}] [${level}] ${message}"
-            ;;
-    esac
+# Source the bootstrap logger for early logging
+source "${SCRIPT_DIR}/lib/bootstrap_logger.sh" 2>/dev/null || {
+    # Fallback if bootstrap_logger.sh is not available
+    log_msg() {
+        local level="$1"
+        shift
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*"
+    }
+    log_info() { log_msg "INFO" "$@"; }
+    log_error() { log_msg "ERROR" "$@" >&2; }
+    log_warn() { log_msg "WARN" "$@" >&2; }
 }
+
+# Source constants for shared values
+source "${SCRIPT_DIR}/lib/constants.sh" 2>/dev/null || true
 
 # Print banner
 print_banner() {
@@ -50,16 +36,16 @@ print_banner() {
 # Check if running as root
 check_root() {
     if [[ "${EUID}" -ne 0 ]]; then
-        log_msg ERROR "This script must be run as root"
-        exit 1
+        log_error "This script must be run as root"
+        exit ${EXIT_NOT_ROOT:-4}
     fi
 }
 
 # Make all scripts executable
 make_scripts_executable() {
-    log_msg INFO "Making scripts executable..."
+    log_info "Making scripts executable..."
     chmod +x "${SCRIPT_DIR}/scripts"/*.sh
-    log_msg INFO "Scripts are now executable"
+    log_info "Scripts are now executable"
 }
 
 # Main installation function
@@ -74,23 +60,23 @@ main() {
     
     # Check if we're on Proxmox
     if [[ ! -f /etc/pve/pve-root-ca.pem ]] && [[ ! -d /etc/pve ]]; then
-        log_msg ERROR "This script must be run on a Proxmox VE host"
-        exit 1
+        log_error "This script must be run on a Proxmox VE host"
+        exit ${EXIT_NOT_PROXMOX:-5}
     fi
     
-    log_msg INFO "Starting PrivateBox installation..."
-    log_msg INFO "This process will:"
-    log_msg INFO "  1. Detect network configuration"
-    log_msg INFO "  2. Create Ubuntu VM"
-    log_msg INFO "  3. Install and configure services"
-    log_msg INFO "  4. Wait for complete installation (5-10 minutes)"
+    log_info "Starting PrivateBox installation..."
+    log_info "This process will:"
+    log_info "  1. Detect network configuration"
+    log_info "  2. Create Ubuntu VM"
+    log_info "  3. Install and configure services"
+    log_info "  4. Wait for complete installation (5-10 minutes)"
     echo ""
     
     # Set environment variable to wait for cloud-init
     export WAIT_FOR_CLOUD_INIT=true
     
     # Run the main creation script with auto-discovery
-    log_msg INFO "Starting VM creation with network auto-discovery..."
+    log_info "Starting VM creation with network auto-discovery..."
     
     # Run create-ubuntu-vm.sh and capture the exit code
     "${SCRIPT_DIR}/scripts/create-ubuntu-vm.sh" --auto-discover
@@ -108,7 +94,7 @@ main() {
             echo "     Installation Failed"
             echo "==========================================="
             echo ""
-            echo "${COLOR_RED}ERROR: Cloud-init installation failed!${COLOR_NC}"
+            echo -e "${RED:-\033[0;31m}ERROR: Cloud-init installation failed!${NC:-\033[0m}"
             echo ""
             echo "Error Details:"
             echo "  Stage: ${INSTALLATION_ERROR_STAGE}"
@@ -124,7 +110,7 @@ main() {
             echo "  2. Check cloud-init logs: sudo cat /var/log/cloud-init-output.log"
             echo "  3. Check status file: cat /etc/privatebox-cloud-init-complete"
             echo ""
-            log_msg ERROR "Installation failed at stage: ${INSTALLATION_ERROR_STAGE}"
+            log_error "Installation failed at stage: ${INSTALLATION_ERROR_STAGE}"
             return 1
         elif [[ $exit_code -eq 0 ]]; then
             echo "     Installation Complete!"
@@ -154,7 +140,7 @@ main() {
             echo ""
             echo "IMPORTANT: Please change the VM password after first login!"
             echo ""
-            log_msg INFO "PrivateBox is ready for use!"
+            log_info "PrivateBox is ready for use!"
         else
             echo "     VM Created - Manual Verification Required"
             echo "==========================================="
@@ -173,12 +159,12 @@ main() {
             echo "  Portainer: http://${STATIC_IP}:9000"
             echo "  Semaphore: http://${STATIC_IP}:3000"
             echo ""
-            log_msg WARN "Please wait for cloud-init to complete before accessing services."
+            log_warn "Please wait for cloud-init to complete before accessing services."
         fi
     else
         echo "     Installation Failed"
         echo "==========================================="
-        log_msg ERROR "Installation failed. Please check the logs."
+        log_error "Installation failed. Please check the logs."
         return 1
     fi
     
