@@ -1,0 +1,155 @@
+---
+# Service Health Check Playbook
+# Monitors the health of all PrivateBox services
+
+- name: PrivateBox Service Health Check
+  hosts: all
+  gather_facts: yes
+  tags:
+    - health
+    - monitoring
+  
+  vars:
+    health_check_timeout: 30
+    health_check_results: []
+  
+  tasks:
+    - name: Check Proxmox API Health
+      uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/status"
+        method: GET
+        user: "{{ vault_proxmox_api_user }}"
+        password: "{{ vault_proxmox_api_password }}"
+        validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+        timeout: "{{ health_check_timeout }}"
+      register: proxmox_health
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname in groups['proxmox_hosts']
+
+    - name: Check OPNsense Health
+      uri:
+        url: "https://{{ opnsense_api.host }}:{{ opnsense_api.port }}/api/diagnostics/interface/getInterfaceStatistics"
+        method: GET
+        user: "{{ opnsense_api.key }}"
+        password: "{{ opnsense_api.secret }}"
+        validate_certs: false
+        timeout: "{{ health_check_timeout }}"
+      register: opnsense_health
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname in groups['opnsense_vms']
+
+    - name: Check AdGuard Home Health
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ adguard_web_port }}/control/status"
+        method: GET
+        timeout: "{{ health_check_timeout }}"
+      register: adguard_health
+      failed_when: false
+      changed_when: false
+      when: "'adguard' in group_names"
+
+    - name: Check Unbound DNS Health
+      command: unbound-control status
+      register: unbound_health
+      failed_when: false
+      changed_when: false
+      when: "'dns_servers' in group_names"
+
+    - name: Check Portainer Health
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ portainer_web_port }}/api/system/status"
+        method: GET
+        timeout: "{{ health_check_timeout }}"
+      register: portainer_health
+      failed_when: false
+      changed_when: false
+      when: "'portainer_hosts' in group_names"
+
+    - name: Check Semaphore Health
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ semaphore_web_port }}/api/ping"
+        method: GET
+        timeout: "{{ health_check_timeout }}"
+      register: semaphore_health
+      failed_when: false
+      changed_when: false
+      when: "'semaphore_hosts' in group_names"
+
+    - name: Check Container Runtime Health
+      command: "{{ container_runtime }} ps"
+      register: container_health
+      failed_when: false
+      changed_when: false
+      when: container_runtime is defined
+
+    - name: Check System Resources
+      set_fact:
+        system_health:
+          cpu_usage: "{{ 100 - (ansible_processor_vcpus * 100 / ansible_processor_count) | round(2) }}"
+          memory_usage: "{{ (1 - ansible_memory_mb.real.available / ansible_memory_mb.real.total) * 100 | round(2) }}"
+          disk_usage: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | first | int - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first | int }}"
+
+    - name: Compile Health Report
+      set_fact:
+        health_report:
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          hostname: "{{ inventory_hostname }}"
+          services:
+            proxmox: "{{ 'healthy' if (proxmox_health.status | default(0)) == 200 else 'unhealthy' }}"
+            opnsense: "{{ 'healthy' if (opnsense_health.status | default(0)) == 200 else 'unhealthy' }}"
+            adguard: "{{ 'healthy' if (adguard_health.status | default(0)) == 200 else 'unhealthy' }}"
+            unbound: "{{ 'healthy' if (unbound_health.rc | default(1)) == 0 else 'unhealthy' }}"
+            portainer: "{{ 'healthy' if (portainer_health.status | default(0)) == 200 else 'unhealthy' }}"
+            semaphore: "{{ 'healthy' if (semaphore_health.status | default(0)) == 200 else 'unhealthy' }}"
+            containers: "{{ 'healthy' if (container_health.rc | default(1)) == 0 else 'unhealthy' }}"
+          resources:
+            cpu_percent: "{{ system_health.cpu_usage }}"
+            memory_percent: "{{ system_health.memory_usage }}"
+            disk_bytes: "{{ system_health.disk_usage }}"
+          alerts: []
+
+    - name: Check for critical conditions
+      set_fact:
+        health_report: "{{ health_report | combine({'alerts': health_report.alerts + [item]}) }}"
+      loop:
+        - "High CPU usage: {{ system_health.cpu_usage }}%"
+        - "High memory usage: {{ system_health.memory_usage }}%"
+      when:
+        - system_health.cpu_usage | float > 80 or system_health.memory_usage | float > 80
+
+    - name: Save health report
+      copy:
+        content: "{{ health_report | to_nice_json }}"
+        dest: "/tmp/health_report_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.json"
+      delegate_to: localhost
+
+    - name: Display health summary
+      debug:
+        msg:
+          - "=== Health Check Summary for {{ inventory_hostname }} ==="
+          - "Services:"
+          - "  Proxmox: {{ health_report.services.proxmox }}"
+          - "  OPNsense: {{ health_report.services.opnsense }}"
+          - "  AdGuard: {{ health_report.services.adguard }}"
+          - "  Unbound: {{ health_report.services.unbound }}"
+          - "  Portainer: {{ health_report.services.portainer }}"
+          - "  Semaphore: {{ health_report.services.semaphore }}"
+          - "Resources:"
+          - "  CPU: {{ health_report.resources.cpu_percent }}%"
+          - "  Memory: {{ health_report.resources.memory_percent }}%"
+          - "{{ 'ALERTS: ' + (health_report.alerts | join(', ')) if health_report.alerts else 'No alerts' }}"
+
+    - name: Send alert if services are unhealthy
+      mail:
+        to: "{{ vault_notification_email }}"
+        subject: "PrivateBox Health Alert - {{ inventory_hostname }}"
+        body: |
+          Health check detected issues on {{ inventory_hostname }}:
+          
+          {{ health_report | to_nice_json }}
+      when:
+        - "'unhealthy' in health_report.services.values()"
+        - vault_notification_email is defined
+        - semaphore_email_enabled | default(false)

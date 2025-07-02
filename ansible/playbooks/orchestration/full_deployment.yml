@@ -1,0 +1,70 @@
+---
+# Full deployment orchestration playbook
+# This playbook orchestrates the complete PrivateBox deployment
+
+- name: Full PrivateBox Deployment
+  hosts: localhost
+  gather_facts: false
+  vars:
+    deployment_phases:
+      - name: "Phase 1: Infrastructure Preparation"
+        playbooks:
+          - ../site.yml
+      - name: "Phase 2: Network Services"
+        playbooks:
+          - ../provision_opnsense_vm.yml
+          - ../configure_opnsense_initial.yml
+          - ../deploy_network_services.yml
+      - name: "Phase 3: Management Services"
+        playbooks:
+          - ../deploy_management_services.yml
+      - name: "Phase 4: Privacy Services"
+        playbooks:
+          - ../deploy_base_services.yml
+      - name: "Phase 5: Validation"
+        playbooks:
+          - ../validate_deployment.yml
+
+  tasks:
+    - name: Display deployment plan
+      ansible.builtin.debug:
+        msg: |
+          PrivateBox Full Deployment Plan
+          ================================
+          {% for phase in deployment_phases %}
+          {{ phase.name }}:
+          {% for playbook in phase.playbooks %}
+            - {{ playbook | basename }}
+          {% endfor %}
+          {% endfor %}
+
+    - name: Confirm deployment
+      ansible.builtin.pause:
+        prompt: "Press Enter to start deployment or Ctrl+C to cancel"
+
+    - name: Execute deployment phases
+      ansible.builtin.include_tasks: execute_phase.yml
+      vars:
+        phase_name: "{{ phase.name }}"
+        phase_playbooks: "{{ phase.playbooks }}"
+      loop: "{{ deployment_phases }}"
+      loop_control:
+        loop_var: phase
+
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg: |
+          Deployment Complete!
+          ===================
+          
+          Access URLs:
+          - OPNsense: https://{{ opnsense_lan_ip }}
+          - Portainer: https://{{ hostvars[groups['management_services'][0]]['ansible_host'] }}:{{ portainer_web_port }}
+          - Semaphore: http://{{ hostvars[groups['management_services'][0]]['ansible_host'] }}:{{ semaphore_web_port }}
+          - AdGuard Home: http://{{ hostvars[groups['network_services'][0]]['ansible_host'] }}:{{ adguard_web_port }}
+          
+          Next Steps:
+          1. Complete OPNsense wizard
+          2. Configure Portainer endpoints
+          3. Set up Semaphore projects
+          4. Review security settings

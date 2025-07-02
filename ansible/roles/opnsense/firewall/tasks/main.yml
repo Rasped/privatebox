@@ -1,0 +1,13 @@
+---
+# OPNsense firewall configuration tasks - to be implemented
+
+- name: Firewall configuration placeholder
+  ansible.builtin.debug:
+    msg: "Firewall configuration tasks to be implemented"
+
+# TODO: Implement firewall rule management
+# - Create rule groups
+# - Configure NAT rules
+# - Set up port forwarding
+# - Configure firewall aliases
+# - Implement rule templates

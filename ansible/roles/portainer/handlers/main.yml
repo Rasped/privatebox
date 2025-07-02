@@ -1,0 +1,17 @@
+---
+# handlers file for portainer
+
+- name: restart portainer
+  community.docker.docker_container:
+    name: "{{ portainer_container_name }}"
+    state: started
+    restart: true
+  become: true
+
+- name: restart portainer agent
+  community.docker.docker_container:
+    name: "{{ portainer_agent_container_name }}"
+    state: started
+    restart: true
+  become: true
+  when: portainer_deploy_agent | bool

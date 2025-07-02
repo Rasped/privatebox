@@ -1,2 +1,32 @@
 ---
 # handlers file for common
+- name: restart sshd
+  service:
+    name: "{{ common_ssh_service }}"
+    state: restarted
+  become: yes
+
+- name: restart cron
+  service:
+    name: "{{ common_cron_service }}"
+    state: restarted
+  become: yes
+
+- name: restart systemd-timesyncd
+  systemd:
+    name: systemd-timesyncd
+    state: restarted
+    daemon_reload: yes
+  become: yes
+
+- name: restart chrony
+  service:
+    name: chrony
+    state: restarted
+  become: yes
+
+- name: restart ntpd
+  service:
+    name: "{{ common_ntp_daemon }}"
+    state: restarted
+  become: yes

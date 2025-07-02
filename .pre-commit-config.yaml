@@ -1,0 +1,99 @@
+---
+# Pre-commit hooks for PrivateBox Ansible project
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ansible linting
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v6.22.1
+    hooks:
+      - id: ansible-lint
+        files: \.(yaml|yml)$
+        exclude: ^(documentation/|\.github/|molecule/)
+        args:
+          - --exclude=.cache
+          - --exclude=.github
+          - -c
+          - .ansible-lint
+
+  # YAML linting and formatting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        files: \.(yaml|yml)$
+        exclude: ^(\.github/|molecule/)
+        args:
+          - -c
+          - .yamllint
+
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.(md|markdown)$
+      - id: end-of-file-fixer
+        exclude: \.(md|markdown)$
+      - id: check-yaml
+        exclude: ^(ansible/templates/|\.github/)
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+
+  # Python code formatting (for dynamic inventory scripts)
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        files: \.py$
+        language_version: python3
+
+  # Python linting
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        files: \.py$
+        args:
+          - --max-line-length=120
+          - --ignore=E501,W503
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        files: \.(sh|bash)$
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        args:
+          - --config
+          - .markdownlint.yml
+
+  # Secret detection
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: ^(ansible/group_vars/vault/|.*\.example)
+
+# Configuration files to be created:
+# .ansible-lint - Ansible lint configuration
+# .yamllint - YAML lint configuration
+# .markdownlint.yml - Markdown lint configuration
+# .secrets.baseline - Baseline for secret detection

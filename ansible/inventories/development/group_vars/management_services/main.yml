@@ -1,0 +1,43 @@
+---
+# Management services group variables
+
+# Portainer configuration
+portainer_container_id: 201
+portainer_hostname: portainer
+portainer_web_port: 9000
+portainer_agent_port: 8000
+portainer_ssl_enabled: true
+portainer_admin_user: admin
+portainer_admin_password: "{{ vault_portainer_admin_password }}"
+portainer_deploy_agent: true
+
+# Semaphore configuration
+semaphore_container_id: 202
+semaphore_hostname: semaphore
+semaphore_web_port: 3001
+semaphore_db_type: sqlite
+semaphore_admin_user: admin
+semaphore_admin_email: "admin@{{ privatebox_domain }}"
+semaphore_admin_password: "{{ vault_semaphore_admin_password }}"
+semaphore_concurrent_tasks: 2
+semaphore_backup_enabled: true
+
+# Grafana configuration (future)
+grafana_enabled: false
+grafana_container_id: 203
+grafana_hostname: grafana
+grafana_web_port: 3002
+grafana_admin_user: admin
+grafana_admin_password: "{{ vault_grafana_admin_password }}"
+
+# Prometheus configuration (future)
+prometheus_enabled: false
+prometheus_container_id: 204
+prometheus_hostname: prometheus
+prometheus_web_port: 9090
+prometheus_retention_days: 15
+
+# Management network
+management_vlan_id: 10
+management_subnet: 10.10.10.0/24
+management_gateway: 10.10.10.1

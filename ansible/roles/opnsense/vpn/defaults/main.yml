@@ -1,0 +1,52 @@
+---
+# VPN sub-role defaults
+
+# WireGuard configuration
+opnsense_wireguard:
+  enabled: false
+  instances: []
+    # Example structure:
+    # - name: "wg0"
+    #   port: 51820
+    #   private_key: "{{ vault_wg_private_key }}"
+    #   address: "10.0.0.1/24"
+    #   peers: []
+
+# OpenVPN configuration
+opnsense_openvpn:
+  enabled: false
+  servers: []
+    # Example structure:
+    # - description: "Remote Access VPN"
+    #   port: 1194
+    #   protocol: "udp"
+    #   dev_type: "tun"
+    #   topology: "subnet"
+    #   server: "10.8.0.0 255.255.255.0"
+    #   local: "192.168.1.1"
+    #   ca: "{{ vault_openvpn_ca }}"
+    #   cert: "{{ vault_openvpn_cert }}"
+    #   key: "{{ vault_openvpn_key }}"
+    #   dh: "{{ vault_openvpn_dh }}"
+
+# IPsec configuration
+opnsense_ipsec:
+  enabled: false
+  connections: []
+    # Example structure:
+    # - description: "Site-to-Site VPN"
+    #   remote_gateway: "203.0.113.1"
+    #   authentication_method: "psk"
+    #   preshared_key: "{{ vault_ipsec_psk }}"
+    #   phase1:
+    #     encryption: ["aes256"]
+    #     hash: ["sha256"]
+    #     dhgroup: 14
+    #     lifetime: 28800
+    #   phase2:
+    #     local_network: "192.168.1.0/24"
+    #     remote_network: "192.168.2.0/24"
+    #     encryption: ["aes256"]
+    #     hash: ["sha256"]
+    #     pfsgroup: 14
+    #     lifetime: 3600

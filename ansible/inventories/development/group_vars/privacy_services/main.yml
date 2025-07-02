@@ -1,0 +1,47 @@
+---
+# Privacy services group variables
+
+# WireGuard VPN configuration
+wireguard_enabled: true
+wireguard_container_id: 301
+wireguard_hostname: wireguard
+wireguard_port: 51820
+wireguard_interface: wg0
+wireguard_subnet: 10.10.50.0/24
+wireguard_dns: 10.10.10.6  # AdGuard Home
+wireguard_allowed_ips: 0.0.0.0/0
+wireguard_persistentkeepalive: 25
+wireguard_peers: []  # To be configured per deployment
+
+# OpenVPN configuration (alternative)
+openvpn_enabled: false
+openvpn_container_id: 302
+openvpn_hostname: openvpn
+openvpn_port: 1194
+openvpn_protocol: udp
+openvpn_subnet: 10.10.60.0/24
+
+# Tor configuration
+tor_enabled: false
+tor_container_id: 303
+tor_hostname: tor
+tor_socks_port: 9050
+tor_control_port: 9051
+tor_bridge_enabled: false
+
+# Privacy DNS
+privacy_dns_over_https: true
+privacy_dns_over_tls: true
+privacy_dns_providers:
+  - name: Quad9
+    doh: https://dns.quad9.net/dns-query
+    dot: dns.quad9.net
+  - name: Cloudflare
+    doh: https://cloudflare-dns.com/dns-query
+    dot: 1.1.1.1
+
+# Privacy settings
+privacy_block_tracking: true
+privacy_block_ads: true
+privacy_block_malware: true
+privacy_enforce_https: true

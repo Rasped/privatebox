@@ -1,0 +1,27 @@
+---
+# Main tasks file for proxmox role
+# This file includes all subtasks for different Proxmox operations
+
+- name: Include VM creation tasks
+  include_tasks: create_vm.yml
+  when: proxmox_operation == "create_vm"
+  tags:
+    - proxmox_create_vm
+
+- name: Include network configuration tasks
+  include_tasks: configure_network.yml
+  when: proxmox_operation == "configure_network"
+  tags:
+    - proxmox_network
+
+- name: Include storage management tasks
+  include_tasks: manage_storage.yml
+  when: proxmox_operation == "manage_storage"
+  tags:
+    - proxmox_storage
+
+# Additional task includes can be added here for other operations
+# such as:
+# - destroy_vm.yml
+# - snapshot_vm.yml
+# - clone_vm.yml

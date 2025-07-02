@@ -1,0 +1,54 @@
+---
+# Validation tasks for semaphore
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - semaphore_container_name is defined
+      - semaphore_container_image is defined
+      - semaphore_web_port is defined
+      - semaphore_data_dir is defined
+      - semaphore_db_type is defined
+      - semaphore_admin_user is defined
+      - semaphore_admin_email is defined
+    fail_msg: "Required semaphore variables are not defined"
+    success_msg: "All required semaphore variables are defined"
+
+- name: Validate database type
+  ansible.builtin.assert:
+    that:
+      - semaphore_db_type in ['sqlite', 'mysql', 'postgres']
+    fail_msg: "Invalid database type: {{ semaphore_db_type }}. Must be sqlite, mysql, or postgres"
+
+- name: Check if Docker is installed
+  ansible.builtin.command: docker --version
+  register: docker_version
+  changed_when: false
+  failed_when: false
+
+- name: Fail if Docker is not installed
+  ansible.builtin.fail:
+    msg: "Docker is not installed on {{ inventory_hostname }}. Please install Docker first."
+  when: docker_version.rc != 0
+
+- name: Validate port availability
+  ansible.builtin.wait_for:
+    port: "{{ semaphore_web_port }}"
+    state: stopped
+    timeout: 3
+  register: port_check
+  failed_when: false
+
+- name: Warn if port is already in use
+  ansible.builtin.debug:
+    msg: "Warning: Port {{ semaphore_web_port }} appears to be in use on {{ inventory_hostname }}"
+  when: port_check.failed is defined and port_check.failed
+
+- name: Validate admin password is set
+  ansible.builtin.assert:
+    that:
+      - semaphore_admin_password is defined
+      - semaphore_admin_password | length > 8
+    fail_msg: "semaphore_admin_password must be defined and at least 8 characters long"
+    success_msg: "Admin password validation passed"
+  no_log: true

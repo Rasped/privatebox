@@ -1,0 +1,64 @@
+---
+# defaults file for semaphore
+
+# Container configuration
+semaphore_container_name: "semaphore"
+semaphore_container_image: "semaphoreui/semaphore:latest"
+semaphore_container_restart_policy: "unless-stopped"
+
+# Network configuration
+semaphore_web_port: 3001
+semaphore_network_name: "management"
+
+# Storage configuration
+semaphore_data_dir: "/home/{{ ansible_user }}/semaphore"
+semaphore_config_file: "{{ semaphore_data_dir }}/config.json"
+
+# Database configuration
+semaphore_db_type: "sqlite"  # Options: sqlite, mysql, postgres
+semaphore_db_name: "semaphore"
+semaphore_db_path: "{{ semaphore_data_dir }}/database.db"
+
+# MySQL/PostgreSQL specific (if not using SQLite)
+semaphore_db_host: "localhost"
+semaphore_db_port: 3306  # 3306 for MySQL, 5432 for PostgreSQL
+semaphore_db_user: "semaphore"
+semaphore_db_password: "{{ vault_semaphore_db_password | default('changeme') }}"
+
+# Admin configuration
+semaphore_admin_user: "admin"
+semaphore_admin_email: "admin@privatebox.local"
+semaphore_admin_name: "Administrator"
+semaphore_admin_password: "{{ vault_semaphore_admin_password | default('changeme') }}"
+
+# Web configuration
+semaphore_web_root: "/"
+semaphore_cookie_hash: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+semaphore_cookie_encryption: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+
+# Git configuration
+semaphore_git_client: "cmd_git"  # Options: cmd_git, go_git
+
+# Runner configuration
+semaphore_runner_registration_token: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+semaphore_concurrent_tasks: 2
+
+# LDAP configuration (optional)
+semaphore_ldap_enabled: false
+semaphore_ldap_host: ""
+semaphore_ldap_port: 389
+semaphore_ldap_bind_dn: ""
+# semaphore_ldap_bind_password should be defined in vault
+semaphore_ldap_base_dn: ""
+
+# Email configuration (optional)
+semaphore_email_enabled: false
+semaphore_email_host: ""
+semaphore_email_port: 587
+semaphore_email_user: ""
+# semaphore_email_password should be defined in vault
+semaphore_email_from: "semaphore@privatebox.local"
+
+# Backup configuration
+semaphore_backup_enabled: true
+semaphore_backup_retention_days: 7

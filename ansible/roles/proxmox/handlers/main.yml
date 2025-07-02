@@ -1,0 +1,78 @@
+---
+# Handlers file for proxmox role
+
+- name: restart vm
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+    api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+    validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+    node: "{{ proxmox_vm_node }}"
+    vmid: "{{ proxmox_vm_vmid }}"
+    state: restarted
+  listen: "restart vm"
+
+- name: stop vm
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+    api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+    validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+    node: "{{ proxmox_vm_node }}"
+    vmid: "{{ proxmox_vm_vmid }}"
+    state: stopped
+  listen: "stop vm"
+
+- name: start vm
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+    api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+    validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+    node: "{{ proxmox_vm_node }}"
+    vmid: "{{ proxmox_vm_vmid }}"
+    state: started
+  listen: "start vm"
+
+- name: restart networking on proxmox node
+  systemd:
+    name: networking
+    state: restarted
+  delegate_to: "{{ proxmox_vm_node }}"
+  become: true
+  listen: "restart proxmox networking"
+
+- name: reload network configuration
+  command: ifreload -a
+  delegate_to: "{{ proxmox_vm_node }}"
+  become: true
+  listen: "reload network configuration"
+
+- name: wait for vm network
+  wait_for:
+    host: "{{ proxmox_vm_ip | default(omit) }}"
+    port: 22
+    delay: 10
+    timeout: 300
+  when: proxmox_vm_ip is defined
+  listen: "wait for vm network"
+
+- name: create vm snapshot
+  community.general.proxmox_snap:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+    api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+    validate_certs: "{{ proxmox_validate_certs | default(true) }}"
+    vmid: "{{ proxmox_vm_vmid }}"
+    snapname: "{{ proxmox_snapshot_name | default('ansible-' + ansible_date_time.epoch) }}"
+    description: "{{ proxmox_snapshot_description | default('Created by Ansible') }}"
+    state: present
+  listen: "create snapshot"

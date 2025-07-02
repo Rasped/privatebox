@@ -1,0 +1,110 @@
+---
+# Pre-flight validation playbook
+# Run this before any deployment to ensure environment is properly configured
+# Usage: ansible-playbook playbooks/pre_flight_check.yml
+
+- name: Pre-flight Environment Validation
+  hosts: localhost
+  gather_facts: no
+  tags:
+    - preflight
+    - validation
+  
+  tasks:
+    - name: Check if vault password file exists
+      stat:
+        path: "{{ playbook_dir }}/../../.vault_pass"
+      register: vault_pass_file
+      failed_when: not vault_pass_file.stat.exists
+      delegate_to: localhost
+
+    - name: Verify vault files are encrypted
+      shell: |
+        file {{ playbook_dir }}/../group_vars/vault/*.yml | grep -v ": data" || true
+      register: unencrypted_files
+      changed_when: false
+      failed_when: unencrypted_files.stdout != ""
+      delegate_to: localhost
+
+    - name: Load and validate vault variables
+      include_vars:
+        dir: "{{ playbook_dir }}/../group_vars/vault"
+      no_log: true
+
+    - name: Validate critical vault variables are not defaults
+      assert:
+        that:
+          - vault_proxmox_api_password is defined
+          - vault_proxmox_api_password != "ChangeMeProxmoxPass123!"
+          - vault_adguard_admin_password is defined
+          - vault_adguard_admin_password != "changeme"
+          - vault_portainer_admin_password is defined
+          - vault_portainer_admin_password != "changeme"
+          - vault_semaphore_admin_password is defined
+          - vault_semaphore_admin_password != "changeme"
+        fail_msg: |
+          SECURITY ERROR: Default passwords detected!
+          Please generate secure passwords for all services.
+          See SECURITY_SETUP.md for instructions.
+
+    - name: Validate Proxmox connection variables
+      assert:
+        that:
+          - vault_proxmox_api_host is defined
+          - vault_proxmox_api_host != "10.0.0.10"
+          - vault_proxmox_api_user is defined
+          - vault_proxmox_node is defined
+        fail_msg: "Proxmox connection variables not properly configured"
+
+    - name: Check if required collections are installed
+      command: ansible-galaxy collection list
+      register: installed_collections
+      changed_when: false
+
+    - name: Validate required collections
+      assert:
+        that:
+          - "'community.general' in installed_collections.stdout"
+          - "'containers.podman' in installed_collections.stdout or 'community.docker' in installed_collections.stdout"
+        fail_msg: |
+          Required collections not installed.
+          Run: ansible-galaxy collection install -r ansible/collections/requirements.yml
+
+    - name: Test Proxmox API connectivity
+      uri:
+        url: "https://{{ vault_proxmox_api_host }}:8006/api2/json/version"
+        method: GET
+        validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+      register: proxmox_test
+      failed_when: false
+      changed_when: false
+
+    - name: Report Proxmox connectivity status
+      debug:
+        msg: "Proxmox API {{ 'is reachable' if proxmox_test.status == 200 else 'is NOT reachable' }}"
+
+    - name: Display validation summary
+      debug:
+        msg:
+          - "✅ Vault password file exists"
+          - "✅ Vault files are encrypted"
+          - "✅ No default passwords detected"
+          - "✅ Required variables are defined"
+          - "✅ Required collections are installed"
+          - "{{ '✅' if proxmox_test.status == 200 else '❌' }} Proxmox API connectivity"
+
+- name: Validate Target Hosts
+  hosts: all:!localhost
+  gather_facts: no
+  tags:
+    - preflight
+    - connectivity
+  
+  tasks:
+    - name: Check host connectivity
+      ping:
+      register: ping_result
+
+    - name: Report host status
+      debug:
+        msg: "Host {{ inventory_hostname }} is reachable"

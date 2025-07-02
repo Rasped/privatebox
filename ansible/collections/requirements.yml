@@ -1,0 +1,53 @@
+---
+# Ansible Collections Requirements
+# Install with: ansible-galaxy collection install -r ansible/collections/requirements.yml
+
+collections:
+  # General purpose collection with many useful modules
+  - name: community.general
+    version: ">=7.0.0"
+    
+  # Docker container management
+  - name: community.docker
+    version: ">=3.4.0"
+    
+  # Podman container management
+  - name: containers.podman
+    version: ">=1.11.0"
+    
+  # POSIX-compliant modules
+  - name: ansible.posix
+    version: ">=1.5.0"
+    
+  # Cryptography modules for SSL/TLS
+  - name: community.crypto
+    version: ">=2.16.0"
+    
+  # Network automation
+  - name: ansible.netcommon
+    version: ">=5.0.0"
+    
+  # Utilities collection
+  - name: ansible.utils
+    version: ">=2.9.0"
+    
+  # Windows support (optional, for future expansion)
+  - name: ansible.windows
+    version: ">=1.13.0"
+    
+  # System roles collection
+  - name: redhat.rhel_system_roles
+    version: ">=1.21.0"
+    
+  # MySQL/MariaDB management
+  - name: community.mysql
+    version: ">=3.5.0"
+    
+  # PostgreSQL management
+  - name: community.postgresql
+    version: ">=3.2.0"
+    
+  # Proxmox support (if available as collection)
+  # Note: Most Proxmox modules are in community.general
+  
+# Additional collections can be added as needed for specific integrations

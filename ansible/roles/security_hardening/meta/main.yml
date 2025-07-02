@@ -1,0 +1,31 @@
+---
+# meta file for security_hardening
+galaxy_info:
+  author: PrivateBox Team
+  description: Comprehensive security hardening role for Linux systems
+  company: PrivateBox
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  galaxy_tags:
+    - security
+    - hardening
+    - ssh
+    - firewall
+    - audit
+    - fail2ban
+    - system
+
+dependencies: []
+
+collections:
+  - ansible.posix
+  - community.general

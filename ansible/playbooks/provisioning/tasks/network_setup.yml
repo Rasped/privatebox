@@ -1,0 +1,63 @@
+---
+# Network Setup Tasks for Proxmox Infrastructure
+# Configures bridges, VLANs, and network interfaces
+
+- name: Configure Proxmox network bridges
+  community.general.proxmox_network:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+    node: "{{ proxmox_node }}"
+    iface: "{{ item.name }}"
+    type: bridge
+    autostart: yes
+    bridge_ports: "{{ item.ports | default('none') }}"
+    comments: "{{ item.comment | default('') }}"
+  loop: "{{ proxmox_bridges }}"
+  when: proxmox_bridges is defined
+  notify: restart networking
+
+- name: Configure VLANs
+  community.general.proxmox_network:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+    node: "{{ proxmox_node }}"
+    iface: "vlan{{ item.id }}"
+    type: vlan
+    vlan_raw_device: "{{ item.device | default('vmbr0') }}"
+    autostart: yes
+    comments: "{{ item.name }} network"
+  loop: "{{ proxmox_vlans }}"
+  when: proxmox_vlans is defined
+
+- name: Configure VLAN-aware bridges
+  community.general.proxmox_network:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+    node: "{{ proxmox_node }}"
+    iface: "{{ item.name }}"
+    type: bridge
+    bridge_vlan_aware: yes
+    autostart: yes
+  loop: "{{ proxmox_vlan_aware_bridges | default([]) }}"
+  when: proxmox_vlan_aware_bridges is defined
+
+- name: Apply network configuration
+  ansible.builtin.command: ifreload -a
+  become: true
+  when: ansible_os_family == "Debian"
+  changed_when: true
+
+- name: Validate network connectivity
+  ansible.builtin.wait_for:
+    host: "{{ proxmox_api_host }}"
+    port: 8006
+    delay: 5
+    timeout: 60
+  delegate_to: localhost
+  when: proxmox_api_host != inventory_hostname
