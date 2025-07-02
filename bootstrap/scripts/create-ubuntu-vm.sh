@@ -429,18 +429,22 @@ write_files:
     permissions: '0600'
     content: |
       SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
-  - path: /usr/local/lib/bootstrap_logger.sh
-    permissions: '0644'
-    content: |
-${bootstrap_logger_content}
   - path: /usr/local/lib/constants.sh
     permissions: '0644'
     content: |
 ${constants_content}
+  - path: /usr/local/lib/bootstrap_logger.sh
+    permissions: '0644'
+    content: |
+${bootstrap_logger_content}
   - path: /usr/local/lib/validation.sh
     permissions: '0644'
     content: |
 ${validation_content}
+  - path: /usr/local/lib/common.sh
+    permissions: '0644'
+    content: |
+${common_lib_content}
   - path: /usr/local/lib/error_handler.sh
     permissions: '0644'
     content: |
@@ -457,10 +461,6 @@ ${ssh_manager_content}
     permissions: '0644'
     content: |
 ${config_manager_content}
-  - path: /usr/local/lib/common.sh
-    permissions: '0644'
-    content: |
-${common_lib_content}
   - path: /usr/local/bin/post-install-setup.sh
     permissions: '0755'
     content: |
