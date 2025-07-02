@@ -5,9 +5,8 @@
 # before common.sh is available. It's designed to be sourced by scripts
 # that need logging during early initialization.
 
-# Source constants for color definitions
-BOOTSTRAP_LOGGER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${BOOTSTRAP_LOGGER_DIR}/constants.sh"
+# Note: This file expects constants.sh to be sourced before it
+# Color definitions should come from constants.sh via common.sh
 
 # Core logging function
 bootstrap_log() {

@@ -4,10 +4,8 @@
 # This module provides functions for managing SSH keys, including
 # generation, validation, and deployment.
 
-# Source required modules
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/bootstrap_logger.sh" 2>/dev/null || true
-source "${SCRIPT_DIR}/constants.sh" 2>/dev/null || true
+# Note: This file expects constants.sh and bootstrap_logger.sh to be sourced before it
+# All dependencies should come from common.sh
 
 # Generate SSH key pair with specified parameters
 generate_ssh_key() {
