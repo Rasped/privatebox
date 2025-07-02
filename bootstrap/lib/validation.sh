@@ -4,17 +4,15 @@
 # Provides comprehensive input validation functions
 # =============================================================================
 
-# Enable strict error handling
-set -euo pipefail
+# This library is meant to be sourced by common.sh or other scripts
+# It should not set -euo pipefail as it may be sourced in different contexts
 
-# Source common library if not already loaded
-if [[ -z "${LOG_DIR:-}" ]]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    # shellcheck source=../common.sh
-    source "${SCRIPT_DIR}/../common.sh" || {
-        echo "ERROR: Cannot source common library" >&2
-        exit 1
-    }
+# Ensure we have logging functions available
+if ! declare -f log_info >/dev/null 2>&1; then
+    # Basic fallback logging if not available
+    log_info() { echo "[INFO] $*"; }
+    log_error() { echo "[ERROR] $*" >&2; }
+    log_debug() { [[ "${DEBUG:-false}" == "true" ]] && echo "[DEBUG] $*"; }
 fi
 
 # =============================================================================
