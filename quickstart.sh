@@ -1,11 +1,14 @@
 #!/bin/bash
 # PrivateBox Quick Start Script
 # 
-# This script provides a simple one-liner installation method for PrivateBox
-# Usage: curl -fsSL https://example.com/quickstart.sh | sudo bash
+# This script provides a simple installation method for PrivateBox
+# 
+# Recommended usage (safer):
+#   curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
+#   sudo bash quickstart.sh [options]
 #
-# Options can be passed after bash:
-#   curl -fsSL https://example.com/quickstart.sh | sudo bash -s -- --ip 192.168.1.50
+# One-line usage (less secure):
+#   curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
 #
 # Available options:
 #   --ip <IP>           Set static IP for the VM
@@ -13,6 +16,7 @@
 #   --no-auto          Skip network auto-discovery
 #   --cleanup          Remove downloaded files after installation
 #   --branch <branch>  Use specific git branch (default: main)
+#   --yes, -y          Skip confirmation prompt
 #   --help             Show this help message
 
 set -euo pipefail
@@ -55,7 +59,7 @@ show_usage() {
 PrivateBox Quick Start Script
 
 Usage: 
-    curl -fsSL https://example.com/quickstart.sh | sudo bash [options]
+    sudo bash quickstart.sh [options]
 
 Options:
     --ip <IP>           Set static IP for the VM
@@ -67,14 +71,24 @@ Options:
     --help             Show this help message
 
 Examples:
+    # Download and run (recommended)
+    curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
+    sudo bash quickstart.sh
+
     # Basic installation with auto-discovery
-    curl -fsSL https://example.com/quickstart.sh | sudo bash
+    sudo bash quickstart.sh
 
     # Set custom IP address
-    curl -fsSL https://example.com/quickstart.sh | sudo bash -s -- --ip 192.168.1.50
+    sudo bash quickstart.sh --ip 192.168.1.50
+
+    # Use specific gateway
+    sudo bash quickstart.sh --ip 192.168.1.50 --gateway 192.168.1.1
 
     # Use development branch
-    curl -fsSL https://example.com/quickstart.sh | sudo bash -s -- --branch develop
+    sudo bash quickstart.sh --branch develop
+
+    # Skip confirmation prompt
+    sudo bash quickstart.sh --yes
 
 EOF
 }
