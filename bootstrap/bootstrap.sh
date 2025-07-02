@@ -103,7 +103,30 @@ main() {
     if [[ -f "${SCRIPT_DIR}/config/privatebox.conf" ]]; then
         source "${SCRIPT_DIR}/config/privatebox.conf"
         
-        if [[ $exit_code -eq 0 ]]; then
+        # Check for installation errors first
+        if [[ -n "${INSTALLATION_ERROR_STAGE:-}" ]]; then
+            echo "     Installation Failed"
+            echo "==========================================="
+            echo ""
+            echo "${COLOR_RED}ERROR: Cloud-init installation failed!${COLOR_NC}"
+            echo ""
+            echo "Error Details:"
+            echo "  Stage: ${INSTALLATION_ERROR_STAGE}"
+            echo "  Message: ${INSTALLATION_ERROR_MESSAGE:-No error message}"
+            echo "  Exit Code: ${INSTALLATION_ERROR_CODE:-1}"
+            echo ""
+            echo "VM Information:"
+            echo "  VM IP Address: ${STATIC_IP}"
+            echo "  SSH: ssh ${VM_USERNAME}@${STATIC_IP}"
+            echo ""
+            echo "To investigate the error:"
+            echo "  1. SSH into the VM: ssh ${VM_USERNAME}@${STATIC_IP}"
+            echo "  2. Check cloud-init logs: sudo cat /var/log/cloud-init-output.log"
+            echo "  3. Check status file: cat /etc/privatebox-cloud-init-complete"
+            echo ""
+            log_msg ERROR "Installation failed at stage: ${INSTALLATION_ERROR_STAGE}"
+            return 1
+        elif [[ $exit_code -eq 0 ]]; then
             echo "     Installation Complete!"
             echo "==========================================="
             echo ""

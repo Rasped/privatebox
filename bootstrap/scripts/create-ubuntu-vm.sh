@@ -413,23 +413,58 @@ $(cat "${SCRIPT_DIR}/semaphore-setup.sh" | sed 's/^/      /') # Indent script fo
       fi
 
 runcmd:
-  - locale-gen en_US.UTF-8
-  - update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8
-  - echo "Configuring Podman for user ${VM_USERNAME}"
-  - loginctl enable-linger ${VM_USERNAME}
-  - mkdir -p /etc/containers
-  - echo "unqualified-search-registries = ['docker.io']" > /etc/containers/registries.conf
-  - su - ${VM_USERNAME} -c "podman system migrate || true"
-  - echo "Configuring SSH server..."
-  - systemctl enable ssh
-  - systemctl start ssh
-  - ufw allow 22/tcp
-  - echo "Executing post-installation setup script..."
-  - export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
-  - /usr/local/bin/post-install-setup.sh
   - |
+    # Error handling function
+    write_error_status() {
+      local stage="\$1"
+      local error_msg="\$2"
+      local exit_code="\${3:-1}"
+      
+      echo "INSTALLATION_STATUS=failed" > /etc/privatebox-cloud-init-complete
+      echo "ERROR_STAGE=\${stage}" >> /etc/privatebox-cloud-init-complete
+      echo "ERROR_MESSAGE=\${error_msg}" >> /etc/privatebox-cloud-init-complete
+      echo "ERROR_CODE=\${exit_code}" >> /etc/privatebox-cloud-init-complete
+      echo "FAILED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
+      
+      # Also log to cloud-init output
+      echo "ERROR: Installation failed at stage '\${stage}': \${error_msg} (exit code: \${exit_code})"
+      exit \${exit_code}
+    }
+    
+    # Set error trap
+    trap 'write_error_status "unknown" "Unexpected error occurred" \$?' ERR
+    
+    # Start installation tracking
+    echo "INSTALLATION_STATUS=running" > /etc/privatebox-cloud-init-complete
+    echo "STARTED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
+    
+    # Locale configuration
+    echo "Configuring locale..."
+    locale-gen en_US.UTF-8 || write_error_status "locale-gen" "Failed to generate locale" \$?
+    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8 || write_error_status "update-locale" "Failed to update locale" \$?
+    
+    # Podman configuration
+    echo "Configuring Podman for user ${VM_USERNAME}"
+    loginctl enable-linger ${VM_USERNAME} || write_error_status "loginctl" "Failed to enable user linger" \$?
+    mkdir -p /etc/containers || write_error_status "mkdir-containers" "Failed to create containers directory" \$?
+    echo "unqualified-search-registries = ['docker.io']" > /etc/containers/registries.conf || write_error_status "registries-conf" "Failed to configure registries" \$?
+    su - ${VM_USERNAME} -c "podman system migrate || true"
+    
+    # SSH configuration
+    echo "Configuring SSH server..."
+    systemctl enable ssh || write_error_status "ssh-enable" "Failed to enable SSH service" \$?
+    systemctl start ssh || write_error_status "ssh-start" "Failed to start SSH service" \$?
+    ufw allow 22/tcp || write_error_status "ufw-ssh" "Failed to configure firewall for SSH" \$?
+    
+    # Main setup script
+    echo "Executing post-installation setup script..."
+    export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
+    if ! /usr/local/bin/post-install-setup.sh; then
+      write_error_status "post-install-setup" "Post-installation setup script failed" \$?
+    fi
+    
     # Install netcat for port checking
-    apt-get update && apt-get install -y netcat-openbsd
+    apt-get update && apt-get install -y netcat-openbsd || write_error_status "apt-netcat" "Failed to install netcat" \$?
     
     # Use the wait-for-services script to ensure services are fully operational
     echo "Waiting for services to be fully operational..."
@@ -440,6 +475,9 @@ runcmd:
       echo "Warning: Some services may not be fully operational"
       SERVICES_OK=false
     fi
+    
+    # Clear trap for final status writing
+    trap - ERR
     
     # Create completion marker with detailed status
     echo "COMPLETED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/privatebox-cloud-init-complete
@@ -454,9 +492,11 @@ runcmd:
     
     # Only mark as completed if all services are running and verified
     if [ "\$SERVICES_OK" = true ]; then
+      echo "INSTALLATION_STATUS=success" >> /etc/privatebox-cloud-init-complete
       echo "SERVICES_STATUS=completed" >> /etc/privatebox-cloud-init-complete
       echo "Cloud-init setup completed successfully with all services running and verified"
     else
+      echo "INSTALLATION_STATUS=partial" >> /etc/privatebox-cloud-init-complete
       echo "SERVICES_STATUS=partial" >> /etc/privatebox-cloud-init-complete
       echo "Cloud-init completed but some services may not be fully operational"
     fi
@@ -628,7 +668,33 @@ function wait_for_cloud_init() {
             # Read the completion marker to check service status
             local MARKER_CONTENT=$(ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "cat /etc/privatebox-cloud-init-complete 2>/dev/null" 2>/dev/null || echo "")
             
-            if [[ "$MARKER_CONTENT" =~ SERVICES_STATUS=completed ]]; then
+            # Check for installation failure first
+            if [[ "$MARKER_CONTENT" =~ INSTALLATION_STATUS=failed ]]; then
+                log_error "Cloud-init installation failed!"
+                
+                # Extract error details
+                local error_stage=$(echo "$MARKER_CONTENT" | grep "ERROR_STAGE=" | cut -d'=' -f2 || echo "unknown")
+                local error_msg=$(echo "$MARKER_CONTENT" | grep "ERROR_MESSAGE=" | cut -d'=' -f2 || echo "No error message")
+                local error_code=$(echo "$MARKER_CONTENT" | grep "ERROR_CODE=" | cut -d'=' -f2 || echo "1")
+                local post_install_error=$(echo "$MARKER_CONTENT" | grep "POST_INSTALL_ERROR=" | cut -d'=' -f2 || echo "")
+                
+                log_error "Installation failed at stage: $error_stage"
+                log_error "Error message: $error_msg"
+                log_error "Exit code: $error_code"
+                
+                if [[ -n "$post_install_error" ]]; then
+                    log_error "Post-install error: $post_install_error"
+                fi
+                
+                # Write error details to config file for bootstrap.sh to read
+                if [[ -f "${CONFIG_FILE}" ]]; then
+                    echo "INSTALLATION_ERROR_STAGE=$error_stage" >> "${CONFIG_FILE}"
+                    echo "INSTALLATION_ERROR_MESSAGE=$error_msg" >> "${CONFIG_FILE}"
+                    echo "INSTALLATION_ERROR_CODE=$error_code" >> "${CONFIG_FILE}"
+                fi
+                
+                return 1
+            elif [[ "$MARKER_CONTENT" =~ INSTALLATION_STATUS=success ]] && [[ "$MARKER_CONTENT" =~ SERVICES_STATUS=completed ]]; then
                 log_info "Cloud-init has completed with all services running!"
                 log_success "All services are running successfully!"
                 return 0
@@ -652,6 +718,9 @@ function wait_for_cloud_init() {
                     log_success "All services are now running successfully!"
                     return 0
                 fi
+            elif [[ "$MARKER_CONTENT" =~ INSTALLATION_STATUS=running ]]; then
+                # Still running
+                log_info "Cloud-init is still running installation tasks..."
             else
                 # Marker exists but doesn't have expected content, still initializing
                 log_info "Cloud-init is still initializing services..."
