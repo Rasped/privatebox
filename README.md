@@ -1,22 +1,115 @@
-# PrivateBox Ansible
+# PrivateBox
 
 ## Project Overview
 
-PrivateBox Ansible is a collection of Ansible playbooks and roles designed to automate the deployment and configuration of a **privacy-focused router product**. This repository contains **only the Ansible automation components** of the larger PrivateBox project.
+PrivateBox is a **privacy-focused router product** built on Proxmox VE that automates the deployment of privacy-enhancing network services. This repository contains both the bootstrap infrastructure for initial setup and Ansible automation for service deployment.
 
-This component provides systematic automation for setting up, configuring, and managing virtual machines and infrastructure components that deliver privacy-enhancing network services. The actual service configurations, VM templates, and other non-Ansible components are maintained in separate repositories of the PrivateBox project.
+The project provides a complete solution for setting up a privacy-focused network appliance, including automated VM provisioning, service deployment, and management tools.
+
+## Quick Start
+
+### Installation from GitHub (Recommended)
+
+Run these commands on your Proxmox host to download and execute the installer:
+
+```bash
+# Download the installer script
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
+
+# Run the installer
+sudo bash quickstart.sh
+```
+
+This will:
+- Automatically detect your network configuration
+- Create an Ubuntu 24.04 VM on your Proxmox host
+- Install Portainer for container management
+- Install Semaphore for Ansible automation
+- Configure all services and provide access information
+
+### Installation Options
+
+```bash
+# Download the script
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
+
+# Run with custom IP address
+sudo bash quickstart.sh --ip 192.168.1.50
+
+# Skip network auto-discovery
+sudo bash quickstart.sh --no-auto
+
+# Use specific gateway
+sudo bash quickstart.sh --ip 192.168.1.50 --gateway 192.168.1.1
+
+# Skip confirmation prompt (unattended)
+sudo bash quickstart.sh --yes
+
+# Clean up installation files after completion
+sudo bash quickstart.sh --cleanup
+```
+
+### Alternative Download Methods
+
+```bash
+# Using wget
+wget https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh
+sudo bash quickstart.sh
+
+# Using curl with different branch
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/develop/quickstart.sh -o quickstart.sh
+sudo bash quickstart.sh --branch develop
+
+# Review the script before running
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
+less quickstart.sh  # Review the script
+sudo bash quickstart.sh
+```
+
+### One-Line Installation (Less Secure)
+
+If you prefer the convenience of a one-line installation:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
+```
+
+**Note:** Piping scripts directly to bash is convenient but less secure. We recommend the two-command approach above.
+
+### What the Quickstart Script Does
+
+1. **Downloads Bootstrap Files**: Fetches the latest bootstrap scripts from GitHub
+2. **Runs Network Discovery**: Automatically detects your network configuration
+3. **Creates VM**: Provisions an Ubuntu 24.04 VM with optimal settings
+4. **Installs Services**: Sets up Portainer and Semaphore via cloud-init
+5. **Provides Access Info**: Shows you how to connect to your new PrivateBox
+
+### Troubleshooting
+
+If you can't download from GitHub directly:
+```bash
+# Use a different branch
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/develop/quickstart.sh | sudo bash
+
+# Check if the script is accessible
+curl -I https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh
+
+# View the script before running
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | less
+```
 
 ## Features
 
-- **Automated VM Provisioning**: Streamlined creation and configuration of VMs on Proxmox hosts
-- **Unattended Installations**: Hands-off provisioning of operating systems and services
-- **Privacy-Focused Services**:
+- **Automated VM Provisioning**: One-command setup on Proxmox hosts
+- **Network Auto-Discovery**: Automatic detection of network configuration
+- **Unattended Installation**: Complete hands-off provisioning
+- **Privacy-Focused Services** (via Ansible):
   - OPNSense firewall and router (dedicated VM)
   - AdGuard Home for ad-blocking (containerized)
   - Unbound DNS for enhanced DNS privacy
   - Additional privacy features
-- **Management Integration**: Seamless integration with Portainer, Proxmox, and Semaphore
-- **Modular Design**: Reusable Ansible roles and playbooks for flexibility and maintainability
+- **Management Integration**: Pre-configured Portainer and Semaphore
+- **Modular Design**: Reusable Ansible roles for service deployment
 
 ## Target Hardware
 
@@ -26,79 +119,94 @@ This component provides systematic automation for setting up, configuring, and m
 ## Repository Structure
 
 ```
-ansible/
+bootstrap/              # Bootstrap infrastructure and scripts
+├── scripts/           # Core installation scripts
+│   ├── create-ubuntu-vm.sh    # Main VM creation script
+│   ├── network-discovery.sh   # Automatic network detection
+│   ├── initial-setup.sh       # Post-install configuration
+│   ├── portainer-setup.sh     # Container management setup
+│   └── semaphore-setup.sh     # Ansible UI setup
+├── config/            # Configuration templates
+├── lib/               # Shared libraries
+└── deploy-to-server.sh  # Remote deployment tool
+
+ansible/                # Ansible automation (future implementation)
 ├── inventories/        # Environment-specific inventory files
 ├── roles/              # Modular, reusable Ansible roles
-├── playbooks/          # Orchestration, deployment, and maintenance playbooks
-├── collections/        # External collection dependencies
-├── group_vars/         # Group-specific variables
-├── host_vars/          # Host-specific variables
-├── vault/              # Encrypted secrets
-├── templates/          # Jinja2 templates
-├── files/              # Static files for deployment
+├── playbooks/          # Orchestration playbooks
 └── ansible.cfg         # Ansible configuration
+
+quickstart.sh          # One-line installer script
 ```
 
-## Primary Roles
+## Bootstrap Scripts
+
+- **bootstrap.sh**: Main entry point for complete installation
+- **create-ubuntu-vm.sh**: Creates and configures Ubuntu VM on Proxmox
+- **network-discovery.sh**: Automatic network configuration detection
+- **initial-setup.sh**: Post-install setup (runs via cloud-init)
+- **portainer-setup.sh**: Container management UI installation
+- **semaphore-setup.sh**: Ansible automation UI installation
+- **health-check.sh**: Service health monitoring
+- **backup.sh**: Configuration and credential backup
+
+## Planned Ansible Roles
 
 - **common**: Base configuration for all managed systems
 - **proxmox**: Manage Proxmox VE host and VM operations
 - **opnsense**: Deploy and configure OPNSense firewall
 - **adguard_home**: Deploy AdGuard Home DNS filtering
 - **unbound_dns**: Deploy Unbound recursive DNS resolver
-- **portainer**: Manage Portainer container management platform
-- **semaphore**: Deploy and configure Semaphore UI for Ansible
-- **security_hardening**: Apply security best practices across systems
-
-## Key Playbooks
-
-1. **site.yml**: Complete infrastructure deployment orchestration
-2. **provision_infrastructure.yml**: VM provisioning on Proxmox hosts
-3. **deploy_base_services.yml**: Common configuration across all systems
-4. **deploy_network_services.yml**: Networking and security services
-5. **deploy_management_services.yml**: Management tools deployment
-6. **maintenance.yml**: Regular system maintenance tasks
-7. **backup.yml**: Configuration backup procedures
+- **security_hardening**: Apply security best practices
 
 ## Getting Started
 
 ### Prerequisites
 
-- Proxmox host configured with API access
-- SSH access to target hosts
-- Ansible 2.10+ installed on control node
-- Required Ansible collections:
-  - community.general
-  - containers.podman
-  - community.crypto
-  - ansible.posix
+- Proxmox VE 7.0 or higher
+- At least 4GB free RAM
+- At least 10GB free storage
+- Internet connection
 
-### Installation
+### Manual Installation
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/privatebox-ansible.git
-   cd privatebox-ansible
-   ```
+If you prefer to run the bootstrap scripts manually:
 
-2. Install required Ansible collections:
-   ```bash
-   ansible-galaxy collection install -r collections/requirements.yml
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/Rasped/privatebox.git
+cd privatebox/bootstrap
 
-3. Configure inventory files in the `inventories/` directory
-   - Update host information
-   - Set environment-specific variables
+# Run with auto-discovery (recommended)
+sudo ./bootstrap.sh
 
-4. Create and encrypt necessary secrets:
-   ```bash
-   ansible-vault create group_vars/vault/all.yml
-   ```
+# Or run with specific network settings
+sudo ./scripts/create-ubuntu-vm.sh --ip 192.168.1.50 --gateway 192.168.1.1
+```
 
-5. Run the deployment:
-   ```bash
-   ansible-playbook -i inventories/production playbooks/site.yml
-   ```
+### Remote Deployment
+
+Deploy to a remote Proxmox server:
+
+```bash
+# Deploy and run bootstrap
+./bootstrap/deploy-to-server.sh 192.168.1.10
+
+# Deploy with testing
+./bootstrap/deploy-to-server.sh 192.168.1.10 root --test
+```
+
+### Access Information
+
+After installation completes (5-10 minutes), your services will be available at:
+
+- **SSH**: `ssh privatebox@<VM-IP>`
+- **Portainer**: `http://<VM-IP>:9000`
+- **Semaphore**: `http://<VM-IP>:3000`
+
+Default credentials:
+- Username: `privatebox`
+- Password: `privatebox` (change after first login!)
 
 ## Security Considerations
 
@@ -110,10 +218,12 @@ ansible/
 
 ## Current Status
 
-- Initial machine setup is nearly fully automated
-- Directory structure and playbook organization plan completed
-- Implementation of roles and playbooks in progress
-- Integration with Semaphore planned for execution management
+- ✅ **Bootstrap Infrastructure**: Fully automated VM creation and service deployment
+- ✅ **Network Auto-Discovery**: Automatic detection of network configuration
+- ✅ **Management Tools**: Portainer and Semaphore pre-installed and configured
+- ✅ **Quick Start Script**: One-line installation for easy deployment
+- 🚧 **Ansible Roles**: Basic structure in place, implementation in progress
+- 📋 **Privacy Services**: Planned deployment via Ansible (OPNSense, AdGuard, etc.)
 
 ## Next Steps
 

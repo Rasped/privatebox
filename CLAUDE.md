@@ -4,41 +4,101 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PrivateBox is a privacy-focused router product built on Proxmox, automating deployment of privacy-enhancing services including OPNSense firewall, AdGuard Home, Unbound DNS, and management tools via Ansible.
+PrivateBox is a privacy-focused router product built on Proxmox VE. The project provides automated bootstrap infrastructure for VM creation and service deployment, with planned Ansible automation for privacy-enhancing services including OPNSense firewall, AdGuard Home, and Unbound DNS.
 
 ## Repository Structure
 
 ```
-ansible/
-├── inventories/           # Environment-specific inventory configurations
-│   └── development/       # Development environment (currently only environment)
-├── roles/                 # Reusable Ansible roles (mostly unimplemented)
-│   └── common/           # Basic common role (partially implemented)
-└── playbooks/            # Orchestration playbooks
-    └── site.yml          # Main site playbook (basic framework only)
+bootstrap/                 # Bootstrap infrastructure (FULLY IMPLEMENTED)
+├── scripts/              # Core installation scripts
+│   ├── create-ubuntu-vm.sh      # Main VM creation with cloud-init
+│   ├── network-discovery.sh     # Automatic network configuration
+│   ├── initial-setup.sh         # Post-install setup (via cloud-init)
+│   ├── portainer-setup.sh       # Container management installation
+│   ├── semaphore-setup.sh       # Ansible UI installation
+│   ├── fix-proxmox-repos.sh     # Proxmox repository fixes
+│   ├── health-check.sh          # Service health monitoring
+│   └── backup.sh               # Configuration backup
+├── config/               # Configuration templates
+│   └── privatebox.conf.example  # Example configuration
+├── lib/                  # Shared libraries
+│   ├── common.sh               # Common functions
+│   └── validation.sh           # Input validation
+├── deploy-to-server.sh   # Remote deployment tool
+└── bootstrap.sh          # Main entry point
 
-documentation/            # Comprehensive planning and technical documentation
+quickstart.sh             # One-line installer (downloads and runs bootstrap)
+
+ansible/                  # Ansible automation (PARTIALLY IMPLEMENTED)
+├── inventories/          # Environment-specific inventory configurations
+│   └── development/      # Development environment
+├── roles/                # Reusable Ansible roles (mostly unimplemented)
+│   └── common/          # Basic common role (partially implemented)
+└── playbooks/           # Orchestration playbooks
+    └── site.yml         # Main site playbook (basic framework only)
+
+documentation/           # Comprehensive planning and technical documentation
 ```
 
 ## Key Architecture Decisions
 
-1. **Target Infrastructure**: Proxmox hypervisor on Intel N100 mini PCs with 8-16GB RAM
-2. **Service Architecture**: 
+1. **Target Infrastructure**: Proxmox VE on Intel N100 mini PCs with 8-16GB RAM
+2. **Bootstrap Architecture**:
+   - Ubuntu 24.04 LTS VM as management host
+   - Cloud-init for unattended installation
+   - Automatic network configuration detection
+   - Pre-installed Portainer and Semaphore
+3. **Service Architecture** (Planned via Ansible): 
    - OPNSense runs in dedicated VM for performance
    - Other services containerized using Docker/Portainer
    - Semaphore provides web UI for Ansible execution
-3. **Network Isolation**: Multiple VLANs for service segregation (planned)
+4. **Network Features**:
+   - Automatic IP detection and assignment
+   - Support for static IP configuration
+   - Multiple VLANs for service segregation (planned)
 
 ## Development Commands
 
-**Currently no build/test infrastructure exists.** When implementing:
+### Quick Start (One-Line Installation)
 
 ```bash
-# Run playbooks (basic execution)
-ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/site.yml
+# Basic installation with auto-discovery
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
 
-# Check syntax (when ansible-lint is added)
-# ansible-lint ansible/
+# With custom IP
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash -s -- --ip 192.168.1.50
+
+# Skip confirmation prompt
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash -s -- --yes
+```
+
+### Bootstrap Commands
+
+```bash
+# Run complete bootstrap with auto-discovery
+sudo ./bootstrap/bootstrap.sh
+
+# Create VM with specific network settings
+sudo ./bootstrap/scripts/create-ubuntu-vm.sh --ip 192.168.1.50 --gateway 192.168.1.1
+
+# Test network discovery
+sudo ./bootstrap/scripts/network-discovery.sh
+
+# Deploy to remote server
+./bootstrap/deploy-to-server.sh 192.168.1.10 root
+
+# Deploy and run tests
+./bootstrap/deploy-to-server.sh 192.168.1.10 root --test
+
+# Check service health
+ssh privatebox@<VM-IP> 'sudo /opt/privatebox/scripts/health-check.sh'
+```
+
+### Ansible Commands (Future)
+
+```bash
+# Run playbooks (when implemented)
+ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/site.yml
 
 # Run specific roles
 ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/site.yml --tags "role_name"
@@ -46,13 +106,23 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 
 ## Implementation Status
 
-- **Documentation**: Complete and comprehensive
-- **Infrastructure**: Basic directory structure only
-- **Roles**: Only `common` role exists with minimal tasks
-- **Inventory**: Basic development inventory with placeholder hosts
-- **Testing**: Not implemented
-- **CI/CD**: Not implemented
-- **Secrets Management**: Not implemented
+### Bootstrap (COMPLETE)
+- ✅ **Quick Start Script**: One-line installer with auto-discovery
+- ✅ **VM Creation**: Automated Ubuntu 24.04 VM provisioning
+- ✅ **Network Discovery**: Automatic network configuration detection
+- ✅ **Service Installation**: Portainer and Semaphore auto-installed
+- ✅ **Cloud-Init**: Unattended setup via cloud-init
+- ✅ **Remote Deployment**: Deploy to remote Proxmox servers
+- ✅ **Health Monitoring**: Service health check scripts
+
+### Ansible (IN PROGRESS)
+- ✅ **Documentation**: Complete and comprehensive
+- 🚧 **Infrastructure**: Basic directory structure only
+- 🚧 **Roles**: Only `common` role exists with minimal tasks
+- 🚧 **Inventory**: Basic development inventory with placeholder hosts
+- ❌ **Testing**: Not implemented
+- ❌ **CI/CD**: Not implemented
+- ❌ **Secrets Management**: Not implemented
 
 ## Critical Implementation Notes
 
@@ -73,6 +143,16 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 
 ## When Working on This Project
 
+### Bootstrap Development
+
+1. **Test Network Discovery First**: Always verify network detection works in the target environment
+2. **Use Common Libraries**: Source `lib/common.sh` for logging and utility functions
+3. **Maintain Idempotency**: Bootstrap scripts should be safe to run multiple times
+4. **Check Prerequisites**: Always verify Proxmox environment before proceeding
+5. **Follow Cloud-Init Best Practices**: Keep cloud-init configs simple and reliable
+
+### Ansible Development
+
 1. **Follow Ansible Best Practices**: The project documentation emphasizes idempotency, proper variable scoping, and modular role design
 2. **Reference Documentation First**: The documentation/ directory contains extensive planning - check there before implementing new features
 3. **Maintain Role Independence**: Each role should be self-contained and reusable
@@ -80,10 +160,19 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 
 ## Key Files to Reference
 
+### Bootstrap Files
+- `quickstart.sh` - One-line installer script
+- `bootstrap/bootstrap.sh` - Main bootstrap entry point
+- `bootstrap/scripts/create-ubuntu-vm.sh` - Core VM creation logic
+- `bootstrap/scripts/network-discovery.sh` - Network auto-detection
+- `bootstrap/config/privatebox.conf.example` - Configuration template
+- `bootstrap/README.md` - Bootstrap documentation
+
+### Ansible Documentation
 - `documentation/ansible_technical_implementation_guide.md` - Code examples and patterns
 - `documentation/ansible_playbook_organization_plan.md` - Detailed role specifications
 - `documentation/planned_ansible_playbooks.md` - List of all playbooks to implement
-- `README.md` - Project overview and goals
+- `README.md` - Project overview and quick start guide
 
 ## Context7 Documentation Loading
 
