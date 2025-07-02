@@ -1,0 +1,91 @@
+---
+# SSH hardening and configuration tasks
+- name: Ensure SSH service is installed
+  package:
+    name: "{{ common_ssh_package }}"
+    state: present
+  become: yes
+
+- name: Configure SSH daemon
+  template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    backup: yes
+    validate: '/usr/sbin/sshd -t -f %s'
+  become: yes
+  notify: restart sshd
+
+- name: Ensure SSH host keys exist
+  command: ssh-keygen -A
+  args:
+    creates: /etc/ssh/ssh_host_rsa_key
+  become: yes
+
+- name: Set SSH host key permissions
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - /etc/ssh/ssh_host_rsa_key
+    - /etc/ssh/ssh_host_ecdsa_key
+    - /etc/ssh/ssh_host_ed25519_key
+  become: yes
+  ignore_errors: yes  # Some key types might not exist
+
+- name: Set SSH public key permissions
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - /etc/ssh/ssh_host_rsa_key.pub
+    - /etc/ssh/ssh_host_ecdsa_key.pub
+    - /etc/ssh/ssh_host_ed25519_key.pub
+  become: yes
+  ignore_errors: yes  # Some key types might not exist
+
+- name: Create SSH banner file
+  copy:
+    content: "{{ common_ssh_banner }}"
+    dest: /etc/ssh/banner
+    owner: root
+    group: root
+    mode: '0644'
+  when: common_ssh_banner is defined
+  become: yes
+  notify: restart sshd
+
+- name: Enable and start SSH service
+  service:
+    name: "{{ common_ssh_service }}"
+    enabled: yes
+    state: started
+  become: yes
+
+- name: Configure firewall for SSH (ufw)
+  ufw:
+    rule: allow
+    port: "{{ common_ssh_port }}"
+    proto: tcp
+    comment: "Allow SSH on custom port"
+  when: 
+    - ansible_os_family == "Debian"
+    - common_manage_firewall | default(false)
+  become: yes
+
+- name: Configure firewall for SSH (firewalld)
+  firewalld:
+    port: "{{ common_ssh_port }}/tcp"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: 
+    - ansible_os_family == "RedHat"
+    - common_manage_firewall | default(false)
+  become: yes

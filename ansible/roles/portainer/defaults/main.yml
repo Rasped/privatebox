@@ -1,0 +1,38 @@
+---
+# defaults file for portainer
+
+# Container configuration
+portainer_container_name: "portainer"
+portainer_container_image: "portainer/portainer-ce:latest"
+portainer_container_restart_policy: "unless-stopped"
+
+# Network configuration
+portainer_web_port: 9000
+portainer_agent_port: 8000
+portainer_network_name: "management"
+
+# Storage configuration
+portainer_data_dir: "/home/{{ ansible_user }}/portainer"
+portainer_docker_socket: "/var/run/docker.sock"
+
+# Security configuration
+portainer_ssl_enabled: true
+portainer_ssl_cert_path: "{{ portainer_data_dir }}/certs/cert.pem"
+portainer_ssl_key_path: "{{ portainer_data_dir }}/certs/key.pem"
+
+# Admin configuration
+portainer_admin_user: "admin"
+portainer_admin_password: "{{ vault_portainer_admin_password | default('changeme') }}"
+
+# Agent configuration for multi-host deployments
+portainer_deploy_agent: false
+portainer_agent_container_name: "portainer-agent"
+portainer_agent_image: "portainer/agent:latest"
+
+# Feature flags
+portainer_hide_labels: true
+portainer_logo_url: ""
+
+# Backup configuration
+portainer_backup_enabled: true
+portainer_backup_retention_days: 7

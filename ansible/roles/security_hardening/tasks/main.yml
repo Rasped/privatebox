@@ -1,0 +1,75 @@
+---
+# tasks file for security_hardening
+
+- name: Include OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+  failed_when: false
+  tags:
+    - security
+    - always
+
+- name: Include SSH hardening tasks
+  ansible.builtin.include_tasks: ssh_hardening.yml
+  tags:
+    - security
+    - ssh
+
+- name: Include firewall configuration tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: firewall_enabled | bool
+  tags:
+    - security
+    - firewall
+
+- name: Include fail2ban configuration tasks
+  ansible.builtin.include_tasks: fail2ban.yml
+  when: fail2ban_enabled | bool
+  tags:
+    - security
+    - fail2ban
+
+- name: Include system updates configuration
+  ansible.builtin.include_tasks: system_updates.yml
+  when: unattended_upgrades_enabled | bool
+  tags:
+    - security
+    - updates
+
+- name: Include kernel hardening tasks
+  ansible.builtin.include_tasks: kernel_hardening.yml
+  tags:
+    - security
+    - kernel
+
+- name: Include file permissions tasks
+  ansible.builtin.include_tasks: file_permissions.yml
+  tags:
+    - security
+    - permissions
+
+- name: Include service hardening tasks
+  ansible.builtin.include_tasks: service_hardening.yml
+  tags:
+    - security
+    - services
+
+- name: Include audit configuration tasks
+  ansible.builtin.include_tasks: audit.yml
+  when: auditd_enabled | bool
+  tags:
+    - security
+    - audit
+
+- name: Include AppArmor configuration tasks
+  ansible.builtin.include_tasks: apparmor.yml
+  when: apparmor_enabled | bool and ansible_os_family == "Debian"
+  tags:
+    - security
+    - apparmor
+
+- name: Include rootkit detection tasks
+  ansible.builtin.include_tasks: rootkit_detection.yml
+  when: rootkit_detection_enabled | bool
+  tags:
+    - security
+    - rootkit

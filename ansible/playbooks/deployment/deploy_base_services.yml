@@ -1,0 +1,108 @@
+---
+# Deploy Base Services Playbook
+# Deploys common and security roles across all hosts
+
+- name: Deploy Base Services
+  hosts: all:!proxmox_hosts
+  gather_facts: true
+  become: true
+  tags:
+    - base
+    - deployment
+  
+  pre_tasks:
+    - name: Validate target hosts
+      ansible.builtin.ping:
+      register: ping_result
+    
+    - name: Check system requirements
+      ansible.builtin.assert:
+        that:
+          - ansible_memtotal_mb >= 1024
+          - ansible_distribution in ['Debian', 'Ubuntu']
+        fail_msg: "System does not meet minimum requirements"
+      tags:
+        - requirements
+
+    - name: Set deployment timestamp
+      ansible.builtin.set_fact:
+        deployment_timestamp: "{{ ansible_date_time.iso8601 }}"
+      tags:
+        - always
+
+  tasks:
+    - name: Apply common role
+      ansible.builtin.include_role:
+        name: common
+      vars:
+        common_install_packages: true
+        common_configure_ntp: true
+        common_configure_ssh: true
+      tags:
+        - common
+        - base-config
+
+    - name: Apply security hardening
+      ansible.builtin.include_role:
+        name: security_hardening
+      vars:
+        security_enable_firewall: true
+        security_configure_fail2ban: true
+        security_harden_ssh: true
+      tags:
+        - security
+        - hardening
+      when: security_hardening_enabled | default(true)
+
+    - name: Configure system monitoring
+      ansible.builtin.include_tasks: tasks/monitoring_setup.yml
+      tags:
+        - monitoring
+      when: monitoring_enabled | default(true)
+
+    - name: Setup log rotation
+      ansible.builtin.include_tasks: tasks/log_rotation.yml
+      tags:
+        - logging
+        - maintenance
+
+  post_tasks:
+    - name: Verify base services deployment
+      ansible.builtin.include_tasks: tasks/verify_base_services.yml
+      tags:
+        - validation
+        - post-deployment
+
+    - name: Create deployment marker
+      ansible.builtin.file:
+        path: /etc/privatebox/.base_deployed
+        state: touch
+        modification_time: preserve
+        access_time: preserve
+      tags:
+        - marker
+
+    - name: Send deployment notification
+      ansible.builtin.debug:
+        msg: "Base services deployed successfully on {{ inventory_hostname }} at {{ deployment_timestamp }}"
+      tags:
+        - notification
+
+  handlers:
+    - name: restart ssh
+      ansible.builtin.systemd:
+        name: sshd
+        state: restarted
+      become: true
+
+    - name: restart firewall
+      ansible.builtin.systemd:
+        name: ufw
+        state: restarted
+      become: true
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      become: true

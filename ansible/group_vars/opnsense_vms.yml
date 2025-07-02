@@ -1,0 +1,134 @@
+---
+# OPNSense VM configuration
+
+# VM specifications
+opnsense_vm_cores: 4
+opnsense_vm_memory: 4096
+opnsense_vm_disk_size: 64
+opnsense_vm_network_interfaces: 2
+opnsense_vm_cpu_type: "host"
+opnsense_vm_machine: "q35"
+
+# OPNSense version and installation
+opnsense_version: "23.7"
+opnsense_iso_url: "https://mirror.ams1.nl.leaseweb.net/opnsense/releases/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso.bz2"
+opnsense_install_type: "dvd"  # dvd or nano
+
+# Network configuration
+opnsense_wan_interface: "vtnet0"
+opnsense_lan_interface: "vtnet1"
+opnsense_wan_config: "dhcp"  # dhcp or static
+opnsense_lan_address: "10.0.0.1"
+opnsense_lan_netmask: "255.255.255.0"
+
+# VLAN interfaces (will be created on LAN)
+opnsense_vlans:
+  - id: 10
+    name: "management"
+    address: "10.0.10.1/24"
+    dhcp: true
+    dhcp_range_start: "10.0.10.100"
+    dhcp_range_end: "10.0.10.200"
+  - id: 20
+    name: "services"
+    address: "10.0.20.1/24"
+    dhcp: true
+    dhcp_range_start: "10.0.20.100"
+    dhcp_range_end: "10.0.20.200"
+  - id: 30
+    name: "monitoring"
+    address: "10.0.30.1/24"
+    dhcp: true
+    dhcp_range_start: "10.0.30.100"
+    dhcp_range_end: "10.0.30.200"
+  - id: 40
+    name: "guest"
+    address: "10.0.40.1/24"
+    dhcp: true
+    dhcp_range_start: "10.0.40.100"
+    dhcp_range_end: "10.0.40.200"
+  - id: 50
+    name: "iot"
+    address: "10.0.50.1/24"
+    dhcp: true
+    dhcp_range_start: "10.0.50.100"
+    dhcp_range_end: "10.0.50.200"
+
+# Firewall rules templates
+opnsense_firewall_rule_templates:
+  - name: "allow_management_to_all"
+    source: "management"
+    destination: "any"
+    action: "pass"
+  - name: "allow_services_to_internet"
+    source: "services"
+    destination: "wan"
+    action: "pass"
+  - name: "block_iot_to_local"
+    source: "iot"
+    destination: "local_networks"
+    action: "block"
+  - name: "allow_guest_to_internet"
+    source: "guest"
+    destination: "wan"
+    action: "pass"
+
+# Services configuration
+opnsense_services:
+  unbound:
+    enabled: true
+    forward_to_adguard: true
+    dnssec: true
+    cache_size: "256"
+  ntpd:
+    enabled: true
+    servers: "{{ ntp_servers }}"
+  dhcpd:
+    enabled: true
+    dns_servers: ["10.0.10.53", "10.0.10.54"]
+  openvpn:
+    enabled: false
+    port: 1194
+    protocol: "udp"
+  wireguard:
+    enabled: true
+    port: 51820
+    peers_allowed: 10
+
+# IDS/IPS configuration
+opnsense_ids_enabled: true
+opnsense_ids_pattern_matcher: "hyperscan"
+opnsense_ids_interfaces: ["wan"]
+opnsense_ids_ruleset: "opnsense.rules"
+
+# System settings
+opnsense_hostname: "opnsense"
+opnsense_domain: "{{ network_domain }}"
+opnsense_timezone: "{{ timezone }}"
+opnsense_prefer_ipv4: true
+
+# Update settings
+opnsense_update_check: "weekly"
+opnsense_firmware_mirror: "default"
+opnsense_auto_update_packages: false
+
+# Backup configuration
+opnsense_backup_enabled: true
+opnsense_backup_frequency: "daily"
+opnsense_backup_retention: 7
+opnsense_backup_items:
+  - "config.xml"
+  - "captiveportal"
+  - "vouchers"
+  - "rrd"
+
+# Performance tuning
+opnsense_optimization_profile: "normal"  # normal, high-latency, conservative, aggressive
+opnsense_states_limit: 200000
+opnsense_frags_limit: 25000
+opnsense_src_nodes_limit: 100000
+
+# High availability (future)
+opnsense_ha_enabled: false
+opnsense_ha_sync_interface: ""
+opnsense_ha_sync_peer: ""

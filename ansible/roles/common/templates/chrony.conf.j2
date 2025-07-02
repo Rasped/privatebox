@@ -1,0 +1,67 @@
+# {{ ansible_managed }}
+# Chrony configuration file
+
+# NTP servers
+{% for server in common_ntp_servers %}
+server {{ server }} iburst
+{% endfor %}
+
+# Record the rate at which the system clock gains/losses time.
+driftfile /var/lib/chrony/drift
+
+# Allow the system clock to be stepped in the first three updates
+# if its offset is larger than 1 second.
+makestep 1.0 3
+
+# Enable kernel synchronization of the real-time clock (RTC).
+rtcsync
+
+# Specify directory for log files.
+logdir /var/log/chrony
+
+# Select which information is logged.
+#log measurements statistics tracking
+
+# Stop bad estimates upsetting machine clock.
+maxupdateskew 100.0
+
+# Dump measurements when daemon exits.
+#dumponexit
+
+# Specify directory for dumping measurements.
+#dumpdir /var/lib/chrony
+
+# This directive forces `chronyd' to send a message to syslog if it
+# makes a system clock adjustment larger than a threshold value in seconds.
+logchange 0.5
+
+# Enable hardware timestamping on all interfaces that support it.
+#hwtimestamp *
+
+# Increase the minimum number of selectable sources required to adjust
+# the system clock.
+#minsources 2
+
+# Allow NTP client access from local network.
+#allow 192.168.0.0/16
+
+# Serve time even if not synchronized to a time source.
+#local stratum 10
+
+# Specify file containing keys for NTP authentication.
+#keyfile /etc/chrony.keys
+
+# Get TAI-UTC offset and leap seconds from the system tz database.
+leapsectz right/UTC
+
+# Specify the key used as password for chronyc.
+#commandkey 1
+
+# Generate command key if missing.
+#generatecommandkey
+
+# Disable logging of client accesses.
+noclientlog
+
+# Send a message to syslog if a clock adjustment is larger than 0.5 seconds.
+logchange 0.5

@@ -1,0 +1,172 @@
+---
+# Common VM Maintenance Playbook
+# Performs system updates, security patches, and routine maintenance
+
+- name: Common VM Maintenance
+  hosts: all:!proxmox_hosts
+  gather_facts: true
+  become: true
+  serial: "{{ maintenance_serial | default('25%') }}"
+  tags:
+    - maintenance
+    - updates
+  
+  vars:
+    maintenance_reboot_timeout: 600
+    maintenance_pre_update_snapshot: true
+    maintenance_log_dir: /var/log/privatebox/maintenance
+
+  pre_tasks:
+    - name: Create maintenance log directory
+      ansible.builtin.file:
+        path: "{{ maintenance_log_dir }}"
+        state: directory
+        mode: '0755'
+      tags:
+        - logging
+
+    - name: Log maintenance start
+      ansible.builtin.lineinfile:
+        path: "{{ maintenance_log_dir }}/maintenance.log"
+        line: "{{ ansible_date_time.iso8601 }} - Starting maintenance on {{ inventory_hostname }}"
+        create: true
+      tags:
+        - logging
+
+    - name: Check system uptime
+      ansible.builtin.command: uptime -p
+      register: system_uptime
+      changed_when: false
+      tags:
+        - pre-checks
+
+    - name: Create pre-maintenance snapshot
+      ansible.builtin.include_tasks: tasks/create_vm_snapshot.yml
+      vars:
+        snapshot_name: "pre-maintenance-{{ ansible_date_time.epoch }}"
+      when: 
+        - maintenance_pre_update_snapshot
+        - ansible_virtualization_type == "kvm"
+      tags:
+        - snapshot
+        - backup
+
+  tasks:
+    - name: Update package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      tags:
+        - packages
+        - apt-update
+
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: safe
+        autoremove: true
+        autoclean: true
+      register: apt_upgrade_result
+      when: ansible_os_family == "Debian"
+      tags:
+        - packages
+        - system-upgrade
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+      tags:
+        - reboot-check
+
+    - name: Clean old logs
+      ansible.builtin.include_tasks: tasks/clean_old_logs.yml
+      tags:
+        - cleanup
+        - logs
+
+    - name: Update container images
+      ansible.builtin.include_tasks: tasks/update_container_images.yml
+      when: 
+        - docker_installed | default(false)
+        - inventory_hostname in groups['container_hosts'] | default([])
+      tags:
+        - containers
+        - docker
+
+    - name: Run security audit
+      ansible.builtin.include_tasks: tasks/security_audit.yml
+      tags:
+        - security
+        - audit
+
+    - name: Update system monitoring
+      ansible.builtin.include_tasks: tasks/update_monitoring.yml
+      when: monitoring_enabled | default(true)
+      tags:
+        - monitoring
+
+  post_tasks:
+    - name: Reboot if required
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by maintenance playbook"
+        reboot_timeout: "{{ maintenance_reboot_timeout }}"
+      when: 
+        - reboot_required_file.stat.exists
+        - maintenance_allow_reboot | default(true)
+      tags:
+        - reboot
+
+    - name: Verify services after maintenance
+      ansible.builtin.include_tasks: tasks/verify_services.yml
+      tags:
+        - validation
+        - post-maintenance
+
+    - name: Clean old snapshots
+      ansible.builtin.include_tasks: tasks/clean_old_snapshots.yml
+      vars:
+        keep_snapshots: 3
+      when: 
+        - maintenance_pre_update_snapshot
+        - ansible_virtualization_type == "kvm"
+      tags:
+        - cleanup
+        - snapshots
+
+    - name: Generate maintenance report
+      ansible.builtin.template:
+        src: templates/maintenance_report.j2
+        dest: "{{ maintenance_log_dir }}/maintenance_report_{{ ansible_date_time.epoch }}.txt"
+      vars:
+        upgrade_result: "{{ apt_upgrade_result | default({}) }}"
+      tags:
+        - reporting
+
+    - name: Log maintenance completion
+      ansible.builtin.lineinfile:
+        path: "{{ maintenance_log_dir }}/maintenance.log"
+        line: "{{ ansible_date_time.iso8601 }} - Completed maintenance on {{ inventory_hostname }}"
+      tags:
+        - logging
+
+    - name: Send maintenance notification
+      ansible.builtin.debug:
+        msg: |
+          Maintenance completed on {{ inventory_hostname }}
+          Packages upgraded: {{ apt_upgrade_result.changed | default(false) }}
+          Reboot performed: {{ reboot_required_file.stat.exists | default(false) }}
+      tags:
+        - notification
+
+  handlers:
+    - name: restart ssh
+      ansible.builtin.systemd:
+        name: sshd
+        state: restarted
+
+    - name: restart networking
+      ansible.builtin.systemd:
+        name: systemd-networkd
+        state: restarted
+      when: ansible_distribution == 'Ubuntu'

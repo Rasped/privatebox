@@ -1,12 +1,17 @@
 ---
 # tasks file for common
-- name: Update package cache
-  package:
-    update_cache: yes
-  become: yes
+# Import task files in a logical order
+- import_tasks: users.yml
+  tags: users
 
-- name: Install common packages
-  package:
-    name: "{{ common_packages }}"
-    state: present
-  become: yes
+- import_tasks: packages.yml
+  tags: packages
+
+- import_tasks: time.yml
+  tags: time
+
+- import_tasks: ssh.yml
+  tags: ssh
+
+- import_tasks: updates.yml
+  tags: updates

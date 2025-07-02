@@ -1,0 +1,85 @@
+---
+# Service hardening tasks
+
+- name: Get list of all services
+  ansible.builtin.systemd:
+    list_units: true
+  register: systemd_units
+
+- name: Disable unnecessary services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: "{{ disable_unnecessary_services }}"
+  when: item in systemd_units.units
+  failed_when: false
+
+- name: Remove unnecessary packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - telnet
+    - rsh-client
+    - rsh-server
+    - nis
+    - talk
+    - talkd
+  failed_when: false
+
+- name: Ensure critical services are running
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - systemd-journald
+    - systemd-timesyncd
+    - systemd-resolved
+
+- name: Configure systemd-journald
+  ansible.builtin.copy:
+    content: |
+      [Journal]
+      Storage=persistent
+      Compress=yes
+      MaxRetentionSec=30d
+      MaxFileSec=1week
+      ForwardToSyslog=no
+      ForwardToKMsg=no
+      ForwardToConsole=no
+      ForwardToWall=no
+    dest: /etc/systemd/journald.conf.d/security.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart systemd-journald
+
+- name: Set secure permissions on systemd directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/systemd/system
+    - /etc/systemd/user
+    - /usr/lib/systemd/system
+
+- name: Disable ctrl-alt-del reboot
+  ansible.builtin.systemd:
+    name: ctrl-alt-del.target
+    masked: true
+
+- name: Configure process accounting
+  ansible.builtin.package:
+    name: acct
+    state: present
+
+- name: Enable process accounting
+  ansible.builtin.systemd:
+    name: acct
+    state: started
+    enabled: true

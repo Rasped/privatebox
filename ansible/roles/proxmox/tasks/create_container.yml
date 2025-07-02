@@ -1,0 +1,122 @@
+---
+# Tasks for creating LXC containers in Proxmox
+
+- name: Validate required container parameters
+  assert:
+    that:
+      - container_name is defined
+      - container_vmid is defined
+      - container_node is defined or proxmox_node is defined
+      - container_ostemplate is defined
+    fail_msg: "Required container parameters are missing"
+    success_msg: "All required container parameters are present"
+
+- name: Set container node
+  set_fact:
+    _container_node: "{{ container_node | default(proxmox_node) }}"
+
+- name: Create LXC container
+  community.general.proxmox:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+    node: "{{ _container_node }}"
+    vmid: "{{ container_vmid }}"
+    hostname: "{{ container_name }}"
+    ostemplate: "{{ container_ostemplate }}"
+    description: "{{ container_description | default('Managed by Ansible') }}"
+    state: present
+    # Resource Configuration
+    cores: "{{ container_cores | default(proxmox_container_defaults.cores) }}"
+    memory: "{{ container_memory | default(proxmox_container_defaults.memory) }}"
+    swap: "{{ container_swap | default(proxmox_container_defaults.swap) }}"
+    # Storage Configuration
+    storage: "{{ container_storage | default(proxmox_default_storage) }}"
+    disk: "{{ container_disk_size | default('8') }}"
+    # Network Configuration
+    netif: "{{ container_netif | default({}) }}"
+    # Security Configuration
+    unprivileged: "{{ container_unprivileged | default(proxmox_container_defaults.unprivileged) }}"
+    features: "{{ container_features | default([]) }}"
+    # Boot Configuration
+    onboot: "{{ container_onboot | default(proxmox_container_defaults.onboot) }}"
+    # Password or SSH key
+    password: "{{ container_password | default(omit) }}"
+    pubkey: "{{ container_pubkey | default(omit) }}"
+    # DNS Configuration
+    nameserver: "{{ container_nameserver | default(dns_servers | join(' ')) }}"
+    searchdomain: "{{ container_searchdomain | default(omit) }}"
+  register: container_creation_result
+  retries: 3
+  delay: 10
+  until: container_creation_result is succeeded
+
+- name: Display container creation result
+  debug:
+    msg: "Container {{ container_name }} (ID: {{ container_vmid }}) created successfully on node {{ _container_node }}"
+  when: container_creation_result is changed
+
+- name: Configure container mount points
+  community.general.proxmox:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+    node: "{{ _container_node }}"
+    vmid: "{{ container_vmid }}"
+    state: present
+    mounts: "{{ item }}"
+  loop: "{{ container_mounts | default([]) }}"
+  when: container_mounts is defined
+
+- name: Start container after creation
+  community.general.proxmox:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password }}"
+    api_validate_certs: "{{ proxmox_api_validate_certs | default(false) }}"
+    node: "{{ _container_node }}"
+    vmid: "{{ container_vmid }}"
+    state: started
+  when:
+    - container_creation_result is changed
+    - container_start_after_create | default(true)
+  register: container_start_result
+  retries: 3
+  delay: 10
+  until: container_start_result is succeeded
+
+- name: Wait for container to be accessible
+  wait_for:
+    host: "{{ container_ip | default(omit) }}"
+    port: "{{ container_ssh_port | default(22) }}"
+    delay: 10
+    timeout: 300
+  when:
+    - container_start_result is changed
+    - container_ip is defined
+    - container_wait_for_ssh | default(false)
+
+- name: Display container start status
+  debug:
+    msg: "Container {{ container_name }} started successfully"
+  when: container_start_result is defined and container_start_result is changed
+
+# Example usage in playbook:
+# - name: Create AdGuard Home container
+#   include_role:
+#     name: proxmox
+#     tasks_from: create_container
+#   vars:
+#     container_name: adguard-home
+#     container_vmid: 201
+#     container_ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+#     container_cores: 2
+#     container_memory: 1024
+#     container_disk_size: 16
+#     container_netif:
+#       net0: "name=eth0,bridge=vmbr1,ip=10.10.30.10/24,gw=10.10.30.1"
+#     container_features:
+#       - nesting=1
+#       - keyctl=1

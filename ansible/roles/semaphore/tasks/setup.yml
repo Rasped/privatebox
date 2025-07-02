@@ -1,0 +1,60 @@
+---
+# Initial setup tasks for semaphore
+
+- name: Check if Semaphore is already initialized
+  ansible.builtin.uri:
+    url: "http://localhost:{{ semaphore_web_port }}/api/user"
+    method: GET
+    status_code: [200, 401]
+  register: semaphore_status
+
+- name: Run Semaphore setup
+  ansible.builtin.uri:
+    url: "http://localhost:{{ semaphore_web_port }}/api/setup"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ semaphore_admin_user }}"
+      name: "{{ semaphore_admin_name }}"
+      email: "{{ semaphore_admin_email }}"
+      password: "{{ semaphore_admin_password }}"
+    status_code: 200
+  register: setup_result
+  when: semaphore_status.status == 401
+  no_log: true
+
+- name: Create default project
+  ansible.builtin.uri:
+    url: "http://localhost:{{ semaphore_web_port }}/api/projects"
+    method: POST
+    body_format: json
+    body:
+      name: "PrivateBox"
+      alert: false
+    headers:
+      Authorization: "Bearer {{ setup_result.json.token }}"
+    status_code: [201, 409]
+  when: setup_result.changed is defined and setup_result.changed
+  register: project_result
+
+- name: Save setup information
+  ansible.builtin.copy:
+    content: |
+      Semaphore Setup Information
+      ==========================
+      URL: http://{{ ansible_host }}:{{ semaphore_web_port }}
+      Admin User: {{ semaphore_admin_user }}
+      Admin Email: {{ semaphore_admin_email }}
+      Setup Date: {{ ansible_date_time.iso8601 }}
+      
+      Default Project: PrivateBox
+      
+      Next Steps:
+      1. Login to Semaphore web interface
+      2. Create SSH keys for accessing hosts
+      3. Add inventory from Ansible project
+      4. Create task templates for playbooks
+    dest: "{{ semaphore_data_dir }}/setup-info.txt"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0600'

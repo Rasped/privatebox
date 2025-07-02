@@ -1,0 +1,60 @@
+---
+# Audit configuration tasks
+
+- name: Install auditd
+  ansible.builtin.package:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+
+- name: Configure auditd
+  ansible.builtin.template:
+    src: audit/auditd.conf.j2
+    dest: /etc/audit/auditd.conf
+    owner: root
+    group: root
+    mode: '0640'
+    backup: true
+  notify: restart auditd
+
+- name: Configure audit rules
+  ansible.builtin.template:
+    src: audit/audit.rules.j2
+    dest: /etc/audit/rules.d/hardening.rules
+    owner: root
+    group: root
+    mode: '0640'
+    backup: true
+  notify: restart auditd
+
+- name: Enable and start auditd service
+  ansible.builtin.systemd:
+    name: auditd
+    state: started
+    enabled: true
+
+- name: Configure log rotation for audit logs
+  ansible.builtin.copy:
+    content: |
+      /var/log/audit/*.log {
+          daily
+          rotate 30
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0600 root root
+          postrotate
+              /usr/sbin/service auditd restart > /dev/null
+          endscript
+      }
+    dest: /etc/logrotate.d/audit
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Set immutable flag on audit configuration
+  ansible.builtin.command: chattr +i /etc/audit/audit.rules
+  changed_when: false
+  failed_when: false

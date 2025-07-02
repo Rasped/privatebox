@@ -1,0 +1,106 @@
+---
+# OPNsense provision tasks - VM creation and OS installation
+
+- name: Ensure ISO storage directory exists
+  ansible.builtin.file:
+    path: "/var/lib/vz/template/iso"
+    state: directory
+    mode: '0755'
+  delegate_to: "{{ proxmox_host }}"
+
+- name: Download OPNsense ISO if not present
+  ansible.builtin.get_url:
+    url: "{{ opnsense_iso.url }}"
+    dest: "/var/lib/vz/template/iso/{{ opnsense_iso.filename }}.bz2"
+    checksum: "{{ opnsense_iso.checksum | default(omit) }}"
+    timeout: 600
+  delegate_to: "{{ proxmox_host }}"
+  register: iso_download
+
+- name: Extract ISO if downloaded
+  ansible.builtin.command:
+    cmd: "bunzip2 -f /var/lib/vz/template/iso/{{ opnsense_iso.filename }}.bz2"
+  delegate_to: "{{ proxmox_host }}"
+  when: iso_download.changed
+  changed_when: iso_download.changed
+
+- name: Check if VM already exists
+  ansible.builtin.command:
+    cmd: "qm status {{ opnsense_vm.vmid }}"
+  delegate_to: "{{ proxmox_host }}"
+  register: vm_exists
+  failed_when: false
+  changed_when: false
+
+- name: Create OPNsense VM using proxmox role
+  include_role:
+    name: proxmox
+    tasks_from: create_vm
+  vars:
+    proxmox_vm_config:
+      vmid: "{{ opnsense_vm.vmid }}"
+      name: "{{ opnsense_vm.name }}"
+      node: "{{ proxmox_node | default('pve') }}"
+      cores: "{{ opnsense_vm.cores }}"
+      memory: "{{ opnsense_vm.memory }}"
+      balloon: 0
+      scsihw: "virtio-scsi-pci"
+      boot: "{{ opnsense_vm.boot_order }}"
+      onboot: "{{ opnsense_vm.onboot | default(true) }}"
+      agent: 0
+      ostype: "other"
+      cpu: "host"
+      numa: 1
+  when: vm_exists.rc != 0
+
+- name: Configure VM disks
+  community.general.proxmox_disk:
+    vmid: "{{ opnsense_vm.vmid }}"
+    disk: "scsi0"
+    storage: "{{ opnsense_vm.storage }}"
+    size: "{{ opnsense_vm.disk_size }}G"
+    state: present
+  delegate_to: "{{ proxmox_host }}"
+  when: vm_exists.rc != 0
+
+- name: Configure WAN network interface
+  ansible.builtin.command:
+    cmd: >
+      qm set {{ opnsense_vm.vmid }}
+      --net0 {{ opnsense_network.wan.model }},bridge={{ opnsense_network.wan.bridge }},firewall={{ opnsense_network.wan.firewall | int }}
+  delegate_to: "{{ proxmox_host }}"
+  when: vm_exists.rc != 0
+
+- name: Configure LAN network interface
+  ansible.builtin.command:
+    cmd: >
+      qm set {{ opnsense_vm.vmid }}
+      --net1 {{ opnsense_network.lan.model }},bridge={{ opnsense_network.lan.bridge }},firewall={{ opnsense_network.lan.firewall | int }}
+  delegate_to: "{{ proxmox_host }}"
+  when: vm_exists.rc != 0
+
+- name: Attach ISO to VM
+  ansible.builtin.command:
+    cmd: >
+      qm set {{ opnsense_vm.vmid }}
+      --ide2 {{ opnsense_iso.storage }}:iso/{{ opnsense_iso.filename }},media=cdrom
+  delegate_to: "{{ proxmox_host }}"
+
+- name: Set boot order to boot from ISO first
+  ansible.builtin.command:
+    cmd: "qm set {{ opnsense_vm.vmid }} --boot order=ide2;scsi0"
+  delegate_to: "{{ proxmox_host }}"
+
+- name: Start VM if configured
+  community.general.proxmox_kvm:
+    vmid: "{{ opnsense_vm.vmid }}"
+    state: started
+  delegate_to: "{{ proxmox_host }}"
+  when: opnsense_vm.start_on_create | default(true)
+
+- name: Display post-provisioning message
+  ansible.builtin.debug:
+    msg:
+      - "OPNsense VM {{ opnsense_vm.name }} ({{ opnsense_vm.vmid }}) has been created"
+      - "Please complete the installation via the Proxmox console"
+      - "After installation, run the base configuration playbook"

@@ -1,0 +1,35 @@
+---
+# Main tasks file for opnsense role
+# This role orchestrates the sub-roles for complete OPNSense deployment
+
+- name: Include provision tasks
+  include_role:
+    name: opnsense/provision
+  when: opnsense_provision | default(true)
+  tags:
+    - opnsense-provision
+    - provision
+
+- name: Include base configuration tasks
+  include_role:
+    name: opnsense/base
+  when: opnsense_configure_base | default(true)
+  tags:
+    - opnsense-base
+    - configuration
+
+- name: Include firewall configuration tasks
+  include_role:
+    name: opnsense/firewall
+  when: opnsense_configure_firewall | default(false)
+  tags:
+    - opnsense-firewall
+    - firewall
+
+- name: Include VPN configuration tasks
+  include_role:
+    name: opnsense/vpn
+  when: opnsense_configure_vpn | default(false)
+  tags:
+    - opnsense-vpn
+    - vpn

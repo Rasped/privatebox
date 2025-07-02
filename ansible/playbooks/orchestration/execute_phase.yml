@@ -1,0 +1,30 @@
+---
+# Helper playbook to execute deployment phases
+
+- name: Start phase execution
+  ansible.builtin.debug:
+    msg: |
+      =====================================
+      Starting: {{ phase_name }}
+      =====================================
+
+- name: Execute phase playbooks
+  ansible.builtin.command: |
+    ansible-playbook -i {{ playbook_dir }}/../../inventories/{{ environment_name | default('development') }}/hosts.yml {{ item }}
+  args:
+    chdir: "{{ playbook_dir }}"
+  loop: "{{ phase_playbooks }}"
+  register: playbook_results
+
+- name: Check phase results
+  ansible.builtin.fail:
+    msg: "Playbook {{ item.item }} failed with return code {{ item.rc }}"
+  when: item.rc != 0
+  loop: "{{ playbook_results.results }}"
+
+- name: Phase completion
+  ansible.builtin.debug:
+    msg: |
+      =====================================
+      Completed: {{ phase_name }}
+      ====================================="

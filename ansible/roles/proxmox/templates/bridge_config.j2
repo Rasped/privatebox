@@ -1,0 +1,29 @@
+# Bridge configuration for {{ proxmox_bridge_name }}
+# Managed by Ansible - do not edit manually
+
+auto {{ proxmox_bridge_name }}
+iface {{ proxmox_bridge_name }} inet {{ proxmox_bridge_config.inet | default('manual') }}
+{% if proxmox_bridge_config.address is defined %}
+    address {{ proxmox_bridge_config.address }}
+{% endif %}
+{% if proxmox_bridge_config.netmask is defined %}
+    netmask {{ proxmox_bridge_config.netmask }}
+{% endif %}
+{% if proxmox_bridge_config.gateway is defined %}
+    gateway {{ proxmox_bridge_config.gateway }}
+{% endif %}
+    bridge_ports {{ proxmox_bridge_config.ports | default('none') }}
+    bridge_stp {{ proxmox_bridge_config.stp | default('off') }}
+    bridge_fd {{ proxmox_bridge_config.fd | default('0') }}
+{% if proxmox_bridge_config.vlan_aware is defined and proxmox_bridge_config.vlan_aware %}
+    bridge_vlan_aware yes
+{% endif %}
+{% if proxmox_bridge_config.vids is defined %}
+    bridge_vids {{ proxmox_bridge_config.vids }}
+{% endif %}
+{% if proxmox_bridge_config.mtu is defined %}
+    mtu {{ proxmox_bridge_config.mtu }}
+{% endif %}
+{% if proxmox_bridge_config.comments is defined %}
+# {{ proxmox_bridge_config.comments }}
+{% endif %}

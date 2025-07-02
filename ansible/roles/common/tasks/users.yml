@@ -1,0 +1,76 @@
+---
+# User management tasks
+- name: Create admin users
+  user:
+    name: "{{ item.name }}"
+    state: present
+    groups: "{{ item.groups | default(omit) }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    home: "{{ item.home | default('/home/' + item.name) }}"
+    createhome: yes
+    comment: "{{ item.comment | default(omit) }}"
+  loop: "{{ common_admin_users }}"
+  when: common_admin_users is defined
+  become: yes
+
+- name: Ensure sudo group exists
+  group:
+    name: "{{ common_sudo_group }}"
+    state: present
+  become: yes
+
+- name: Add admin users to sudo group
+  user:
+    name: "{{ item.name }}"
+    groups: "{{ common_sudo_group }}"
+    append: yes
+  loop: "{{ common_admin_users }}"
+  when: common_admin_users is defined
+  become: yes
+
+- name: Deploy SSH keys for admin users
+  authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.ssh_key }}"
+    state: present
+    exclusive: "{{ item.ssh_key_exclusive | default(false) }}"
+  loop: "{{ common_admin_users }}"
+  when: 
+    - common_admin_users is defined
+    - item.ssh_key is defined
+  become: yes
+
+- name: Configure home directory permissions
+  file:
+    path: "{{ item.home | default('/home/' + item.name) }}"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: '0750'
+  loop: "{{ common_admin_users }}"
+  when: common_admin_users is defined
+  become: yes
+
+- name: Create .ssh directory for users
+  file:
+    path: "{{ item.home | default('/home/' + item.name) }}/.ssh"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: '0700'
+    state: directory
+  loop: "{{ common_admin_users }}"
+  when: common_admin_users is defined
+  become: yes
+
+- name: Set authorized_keys file permissions
+  file:
+    path: "{{ item.home | default('/home/' + item.name) }}/.ssh/authorized_keys"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: '0600'
+    state: file
+  loop: "{{ common_admin_users }}"
+  when: 
+    - common_admin_users is defined
+    - item.ssh_key is defined
+  become: yes
+  ignore_errors: yes  # File might not exist if no SSH key was deployed

@@ -1,0 +1,44 @@
+---
+# OPNsense role variables
+
+# API endpoints
+opnsense_api_endpoints:
+  system:
+    status: "/api/core/system/status"
+    settings: "/api/core/system/settings/set"
+    reboot: "/api/core/system/reboot"
+    backup: "/api/core/backup/backupconfig"
+  interfaces:
+    settings: "/api/interfaces/settings/set"
+    reconfigure: "/api/interfaces/reconfigure"
+    status: "/api/interfaces/overview/status"
+  firewall:
+    filter_set: "/api/firewall/filter/set"
+    filter_apply: "/api/firewall/filter/apply"
+    nat_set: "/api/firewall/nat/set"
+    nat_apply: "/api/firewall/nat/apply"
+    alias_set: "/api/firewall/alias/set"
+  service:
+    set: "/api/core/service/set"
+    restart: "/api/core/service/restart"
+    status: "/api/core/service/status"
+  user:
+    add: "/api/core/user/addUser"
+    set: "/api/core/user/setUser"
+  vpn:
+    wireguard: "/api/wireguard/settings/set"
+    openvpn: "/api/openvpn/instances/set"
+    ipsec: "/api/ipsec/settings/set"
+
+# Required packages for API interaction
+opnsense_required_packages:
+  - python3-requests
+  - python3-urllib3
+
+# Service names
+opnsense_services:
+  ssh: "openssh"
+  web: "webgui"
+  firewall: "pf"
+  unbound: "unbound"
+  dhcp: "dhcpd"

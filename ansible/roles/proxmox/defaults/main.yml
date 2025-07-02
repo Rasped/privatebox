@@ -1,0 +1,97 @@
+---
+# Defaults file for proxmox role
+
+# Proxmox API Connection defaults
+proxmox_api_host: "{{ lookup('env', 'PROXMOX_HOST') | default('proxmox.local', true) }}"
+proxmox_api_user: "{{ lookup('env', 'PROXMOX_USER') | default('root@pam', true) }}"
+proxmox_api_password: "{{ lookup('env', 'PROXMOX_PASSWORD') | default(omit) }}"
+proxmox_api_token_id: "{{ lookup('env', 'PROXMOX_TOKEN_ID') | default(omit) }}"
+proxmox_api_token_secret: "{{ lookup('env', 'PROXMOX_TOKEN_SECRET') | default(omit) }}"
+proxmox_validate_certs: true
+
+# Default operation (can be: create_vm, configure_network, manage_storage)
+proxmox_operation: create_vm
+
+# Default VM specifications
+proxmox_vm_cores: 2
+proxmox_vm_sockets: 1
+proxmox_vm_cpu_type: host
+proxmox_vm_memory: 2048
+proxmox_vm_balloon: 0
+proxmox_vm_ostype: l26  # Linux 2.6/3.x/4.x/5.x kernel
+proxmox_vm_scsihw: virtio-scsi-pci
+proxmox_vm_agent: 1
+proxmox_vm_hotplug: "network,disk,cpu,memory"
+proxmox_vm_onboot: true
+proxmox_vm_protection: false
+proxmox_vm_start_after_create: true
+proxmox_vm_description: "Managed by Ansible"
+
+# Default network configuration
+proxmox_vm_networks:
+  net0: "virtio,bridge=vmbr0,firewall=1"
+
+# Default disk configuration
+proxmox_vm_disks:
+  scsi0: "local-lvm:32,format=raw"
+
+# Boot configuration defaults
+proxmox_vm_boot_order: "order=scsi0;ide2;net0"
+proxmox_vm_bootdisk: scsi0
+
+# Storage defaults
+proxmox_iso_storage: local
+proxmox_backup_storage: local
+proxmox_disk_storage: local-lvm
+proxmox_disk_format: raw
+proxmox_disk_cache: none
+proxmox_iso_download_timeout: 600
+
+# Backup defaults
+proxmox_backup_mode: snapshot
+proxmox_backup_compress: zstd
+proxmox_backup_dow: "mon,tue,wed,thu,fri,sat,sun"
+proxmox_backup_starttime: "03:00"
+proxmox_backup_mailnotification: failure
+proxmox_backup_enabled: true
+proxmox_backup_prune: "keep-last=3,keep-weekly=2,keep-monthly=1"
+
+# Network operation defaults
+proxmox_network_stop_vm: false
+proxmox_network_start_after: true
+proxmox_configure_bridge: false
+proxmox_bridge_restart_network: false
+
+# Common VM templates for quick deployment
+proxmox_vm_templates:
+  opnsense:
+    cores: 2
+    memory: 4096
+    disks:
+      scsi0: "local-lvm:32,format=raw"
+    networks:
+      net0: "virtio,bridge=vmbr0,firewall=1"
+      net1: "virtio,bridge=vmbr1,firewall=1"
+    ostype: other
+    description: "OPNsense Firewall"
+  
+  ubuntu_server:
+    cores: 2
+    memory: 2048
+    disks:
+      scsi0: "local-lvm:20,format=raw"
+    networks:
+      net0: "virtio,bridge=vmbr0,firewall=1"
+    ostype: l26
+    description: "Ubuntu Server"
+  
+  docker_host:
+    cores: 4
+    memory: 8192
+    disks:
+      scsi0: "local-lvm:50,format=raw"
+    networks:
+      net0: "virtio,bridge=vmbr0,firewall=1"
+    ostype: l26
+    hotplug: "network,disk,cpu,memory"
+    description: "Docker Container Host"

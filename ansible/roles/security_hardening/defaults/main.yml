@@ -1,0 +1,163 @@
+---
+# defaults file for security_hardening
+
+# SSH Hardening
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+ssh_pubkey_authentication: "yes"
+ssh_permit_empty_passwords: "no"
+ssh_challenge_response_authentication: "no"
+ssh_gssapi_authentication: "no"
+ssh_x11_forwarding: "no"
+ssh_max_auth_tries: 3
+ssh_client_alive_interval: 300
+ssh_client_alive_count_max: 2
+ssh_login_grace_time: 60
+ssh_strict_modes: "yes"
+ssh_use_pam: "yes"
+ssh_allowed_users: []  # List of users allowed to SSH
+ssh_allowed_groups: ["ssh-users"]
+ssh_deny_users: []
+ssh_deny_groups: []
+
+# Firewall Configuration (UFW)
+firewall_enabled: true
+firewall_default_incoming_policy: "deny"
+firewall_default_outgoing_policy: "allow"
+firewall_allowed_tcp_ports:
+  - 22  # SSH (will be updated if ssh_port changes)
+  - 80  # HTTP
+  - 443 # HTTPS
+firewall_allowed_udp_ports: []
+firewall_allowed_networks: []
+firewall_log_level: "low"
+
+# Fail2ban Configuration
+fail2ban_enabled: true
+fail2ban_ignoreips:
+  - "127.0.0.1/8"
+  - "::1"
+fail2ban_bantime: 600
+fail2ban_findtime: 600
+fail2ban_maxretry: 5
+fail2ban_destemail: "root@localhost"
+fail2ban_services:
+  - name: sshd
+    enabled: true
+    port: "{{ ssh_port }}"
+    maxretry: 3
+    bantime: 3600
+
+# System Updates
+unattended_upgrades_enabled: true
+unattended_upgrades_allowed_origins:
+  - "${distro_id}:${distro_codename}-security"
+  - "${distro_id}ESMApps:${distro_codename}-apps-security"
+  - "${distro_id}ESM:${distro_codename}-infra-security"
+unattended_upgrades_package_blacklist: []
+unattended_upgrades_auto_fix_interrupted_dpkg: true
+unattended_upgrades_minimal_steps: true
+unattended_upgrades_install_on_shutdown: false
+unattended_upgrades_mail: "root@localhost"
+unattended_upgrades_mail_only_on_error: true
+unattended_upgrades_remove_unused_kernel_packages: true
+unattended_upgrades_remove_unused_dependencies: true
+unattended_upgrades_automatic_reboot: false
+unattended_upgrades_automatic_reboot_time: "02:00"
+
+# Audit Configuration
+auditd_enabled: true
+auditd_max_log_file: 8
+auditd_max_log_file_action: "rotate"
+auditd_num_logs: 5
+auditd_rules:
+  - "-w /etc/passwd -p wa -k passwd_changes"
+  - "-w /etc/group -p wa -k group_changes"
+  - "-w /etc/shadow -p wa -k shadow_changes"
+  - "-w /etc/sudoers -p wa -k sudoers_changes"
+  - "-w /etc/ssh/sshd_config -p wa -k sshd_config_changes"
+  - "-a always,exit -F arch=b64 -S execve -k exec_commands"
+
+# Kernel Hardening (sysctl)
+sysctl_settings:
+  # IP Spoofing protection
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  # Ignore ICMP redirects
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv6.conf.all.accept_redirects: 0
+  # Ignore send redirects
+  net.ipv4.conf.all.send_redirects: 0
+  # Disable source packet routing
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  # Log Martians
+  net.ipv4.conf.all.log_martians: 1
+  # Ignore ICMP ping requests
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  # Ignore Directed pings
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  # Enable TCP/IP SYN cookies
+  net.ipv4.tcp_syncookies: 1
+  # Disable IPv6 if not needed
+  net.ipv6.conf.all.disable_ipv6: 0
+  net.ipv6.conf.default.disable_ipv6: 0
+  # File system hardening
+  fs.protected_hardlinks: 1
+  fs.protected_symlinks: 1
+  fs.suid_dumpable: 0
+  # Process hardening
+  kernel.randomize_va_space: 2
+  kernel.yama.ptrace_scope: 1
+
+# File Permissions
+secure_file_permissions:
+  - path: /etc/passwd
+    owner: root
+    group: root
+    mode: "0644"
+  - path: /etc/shadow
+    owner: root
+    group: shadow
+    mode: "0640"
+  - path: /etc/group
+    owner: root
+    group: root
+    mode: "0644"
+  - path: /etc/gshadow
+    owner: root
+    group: shadow
+    mode: "0640"
+  - path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+
+# Service Hardening
+disable_unnecessary_services:
+  - avahi-daemon
+  - cups
+  - isc-dhcp-server
+  - isc-dhcp-server6
+  - rpcbind
+  - rsync
+
+# Log Rotation
+logrotate_frequency: "daily"
+logrotate_rotate: 14
+logrotate_compress: true
+
+# AIDE (Advanced Intrusion Detection Environment)
+aide_enabled: false
+aide_database_path: "/var/lib/aide/aide.db"
+aide_config_path: "/etc/aide/aide.conf"
+
+# AppArmor
+apparmor_enabled: true
+
+# Rootkit Detection
+rootkit_detection_enabled: true
+rootkit_detection_tools:
+  - rkhunter
+  - chkrootkit

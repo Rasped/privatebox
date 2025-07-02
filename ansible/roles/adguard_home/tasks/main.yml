@@ -1,0 +1,85 @@
+---
+# Main tasks for AdGuard Home role
+
+- name: Ensure AdGuard Home directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  loop:
+    - "{{ adguard_data_path }}"
+    - "{{ adguard_config_path }}"
+    - "{{ adguard_work_path }}"
+
+- name: Deploy initial AdGuard configuration
+  ansible.builtin.template:
+    src: adguard.yaml.j2
+    dest: "{{ adguard_config_path }}/AdGuardHome.yaml"
+    mode: '0644'
+    owner: root
+    group: root
+    backup: yes
+  notify: restart adguard container
+
+- name: Pull AdGuard Home container image (Podman)
+  containers.podman.podman_image:
+    name: "{{ adguard_container_image }}"
+    pull: "{{ adguard_container_pull }}"
+    state: present
+  when: container_runtime == "podman"
+
+- name: Pull AdGuard Home container image (Docker)
+  community.docker.docker_image:
+    name: "{{ adguard_container_image }}"
+    source: pull
+    state: present
+  when: container_runtime == "docker"
+
+- name: Create and start AdGuard Home container (Podman)
+  containers.podman.podman_container:
+    name: "{{ adguard_container_name }}"
+    image: "{{ adguard_container_image }}"
+    state: "{{ adguard_container_state }}"
+    restart_policy: "{{ adguard_container_restart_policy }}"
+    network_mode: "{{ adguard_network_mode }}"
+    ports:
+      - "{{ adguard_dns_port }}:53/tcp"
+      - "{{ adguard_dns_port }}:53/udp"
+      - "{{ adguard_dhcp_port }}:67/udp"
+      - "{{ adguard_web_port }}:{{ adguard_web_port_config }}/tcp"
+      - "{{ adguard_dns_port_quic }}:853/tcp"
+    volumes:
+      - "{{ adguard_config_path }}:/opt/adguardhome/conf:Z"
+      - "{{ adguard_work_path }}:/opt/adguardhome/work:Z"
+    env:
+      TZ: "{{ timezone | default('UTC') }}"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:{{ adguard_web_port_config }}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+- name: Wait for AdGuard Home to be ready
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/status"
+    method: GET
+    status_code: [200, 403]
+  register: adguard_status
+  until: adguard_status.status in [200, 403]
+  retries: "{{ adguard_setup_retries }}"
+  delay: "{{ adguard_setup_delay }}"
+
+- name: Check if initial setup is required
+  ansible.builtin.set_fact:
+    adguard_needs_setup: "{{ adguard_status.status == 403 }}"
+
+- name: Configure AdGuard Home
+  ansible.builtin.include_tasks: configure.yml
+  when: adguard_needs_setup | bool
+
+- name: Update blocklists
+  ansible.builtin.include_tasks: update_blocklists.yml
+  when: not adguard_needs_setup | bool

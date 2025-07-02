@@ -1,0 +1,51 @@
+---
+# Preparation tasks for semaphore
+
+- name: Create semaphore data directory
+  ansible.builtin.file:
+    path: "{{ semaphore_data_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Create semaphore subdirectories
+  ansible.builtin.file:
+    path: "{{ semaphore_data_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+  loop:
+    - tmp
+    - repositories
+    - backups
+
+- name: Create docker network for management services
+  community.docker.docker_network:
+    name: "{{ semaphore_network_name }}"
+    driver: bridge
+    state: present
+  become: true
+
+- name: Check if Semaphore container exists
+  community.docker.docker_container_info:
+    name: "{{ semaphore_container_name }}"
+  register: semaphore_container_info
+  become: true
+
+- name: Stop existing Semaphore container if running
+  community.docker.docker_container:
+    name: "{{ semaphore_container_name }}"
+    state: stopped
+  when: semaphore_container_info.exists
+  become: true
+
+- name: Create Semaphore environment file
+  ansible.builtin.template:
+    src: semaphore.env.j2
+    dest: "{{ semaphore_data_dir }}/.env"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0600'
+  no_log: true

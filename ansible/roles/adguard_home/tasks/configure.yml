@@ -1,0 +1,145 @@
+---
+# Configure AdGuard Home via API
+
+- name: Perform initial setup
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/install/configure"
+    method: POST
+    body_format: json
+    body:
+      web:
+        ip: "{{ adguard_web_interface }}"
+        port: "{{ adguard_web_port_config }}"
+      dns:
+        ip: "{{ adguard_dns_interface }}"
+        port: "{{ adguard_dns_port_config }}"
+      username: "{{ adguard_admin_username }}"
+      password: "{{ adguard_admin_password }}"
+    status_code: 200
+  register: setup_result
+
+- name: Wait for AdGuard to restart after setup
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: Login to AdGuard Home
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/login"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ adguard_admin_username }}"
+      password: "{{ adguard_admin_password }}"
+    status_code: 200
+  register: login_result
+
+- name: Set authentication cookie
+  ansible.builtin.set_fact:
+    adguard_auth_cookie: "{{ login_result.cookies_string }}"
+
+- name: Configure upstream DNS servers
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/dns_config"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    body_format: json
+    body:
+      upstream_dns: "{{ adguard_upstream_dns }}"
+      bootstrap_dns: "{{ adguard_bootstrap_dns }}"
+      protection_enabled: true
+      dnssec_enabled: "{{ adguard_dnssec_enabled }}"
+      cache_size: "{{ adguard_cache_size }}"
+      cache_ttl_min: "{{ adguard_cache_ttl_min }}"
+      cache_ttl_max: "{{ adguard_cache_ttl_max }}"
+      ratelimit: "{{ adguard_ratelimit }}"
+      blocking_mode: "{{ adguard_blocking_mode }}"
+    status_code: 200
+
+- name: Configure query log settings
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/querylog_config"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    body_format: json
+    body:
+      enabled: "{{ adguard_querylog_enabled }}"
+      interval: "{{ adguard_querylog_interval }}"
+      size_memory: "{{ adguard_querylog_size_memory }}"
+      file_enabled: "{{ adguard_querylog_file_enabled }}"
+    status_code: 200
+
+- name: Configure statistics settings
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/stats_config"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    body_format: json
+    body:
+      enabled: "{{ adguard_statistics_enabled }}"
+      interval: "{{ adguard_statistics_interval }}"
+    status_code: 200
+
+- name: Configure safe browsing
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/safebrowsing/enable"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    status_code: 200
+  when: adguard_safebrowsing_enabled | bool
+
+- name: Disable safe browsing
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/safebrowsing/disable"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    status_code: 200
+  when: not adguard_safebrowsing_enabled | bool
+
+- name: Configure parental control
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/parental/enable"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    status_code: 200
+  when: adguard_parental_enabled | bool
+
+- name: Disable parental control
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/parental/disable"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    status_code: 200
+  when: not adguard_parental_enabled | bool
+
+- name: Add blocklists
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/filtering/add_url"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      url: "{{ item.url }}"
+      enabled: "{{ item.enabled }}"
+    status_code: 200
+  loop: "{{ adguard_blocklists }}"
+  when: adguard_blocklists is defined
+
+- name: Refresh blocklists
+  ansible.builtin.uri:
+    url: "{{ adguard_api_url }}/control/filtering/refresh"
+    method: POST
+    headers:
+      Cookie: "{{ adguard_auth_cookie }}"
+    body_format: json
+    body:
+      whitelist: false
+    status_code: 200

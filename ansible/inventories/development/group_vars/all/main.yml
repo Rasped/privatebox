@@ -1,0 +1,61 @@
+---
+# Global variables for all hosts
+
+# Environment
+environment_name: development
+privatebox_domain: privatebox.local
+
+# Common user settings
+ansible_user: privatebox
+ansible_ssh_private_key_file: "~/.ssh/privatebox_{{ environment_name }}"
+
+# Network configuration
+management_network: 10.10.10.0/24
+lan_network: 10.10.20.0/24
+guest_network: 10.10.30.0/24
+iot_network: 10.10.40.0/24
+
+# DNS servers
+dns_servers:
+  - 10.10.10.5  # Unbound
+  - 10.10.10.6  # AdGuard Home
+  - 9.9.9.9     # Quad9 fallback
+
+# NTP servers
+ntp_servers:
+  - 0.pool.ntp.org
+  - 1.pool.ntp.org
+  - 2.pool.ntp.org
+
+# Common packages to install
+common_packages:
+  - vim
+  - htop
+  - tmux
+  - curl
+  - wget
+  - git
+  - python3-pip
+  - net-tools
+  - dnsutils
+  - traceroute
+
+# Timezone
+system_timezone: UTC
+
+# Update configuration
+automatic_updates_enabled: true
+automatic_updates_reboot: false
+
+# Logging configuration
+log_retention_days: 30
+remote_syslog_enabled: false
+
+# Backup configuration
+backup_enabled: true
+backup_retention_days: 7
+backup_location: /backup
+
+# Monitoring
+monitoring_enabled: true
+metrics_retention_days: 14

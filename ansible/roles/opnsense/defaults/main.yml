@@ -1,0 +1,74 @@
+---
+# Global defaults for OPNsense role
+
+# VM specifications
+opnsense_vm:
+  name: "opnsense-fw"
+  vmid: 100
+  cores: 2
+  memory: 2048
+  disk_size: 20
+  storage: "local-lvm"
+  boot_order: "cdn"
+  onboot: true
+  start_on_create: true
+
+# Network configuration
+opnsense_network:
+  wan:
+    bridge: "vmbr0"
+    model: "virtio"
+    firewall: false
+  lan:
+    bridge: "vmbr1"
+    model: "virtio"
+    firewall: false
+
+# ISO configuration
+opnsense_iso:
+  url: "https://mirror.ams1.nl.leaseweb.net/opnsense/releases/24.7/OPNsense-24.7-dvd-amd64.iso.bz2"
+  checksum: "sha256:1234567890abcdef"  # Update with actual checksum
+  storage: "local"
+  filename: "OPNsense-24.7-dvd-amd64.iso"
+
+# API configuration
+opnsense_api:
+  host: "{{ opnsense_lan_ip | default('192.168.1.1') }}"
+  port: 443
+  username: "root"
+  password: "{{ vault_opnsense_root_password | default('opnsense') }}"
+  key: "{{ opnsense_api_key | default('') }}"
+  secret: "{{ opnsense_api_secret | default('') }}"
+  verify_ssl: false
+
+# Base configuration
+opnsense_base_config:
+  hostname: "opnsense"
+  domain: "localdomain"
+  timezone: "UTC"
+  dns_servers:
+    - "1.1.1.1"
+    - "8.8.8.8"
+
+# Interface configuration
+opnsense_interfaces:
+  wan:
+    name: "vtnet0"
+    description: "WAN"
+    enable: true
+    ipv4_type: "dhcp"
+    ipv6_type: "none"
+  lan:
+    name: "vtnet1"
+    description: "LAN"
+    enable: true
+    ipv4_type: "static"
+    ipv4_address: "192.168.1.1"
+    ipv4_subnet: 24
+    ipv6_type: "none"
+
+# Firewall defaults
+opnsense_firewall:
+  default_log: false
+  optimization: "normal"
+  state_policy: "floating"

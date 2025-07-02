@@ -1,0 +1,130 @@
+---
+# Unbound DNS configuration
+
+# Package and service settings
+unbound_package_name: unbound
+unbound_service_name: unbound
+unbound_service_state: started
+unbound_service_enabled: true
+
+# Network configuration
+unbound_interfaces:
+  - "127.0.0.1"
+  - "::1"
+unbound_port: 5353
+unbound_do_ip4: true
+unbound_do_ip6: true
+unbound_do_udp: true
+unbound_do_tcp: true
+
+# Access control
+unbound_access_control:
+  - "127.0.0.0/8 allow"
+  - "::1 allow"
+  - "10.0.0.0/8 allow"
+  - "172.16.0.0/12 allow"
+  - "192.168.0.0/16 allow"
+  - "fd00::/8 allow"
+  - "fe80::/10 allow"
+
+# Performance tuning
+unbound_num_threads: 4
+unbound_msg_cache_size: "64m"
+unbound_rrset_cache_size: "128m"
+unbound_cache_min_ttl: 300
+unbound_cache_max_ttl: 86400
+unbound_cache_max_negative_ttl: 3600
+unbound_infra_cache_numhosts: 10000
+unbound_infra_cache_slabs: 4
+
+# Prefetching
+unbound_prefetch: true
+unbound_prefetch_key: true
+
+# DNSSEC configuration
+unbound_module_config: "validator iterator"
+unbound_auto_trust_anchor_file: "/var/lib/unbound/root.key"
+unbound_val_clean_additional: true
+unbound_val_permissive_mode: false
+unbound_ignore_cd_flag: false
+unbound_serve_expired: true
+
+# Security settings
+unbound_hide_identity: true
+unbound_hide_version: true
+unbound_qname_minimisation: true
+unbound_qname_minimisation_strict: false
+unbound_use_caps_for_id: true
+unbound_private_addresses:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "169.254.0.0/16"
+  - "fd00::/8"
+  - "fe80::/10"
+
+# Hardening
+unbound_harden_glue: true
+unbound_harden_dnssec_stripped: true
+unbound_harden_below_nxdomain: true
+unbound_harden_referral_path: false
+unbound_harden_algo_downgrade: true
+unbound_use_syslog: true
+
+# Query settings
+unbound_verbosity: 1
+unbound_log_queries: false
+unbound_log_replies: false
+unbound_log_servfail: true
+
+# Remote control
+unbound_remote_control_enable: false
+unbound_control_interface: "127.0.0.1"
+unbound_control_port: 8953
+
+# Root hints
+unbound_root_hints_url: "https://www.internic.net/domain/named.cache"
+unbound_root_hints_file: "/var/lib/unbound/root.hints"
+
+# Forward zones (optional, normally we want recursive resolution)
+unbound_forward_zones: []
+# Example:
+# unbound_forward_zones:
+#   - name: "."
+#     forward_addr:
+#       - "9.9.9.9"
+#       - "149.112.112.112"
+
+# Stub zones (optional)
+unbound_stub_zones: []
+
+# Local zones
+unbound_local_zones:
+  - zone: "localhost."
+    type: "static"
+  - zone: "127.in-addr.arpa."
+    type: "static"
+  - zone: "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa."
+    type: "static"
+
+# Local data
+unbound_local_data:
+  - "localhost. 10800 IN A 127.0.0.1"
+  - "localhost. 10800 IN AAAA ::1"
+
+# Statistics
+unbound_statistics_interval: 0
+unbound_statistics_cumulative: false
+unbound_extended_statistics: false
+
+# EDNS buffer size
+unbound_edns_buffer_size: 1232
+
+# SO_REUSEPORT
+unbound_so_reuseport: true
+
+# Outgoing range
+unbound_outgoing_range: 4096
+
+# Number of queries per thread
+unbound_num_queries_per_thread: 4096
