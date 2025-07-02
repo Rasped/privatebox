@@ -411,6 +411,7 @@ function generate_cloud_init() {
 #cloud-config
 locale: en_US.UTF-8
 locale_configfile: /etc/default/locale
+shell: ['/bin/bash', '-c']
 users:
   - name: ${VM_USERNAME}
     plain_text_passwd: ${VM_PASSWORD}
