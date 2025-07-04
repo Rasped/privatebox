@@ -232,3 +232,10 @@ export -f save_credentials
 common_loaded() {
     return 0
 }
+
+# Auto-setup error handling if requested (opt-in for compatibility)
+if [[ "${PRIVATEBOX_AUTO_ERROR_HANDLING:-false}" == "true" ]]; then
+    if type -t setup_error_handling &> /dev/null; then
+        setup_error_handling
+    fi
+fi

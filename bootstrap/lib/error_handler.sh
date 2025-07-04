@@ -72,33 +72,35 @@ cleanup_handler() {
     log_info "Performing cleanup..."
     
     # Kill registered PIDs
-    for pid in "${CLEANUP_PIDS[@]}"; do
-        if kill -0 "${pid}" 2>/dev/null; then
+    for pid in "${CLEANUP_PIDS[@]:-}"; do
+        if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
             log_debug "Killing process: ${pid}"
             kill -TERM "${pid}" 2>/dev/null || true
         fi
     done
     
     # Remove temporary files
-    for file in "${TEMP_FILES[@]}"; do
-        if [[ -f "${file}" ]]; then
+    for file in "${TEMP_FILES[@]:-}"; do
+        if [[ -n "${file}" ]] && [[ -f "${file}" ]]; then
             log_debug "Removing temporary file: ${file}"
             rm -f "${file}" || true
         fi
     done
     
     # Remove temporary directories
-    for dir in "${TEMP_DIRS[@]}"; do
-        if [[ -d "${dir}" ]]; then
+    for dir in "${TEMP_DIRS[@]:-}"; do
+        if [[ -n "${dir}" ]] && [[ -d "${dir}" ]]; then
             log_debug "Removing temporary directory: ${dir}"
             rm -rf "${dir}" || true
         fi
     done
     
     # Call registered cleanup functions
-    for func in "${CLEANUP_FUNCTIONS[@]}"; do
-        log_debug "Calling cleanup function: ${func}"
-        "${func}" || true
+    for func in "${CLEANUP_FUNCTIONS[@]:-}"; do
+        if [[ -n "${func}" ]]; then
+            log_debug "Calling cleanup function: ${func}"
+            "${func}" || true
+        fi
     done
     
     # Log final status
@@ -160,8 +162,10 @@ error_handler() {
 setup_error_handling() {
     set -euo pipefail
     
-    # Set up error trap with context
-    trap 'error_handler ${LINENO} ${BASH_LINENO} "$BASH_COMMAND" "${FUNCNAME[@]}"' ERR
+    # Set up error trap with context (only if running under bash)
+    if [[ "${BASH_VERSION:-}" ]]; then
+        trap 'error_handler ${LINENO} ${BASH_LINENO} "$BASH_COMMAND" "${FUNCNAME[@]}"' ERR
+    fi
     
     # Set up exit trap for cleanup
     trap cleanup_handler EXIT INT TERM
@@ -172,7 +176,11 @@ setup_error_handling() {
 # Temporarily disable error handling
 disable_error_handling() {
     set +euo pipefail
-    trap - ERR EXIT INT TERM
+    trap - EXIT INT TERM
+    # Only clear ERR trap if running under bash
+    if [[ "${BASH_VERSION:-}" ]]; then
+        trap - ERR
+    fi
 }
 
 # Re-enable error handling
@@ -298,8 +306,10 @@ setup_cloud_init_error_handling() {
     # Use basic error handling suitable for cloud-init
     set -euo pipefail
     
-    # Simple error trap that writes to status file
-    trap 'write_error_status "Script failed at line $LINENO" $?; exit 1' ERR
+    # Simple error trap that writes to status file (only if running under bash)
+    if [[ "${BASH_VERSION:-}" ]]; then
+        trap 'write_error_status "Script failed at line $LINENO" $?; exit 1' ERR
+    fi
     
     # Cleanup trap
     trap 'cleanup_handler' EXIT INT TERM

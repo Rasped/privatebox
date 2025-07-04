@@ -79,8 +79,7 @@ EOF
         exit $exit_code
     }
     
-    # Set error trap
-    trap 'handle_error ${LINENO}' ERR
+    # Use explicit error checking instead of ERR trap for cloud-init compatibility
     set -euo pipefail
     
     # Define exit codes

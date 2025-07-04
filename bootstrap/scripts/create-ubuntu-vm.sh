@@ -403,10 +403,10 @@ function generate_cloud_init() {
     fi
     
     # Read setup scripts
-    if [[ -f "${SCRIPT_DIR}/initial-setup.sh" ]]; then
-        initial_setup_content=$(cat "${SCRIPT_DIR}/initial-setup.sh" | sed 's/^/      /')
+    if [[ -f "${SCRIPT_DIR}/privatebox-setup.sh" ]]; then
+        privatebox_setup_content=$(cat "${SCRIPT_DIR}/privatebox-setup.sh" | sed 's/^/      /')
     else
-        log_error "Cannot find initial-setup.sh at ${SCRIPT_DIR}/initial-setup.sh"
+        log_error "Cannot find privatebox-setup.sh at ${SCRIPT_DIR}/privatebox-setup.sh"
         return 1
     fi
     
@@ -496,10 +496,10 @@ ${ssh_manager_content}
     permissions: '0644'
     content: |
 ${config_manager_content}
-  - path: /usr/local/bin/post-install-setup.sh
+  - path: /usr/local/bin/privatebox-setup.sh
     permissions: '0755'
     content: |
-${initial_setup_content}
+${privatebox_setup_content}
   - path: /usr/local/bin/portainer-setup.sh
     permissions: '0755'
     content: |
@@ -594,8 +594,8 @@ ${semaphore_setup_content}
         exit \${exit_code}
       }
       
-      # Set error trap - this is bash-specific and now safe to use
-      trap 'write_error_status "unknown" "Unexpected error occurred" \$?' ERR
+      # Set error trap - disabled for now as it may cause issues
+      # trap 'write_error_status "unknown" "Unexpected error occurred" \$?' ERR
       
       # Start installation tracking
       echo "INSTALLATION_STATUS=running" > /etc/privatebox-cloud-init-complete
@@ -620,10 +620,12 @@ ${semaphore_setup_content}
       ufw allow 22/tcp || write_error_status "ufw-ssh" "Failed to configure firewall for SSH" \$?
       
       # Main setup script
-      echo "Executing post-installation setup script..."
+      echo "Executing PrivateBox setup script..."
       export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
-      if ! /usr/local/bin/post-install-setup.sh; then
-        write_error_status "post-install-setup" "Post-installation setup script failed" \$?
+      /usr/local/bin/privatebox-setup.sh
+      exit_code=\$?
+      if [ \$exit_code -ne 0 ]; then
+        write_error_status "privatebox-setup" "PrivateBox setup script failed" \$exit_code
       fi
       
       # Install netcat for port checking
@@ -640,7 +642,7 @@ ${semaphore_setup_content}
       fi
       
       # Clear trap for final status writing
-      trap - ERR
+      # trap - ERR
       
       # Create completion marker with detailed status
       echo "COMPLETED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/privatebox-cloud-init-complete
