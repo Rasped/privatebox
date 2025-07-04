@@ -176,49 +176,116 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 
 ## Context7 Documentation Loading
 
-**IMPORTANT**: When working on this project or any technical subject, ALWAYS load relevant documentation using Context7 MCP tools at the start of the conversation.
+**IMPORTANT**: Context7 is an MCP server that provides up-to-date, version-specific code documentation and examples directly from source libraries. This eliminates outdated or hallucinated code examples by fetching real-time documentation.
+
+### What is Context7?
+
+Context7 is a Model Context Protocol (MCP) server designed to provide:
+- Real-time, accurate documentation pulled directly from source libraries
+- Version-specific code examples and API references
+- Current best practices and implementation patterns
+- Support for multiple libraries and frameworks
+
+### How to Use Context7 in Claude Code
+
+1. **Search for Libraries**: Use `mcp__context7__resolve-library-id` to find available documentation
+   ```
+   Function: mcp__context7__resolve-library-id
+   Parameter: libraryName (e.g., "ansible", "react", "fastapi")
+   
+   Returns: List of matching libraries with:
+   - Library ID (Context7-compatible identifier)
+   - Name and description
+   - Number of code snippets available
+   - Trust score (reliability indicator)
+   - Available versions (if applicable)
+   ```
+
+2. **Load Documentation**: Use `mcp__context7__get-library-docs` with the library ID
+   ```
+   Function: mcp__context7__get-library-docs
+   Parameters:
+   - context7CompatibleLibraryID: The exact ID from resolve-library-id
+   - tokens: Maximum tokens to retrieve (default: 10000)
+   - topic: Optional topic focus (e.g., "hooks", "routing")
+   
+   Example: Load /ansible/ansible-documentation with 10000 tokens
+   ```
+
+### Best Practices for Using Context7
+
+1. **Always Start with Context7**: When working on any technical task, immediately search for and load relevant documentation
+2. **Choose Libraries Wisely**: Select libraries based on:
+   - **Trust Score**: Prefer scores of 7-10 (more authoritative)
+   - **Code Snippets**: More snippets = better coverage
+   - **Name Match**: Exact matches are usually best
+   - **Version**: Use specific versions if the user mentions them
+3. **Load Multiple Sources**: For complex tasks, load documentation from multiple related libraries
+4. **Use Topic Filtering**: When you need specific information, use the `topic` parameter to focus results
 
 ### Required Documentation for This Project
 
 1. **Ansible Documentation**: 
    ```
    Library ID: /ansible/ansible-documentation
-   Description: Core Ansible documentation with 2362 code snippets
+   Trust Score: 9.3
+   Code Snippets: 2366
+   Description: Core Ansible documentation with comprehensive examples
    ```
 
 2. **Community Proxmox Collection**:
    ```
    Library ID: /ansible-collections/community.proxmox
-   Description: Proxmox integration for Ansible
+   Description: Proxmox integration modules for Ansible
    ```
 
-### How to Use Context7
-
-1. **Search for Libraries**: Use `mcp__context7__resolve-library-id` with a library name to find available documentation
+3. **Proxmox VE Documentation**:
    ```
-   Example: Search for "ansible" to find Ansible-related libraries
-   ```
-
-2. **Load Documentation**: Use `mcp__context7__get-library-docs` with the Context7-compatible library ID
-   ```
-   Example: Load /ansible/ansible-documentation with 10000 tokens
+   Library ID: /proxmox/pve-docs
+   Trust Score: 8.2
+   Code Snippets: 1486
+   Description: Official Proxmox VE documentation
    ```
 
-### General Context7 Guidelines
+### Example Context7 Workflow
 
-- **Always use Context7** when working with any technology or framework
-- **Search first** if you don't know the exact library ID
-- **Load documentation proactively** at the start of conversations
-- **Prefer libraries with**:
-  - Higher trust scores (7-10)
-  - More code snippets
-  - Exact name matches
-  - Recent versions if available
+```
+User: "Help me create a FastAPI application with authentication"
+
+Claude Code Actions:
+1. Search for FastAPI documentation:
+   mcp__context7__resolve-library-id("fastapi")
+   
+2. Load FastAPI docs:
+   mcp__context7__get-library-docs("/tiangolo/fastapi", tokens=10000)
+   
+3. Search for authentication libraries:
+   mcp__context7__resolve-library-id("fastapi authentication")
+   
+4. Load specific auth documentation if found
+5. Implement solution using current, accurate examples
+```
+
+### Common Technology Library IDs
+
+Here are some commonly used library IDs for quick reference:
+- Python: `/context7/python-3.9` (Trust: 10, Snippets: 13580)
+- React: Search "react" for latest options
+- Node.js: Search "node" or "nodejs"
+- Docker: Search "docker"
+- Kubernetes: Search "kubernetes"
+- AWS: Search "aws" or specific service names
+
+### Troubleshooting Context7
+
+- **"Documentation not found"**: The library might not be finalized. Try searching for alternative names or related libraries
+- **Empty results**: Some libraries are listed but not yet populated with documentation
+- **Version-specific needs**: If a user needs a specific version, check the `Versions` field in search results
 
 ### For Future Agents
 
 When any agent works on this codebase or discusses technical topics:
-1. Immediately check if Context7 has relevant documentation
-2. Load appropriate libraries before starting work
-3. Reference the loaded documentation when implementing features
-4. If working with a new technology, search Context7 first
+1. **Immediately search Context7** for relevant documentation before providing any code
+2. **Load multiple libraries** if the task involves multiple technologies
+3. **Reference loaded documentation** explicitly when implementing features
+4. **Update this list** if you discover useful library IDs for this project

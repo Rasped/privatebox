@@ -293,20 +293,6 @@ EOF
     fi
 }
 
-# Setup error handling for cloud-init scripts
-setup_cloud_init_error_handling() {
-    # Use basic error handling suitable for cloud-init
-    set -euo pipefail
-    
-    # Simple error trap that writes to status file
-    trap 'write_error_status "Script failed at line $LINENO" $?; exit 1' ERR
-    
-    # Cleanup trap
-    trap 'cleanup_handler' EXIT INT TERM
-    
-    log_debug "Cloud-init error handling configured"
-}
-
 # Safe command execution with fallback error handling
 safe_execute() {
     local cmd=("$@")
