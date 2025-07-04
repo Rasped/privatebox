@@ -452,7 +452,6 @@ ssh:
 chpasswd:
   expire: False
 packages:
-  - language-pack-en
   - podman
   - buildah
   - skopeo
@@ -496,7 +495,9 @@ ${ssh_manager_content}
     permissions: '0644'
     content: |
 ${config_manager_content}
-  - path: /usr/local/bin/post-install-setup.sh
+  # WARNING: initial-setup.sh must NOT use ERR traps or 'set -e'
+  # See the script header for detailed explanation
+  - path: /usr/local/bin/initial-setup.sh
     permissions: '0755'
     content: |
 ${initial_setup_content}
@@ -576,6 +577,13 @@ ${semaphore_setup_content}
       #!/bin/bash
       # Main cloud-init execution script
       # This script is executed with bash to ensure proper error handling
+      #
+      # IMPORTANT: NO ERR TRAPS OR 'set -e' IN THIS SCRIPT!
+      # Cloud-init environments have issues with ERR traps that can cause:
+      # - Scripts to exit prematurely with false failures
+      # - Difficult to debug errors
+      # - Race conditions with exit handlers
+      # Use explicit error checking instead
       
       # Error handling function
       write_error_status() {
@@ -593,9 +601,6 @@ ${semaphore_setup_content}
         echo "ERROR: Installation failed at stage '\${stage}': \${error_msg} (exit code: \${exit_code})"
         exit \${exit_code}
       }
-      
-      # Set error trap - this is bash-specific and now safe to use
-      trap 'write_error_status "unknown" "Unexpected error occurred" \$?' ERR
       
       # Start installation tracking
       echo "INSTALLATION_STATUS=running" > /etc/privatebox-cloud-init-complete
@@ -622,8 +627,10 @@ ${semaphore_setup_content}
       # Main setup script
       echo "Executing post-installation setup script..."
       export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
-      if ! /usr/local/bin/post-install-setup.sh; then
-        write_error_status "post-install-setup" "Post-installation setup script failed" \$?
+      /bin/bash /usr/local/bin/initial-setup.sh
+      setup_exit_code=\$?
+      if [ \$setup_exit_code -ne 0 ]; then
+        write_error_status "initial-setup" "Initial setup script failed" \$setup_exit_code
       fi
       
       # Install netcat for port checking
@@ -843,14 +850,14 @@ function wait_for_cloud_init() {
                 local error_stage=$(echo "$MARKER_CONTENT" | grep "ERROR_STAGE=" | cut -d'=' -f2 || echo "unknown")
                 local error_msg=$(echo "$MARKER_CONTENT" | grep "ERROR_MESSAGE=" | cut -d'=' -f2 || echo "No error message")
                 local error_code=$(echo "$MARKER_CONTENT" | grep "ERROR_CODE=" | cut -d'=' -f2 || echo "1")
-                local post_install_error=$(echo "$MARKER_CONTENT" | grep "POST_INSTALL_ERROR=" | cut -d'=' -f2 || echo "")
+                local initial_setup_error=$(echo "$MARKER_CONTENT" | grep "INITIAL_SETUP_ERROR=" | cut -d'=' -f2 || echo "")
                 
                 log_error "Installation failed at stage: $error_stage"
                 log_error "Error message: $error_msg"
                 log_error "Exit code: $error_code"
                 
-                if [[ -n "$post_install_error" ]]; then
-                    log_error "Post-install error: $post_install_error"
+                if [[ -n "$initial_setup_error" ]]; then
+                    log_error "Initial setup error: $initial_setup_error"
                 fi
                 
                 # Write error details to config file for bootstrap.sh to read
@@ -999,7 +1006,11 @@ register_cleanup cleanup_vm_on_failure
     echo "========================================="
 } 2>&1 | tee vm_creation_${VMID}.log
 
+# Capture the exit status of the command before the pipe
+SCRIPT_EXIT_CODE=${PIPESTATUS[0]}
+
 # Register the log file for cleanup
 register_temp_file "vm_creation_${VMID}.log"
 
-exit ${EXIT_SUCCESS}
+# Exit with the actual script exit code, not tee's exit code
+exit ${SCRIPT_EXIT_CODE}

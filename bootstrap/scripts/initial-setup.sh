@@ -2,6 +2,13 @@
 # VM post-installation setup script
 # This script runs after cloud-init completes
 #
+# IMPORTANT: DO NOT USE ERR TRAPS IN THIS SCRIPT!
+# Cloud-init has issues with ERR traps and 'set -e' which can cause:
+# - Premature script termination
+# - False failure reports even when the script succeeds
+# - Difficult to debug errors
+# Instead, use explicit error checking with error_exit() function
+#
 # Exit codes:
 #   0 - Success
 #   1 - General error
@@ -13,36 +20,89 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Define cloud-init status file
 export CLOUD_INIT_STATUS_FILE="/tmp/privatebox-install-status"
 
+# Define detailed log file for debugging
+SETUP_LOG="/var/log/privatebox-setup.log"
+SETUP_DEBUG_LOG="/var/log/privatebox-setup-debug.log"
+
+# Initialize log files
+mkdir -p /var/log
+echo "=== PrivateBox Initial Setup Log ===" > "$SETUP_LOG"
+echo "Started at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$SETUP_LOG"
+echo "Script: $0" >> "$SETUP_LOG"
+echo "User: $(whoami)" >> "$SETUP_LOG"
+echo "PWD: $(pwd)" >> "$SETUP_LOG"
+echo "=================================" >> "$SETUP_LOG"
+
+# Enable debug logging
+exec 2> >(tee -a "$SETUP_DEBUG_LOG")
+
 # Source common library if available (fallback to basic logging)
 if [[ -f "${SCRIPT_DIR}/../lib/common.sh" ]]; then
     # shellcheck source=../lib/common.sh
     source "${SCRIPT_DIR}/../lib/common.sh"
-    # Use cloud-init error handling if available
-    if type -t setup_cloud_init_error_handling &> /dev/null; then
-        setup_cloud_init_error_handling
-    else
-        setup_error_handling
-    fi
+    # WARNING: Do NOT use setup_cloud_init_error_handling() here!
+    # That function sets 'set -euo pipefail' and ERR traps which cause
+    # cloud-init to fail even when the script succeeds.
+    # Just use the simple logging functions from common.sh
+    
+    # Override log functions to also write to our setup logs
+    original_log_info=$(declare -f log_info)
+    log_info() {
+        bootstrap_log INFO "$*"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $*" >> "$SETUP_LOG"
+    }
+    
+    original_log_error=$(declare -f log_error)
+    log_error() {
+        bootstrap_log ERROR "$*"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >> "$SETUP_LOG"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >> "$SETUP_DEBUG_LOG"
+    }
+    
+    log_info "Using common library functions (without error traps)"
 else
     # Fallback for embedded environment
     # Define minimal error handling functions
     log() {
         local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-        echo "[$timestamp] $1"
+        echo "[$timestamp] $1" | tee -a "$SETUP_LOG"
     }
     log_info() { log "INFO: $*"; }
     log_warn() { log "WARN: $*"; }
-    log_error() { log "ERROR: $*" >&2; }
+    log_error() { 
+        log "ERROR: $*" >&2
+        echo "[$timestamp] ERROR: $*" >> "$SETUP_DEBUG_LOG"
+    }
     log_success() { log "SUCCESS: $*"; }
-    log_debug() { [[ "${DEBUG:-0}" -eq 1 ]] && log "DEBUG: $*"; }
+    log_debug() { 
+        log "DEBUG: $*"
+        echo "[$timestamp] DEBUG: $*" >> "$SETUP_DEBUG_LOG"
+    }
     
     # Error exit with status file update
     error_exit() { 
-        log_error "$1"
+        local error_msg="$1"
+        local exit_code="${2:-1}"
+        log_error "$error_msg"
+        
+        # Write detailed error report
+        cat >> "$SETUP_LOG" <<EOF
+
+=== ERROR Report ===
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Error: $error_msg
+Exit Code: $exit_code
+Script Line: ${BASH_LINENO[0]}
+Function: ${FUNCNAME[1]:-main}
+===================
+EOF
+        
         # Write error to status file for Proxmox to see
         if [[ -w /etc/privatebox-cloud-init-complete ]]; then
-            echo "POST_INSTALL_ERROR=$1" >> /etc/privatebox-cloud-init-complete
-            echo "POST_INSTALL_EXIT_CODE=${2:-1}" >> /etc/privatebox-cloud-init-complete
+            echo "INITIAL_SETUP_ERROR=$error_msg" >> /etc/privatebox-cloud-init-complete
+            echo "INITIAL_SETUP_EXIT_CODE=$exit_code" >> /etc/privatebox-cloud-init-complete
+            echo "INITIAL_SETUP_ERROR_LINE=${BASH_LINENO[0]}" >> /etc/privatebox-cloud-init-complete
+            echo "INITIAL_SETUP_ERROR_FUNC=${FUNCNAME[1]:-main}" >> /etc/privatebox-cloud-init-complete
         fi
         # Also write to cloud-init status file
         if [[ -n "${CLOUD_INIT_STATUS_FILE}" ]]; then
@@ -65,8 +125,8 @@ EOF
         
         # Update status files
         if [[ -w /etc/privatebox-cloud-init-complete ]]; then
-            echo "POST_INSTALL_ERROR=$error_msg" >> /etc/privatebox-cloud-init-complete
-            echo "POST_INSTALL_EXIT_CODE=$exit_code" >> /etc/privatebox-cloud-init-complete
+            echo "INITIAL_SETUP_ERROR=$error_msg" >> /etc/privatebox-cloud-init-complete
+            echo "INITIAL_SETUP_EXIT_CODE=$exit_code" >> /etc/privatebox-cloud-init-complete
         fi
         if [[ -n "${CLOUD_INIT_STATUS_FILE}" ]]; then
             cat > "${CLOUD_INIT_STATUS_FILE}" <<EOF
@@ -79,9 +139,8 @@ EOF
         exit $exit_code
     }
     
-    # Set error trap
-    trap 'handle_error ${LINENO}' ERR
-    set -euo pipefail
+    # Note: Not using ERR trap or set -e in cloud-init environment
+    # as they can cause unexpected behavior. Using explicit error checking instead.
     
     # Define exit codes
     EXIT_SUCCESS=0
@@ -182,10 +241,43 @@ fi
 
 log_info "VM setup completed successfully!"
 
-# Write success status
+# Collect final status information
+FINAL_STATUS="SUCCESS"
+PORTAINER_STATUS=$(systemctl is-active portainer.service 2>/dev/null || echo "failed")
+SEMAPHORE_UI_STATUS=$(systemctl is-active semaphore-ui.service 2>/dev/null || echo "failed")
+SEMAPHORE_DB_STATUS=$(systemctl is-active semaphore-db.service 2>/dev/null || echo "failed")
+
+# Write detailed status report
+cat >> "$SETUP_LOG" <<EOF
+
+=== Final Status Report ===
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Overall Status: $FINAL_STATUS
+Services:
+  - Portainer: $PORTAINER_STATUS
+  - Semaphore UI: $SEMAPHORE_UI_STATUS
+  - Semaphore DB: $SEMAPHORE_DB_STATUS
+
+Exit Code: 0
+Log Files:
+  - Main Log: $SETUP_LOG
+  - Debug Log: $SETUP_DEBUG_LOG
+===========================
+EOF
+
+# Write success status with detailed info
 if [[ -w /etc/privatebox-cloud-init-complete ]]; then
     echo "POST_INSTALL_SUCCESS=true" >> /etc/privatebox-cloud-init-complete
     echo "POST_INSTALL_EXIT_CODE=0" >> /etc/privatebox-cloud-init-complete
+    echo "POST_INSTALL_LOG=$SETUP_LOG" >> /etc/privatebox-cloud-init-complete
+    echo "POST_INSTALL_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
+    echo "POST_INSTALL_SERVICES=portainer:$PORTAINER_STATUS,semaphore-ui:$SEMAPHORE_UI_STATUS,semaphore-db:$SEMAPHORE_DB_STATUS" >> /etc/privatebox-cloud-init-complete
 fi
+
+# Copy logs to a persistent location
+cp "$SETUP_LOG" /var/log/privatebox-setup-final.log 2>/dev/null || true
+cp "$SETUP_DEBUG_LOG" /var/log/privatebox-setup-debug-final.log 2>/dev/null || true
+
+log_info "Setup logs written to: $SETUP_LOG and $SETUP_DEBUG_LOG"
 
 exit ${EXIT_SUCCESS}
