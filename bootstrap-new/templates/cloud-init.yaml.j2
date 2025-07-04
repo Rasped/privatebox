@@ -1,0 +1,241 @@
+#cloud-config
+# PrivateBox Cloud-Init Configuration
+
+# Set locale
+locale: en_US.UTF-8
+timezone: UTC
+
+# User configuration
+users:
+  - name: {{VM_USERNAME}}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: {{VM_PASSWORD_HASH}}
+    ssh_authorized_keys:
+      - {{SSH_PUBLIC_KEY}}
+    groups: [sudo]
+
+# Enable SSH
+ssh_pwauth: true
+disable_root: false
+
+# Package management
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - net-tools
+  - podman
+  - podman-compose
+  - buildah
+  - skopeo
+  - gpg
+  - fail2ban
+  - ufw
+  - jq
+  - nc
+  - systemd-container
+
+# Configure Podman
+write_files:
+  # Podman registries configuration
+  - path: /etc/containers/registries.conf
+    content: |
+      unqualified-search-registries = ["docker.io"]
+      
+      [[registry]]
+      location = "docker.io"
+      insecure = false
+    permissions: '0644'
+
+  # Enable lingering for the user (required for user systemd services)
+  - path: /etc/systemd/system/user-linger.service
+    content: |
+      [Unit]
+      Description=Enable lingering for {{VM_USERNAME}}
+      After=multi-user.target
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/loginctl enable-linger {{VM_USERNAME}}
+      RemainAfterExit=yes
+      
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  # Create systemd directory structure
+  - path: /home/{{VM_USERNAME}}/.config/containers/systemd/.keep
+    content: |
+      # Directory marker for systemd quadlets
+    owner: {{VM_USERNAME}}:{{VM_USERNAME}}
+    permissions: '0644'
+
+  # Portainer quadlet
+  - path: /home/{{VM_USERNAME}}/.config/containers/systemd/portainer.container
+    content: |
+      [Unit]
+      Description=Portainer CE
+      After=network-online.target
+      
+      [Container]
+      Image=docker.io/portainer/portainer-ce:latest
+      ContainerName=portainer
+      Volume=portainer_data:/data:Z
+      Volume=/run/podman/podman.sock:/var/run/docker.sock:z
+      PublishPort={{PORTAINER_PORT}}:9000
+      PublishPort={{PORTAINER_HTTPS_PORT}}:9443
+      Environment=TZ=UTC
+      
+      [Service]
+      Restart=always
+      TimeoutStartSec=300
+      
+      [Install]
+      WantedBy=default.target
+    owner: {{VM_USERNAME}}:{{VM_USERNAME}}
+    permissions: '0644'
+
+  # Semaphore quadlet
+  - path: /home/{{VM_USERNAME}}/.config/containers/systemd/semaphore.container
+    content: |
+      [Unit]
+      Description=Semaphore - Ansible UI
+      After=network-online.target
+      
+      [Container]
+      Image=docker.io/semaphoreui/semaphore:latest
+      ContainerName=semaphore
+      Volume=semaphore_data:/var/lib/semaphore:Z
+      Volume=semaphore_config:/etc/semaphore:Z
+      PublishPort={{SEMAPHORE_PORT}}:3000
+      Environment=SEMAPHORE_DB_DIALECT=bolt
+      Environment=SEMAPHORE_ADMIN=admin
+      Environment=SEMAPHORE_ADMIN_PASSWORD={{SEMAPHORE_PASSWORD}}
+      Environment=SEMAPHORE_ADMIN_NAME="Admin User"
+      Environment=SEMAPHORE_ADMIN_EMAIL=admin@localhost
+      Environment=TZ=UTC
+      
+      [Service]
+      Restart=always
+      TimeoutStartSec=300
+      
+      [Install]
+      WantedBy=default.target
+    owner: {{VM_USERNAME}}:{{VM_USERNAME}}
+    permissions: '0644'
+
+  # Service startup script
+  - path: /usr/local/bin/start-privatebox-services.sh
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      
+      echo "Starting PrivateBox services..."
+      
+      # Ensure user systemd is running
+      export XDG_RUNTIME_DIR="/run/user/$(id -u {{VM_USERNAME}})"
+      
+      # Create necessary directories
+      su - {{VM_USERNAME}} -c "mkdir -p ~/.config/containers/systemd"
+      
+      # Reload systemd for the user
+      su - {{VM_USERNAME}} -c "systemctl --user daemon-reload"
+      
+      # Enable and start services
+      su - {{VM_USERNAME}} -c "systemctl --user enable --now portainer.service"
+      su - {{VM_USERNAME}} -c "systemctl --user enable --now semaphore.service"
+      
+      # Wait for services to be ready
+      echo "Waiting for services to start..."
+      sleep 10
+      
+      # Check service status
+      su - {{VM_USERNAME}} -c "systemctl --user status portainer.service --no-pager" || true
+      su - {{VM_USERNAME}} -c "systemctl --user status semaphore.service --no-pager" || true
+      
+      # Check if ports are listening
+      for port in {{PORTAINER_PORT}} {{SEMAPHORE_PORT}}; do
+        if nc -z localhost $port; then
+          echo "Port $port is listening"
+        else
+          echo "Warning: Port $port is not listening"
+        fi
+      done
+      
+      echo "PrivateBox services startup complete"
+    permissions: '0755'
+
+  # Firewall configuration script
+  - path: /usr/local/bin/configure-firewall.sh
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      
+      echo "Configuring firewall..."
+      
+      # Enable UFW
+      ufw --force enable
+      
+      # Default policies
+      ufw default deny incoming
+      ufw default allow outgoing
+      
+      # Allow SSH
+      ufw allow {{SSH_PORT}}/tcp
+      
+      # Allow Portainer
+      ufw allow {{PORTAINER_PORT}}/tcp
+      ufw allow {{PORTAINER_HTTPS_PORT}}/tcp
+      
+      # Allow Semaphore
+      ufw allow {{SEMAPHORE_PORT}}/tcp
+      
+      # Reload UFW
+      ufw reload
+      
+      echo "Firewall configured successfully"
+    permissions: '0755'
+
+  # Completion marker
+  - path: /etc/privatebox-cloud-init-complete
+    content: |
+      INSTALLATION_STATUS=completed
+      COMPLETED_AT={{TIMESTAMP}}
+      VM_IP={{STATIC_IP}}
+      GATEWAY={{GATEWAY}}
+    permissions: '0644'
+
+# Run commands
+runcmd:
+  # Enable user lingering
+  - systemctl enable --now user-linger.service
+  
+  # Configure Podman for rootless operation
+  - su - {{VM_USERNAME}} -c "podman system migrate"
+  
+  # Configure firewall
+  - /usr/local/bin/configure-firewall.sh
+  
+  # Start services
+  - /usr/local/bin/start-privatebox-services.sh
+  
+  # Set completion marker
+  - echo "SERVICES_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
+
+# Final message
+final_message: |
+  PrivateBox installation completed!
+  System will be ready at: {{STATIC_IP}}
+  
+  Access URLs:
+  - Portainer: https://{{STATIC_IP}}:{{PORTAINER_HTTPS_PORT}}
+  - Semaphore: http://{{STATIC_IP}}:{{SEMAPHORE_PORT}}
+  
+  Default credentials have been generated.
+  SSH access: ssh {{VM_USERNAME}}@{{STATIC_IP}}

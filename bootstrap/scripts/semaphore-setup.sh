@@ -224,7 +224,10 @@ start_systemd_services() {
             db_ready=true
             break
         fi
-        sleep 2
+        if [ $((i % 6)) -eq 0 ]; then
+            log_info "Still waiting for MySQL... ($((i * 5)) seconds elapsed)"
+        fi
+        sleep 5
     done
     
     if [ "$db_ready" != "true" ]; then
@@ -636,10 +639,10 @@ RequiresMountsFor=/opt/semaphore/mysql/data
 [Container]
 ContainerName=semaphore-db
 Image=docker.io/library/mysql:8.0
-Environment=MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+Environment=MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD"
 Environment=MYSQL_DATABASE=semaphore
 Environment=MYSQL_USER=semaphore
-Environment=MYSQL_PASSWORD=$MYSQL_SEMAPHORE_PASSWORD
+Environment=MYSQL_PASSWORD="$MYSQL_SEMAPHORE_PASSWORD"
 Volume=/opt/semaphore/mysql/data:/var/lib/mysql:Z
 Network=semaphore.network
 PublishPort=3306:3306
@@ -663,16 +666,16 @@ RequiresMountsFor=/opt/semaphore/app/data /opt/semaphore/app/config
 ContainerName=semaphore-ui
 Image=docker.io/semaphoreui/semaphore:latest
 Environment=SEMAPHORE_DB_USER=semaphore
-Environment=SEMAPHORE_DB_PASS=$MYSQL_SEMAPHORE_PASSWORD
+Environment=SEMAPHORE_DB_PASS="$MYSQL_SEMAPHORE_PASSWORD"
 Environment=SEMAPHORE_DB_HOST=semaphore-db
 Environment=SEMAPHORE_DB_PORT=3306
 Environment=SEMAPHORE_DB_DIALECT=mysql
 Environment=SEMAPHORE_DB=semaphore
-Environment=SEMAPHORE_ADMIN_PASSWORD=$SEMAPHORE_ADMIN_PASSWORD
+Environment=SEMAPHORE_ADMIN_PASSWORD="$SEMAPHORE_ADMIN_PASSWORD"
 Environment=SEMAPHORE_ADMIN_NAME=admin
 Environment=SEMAPHORE_ADMIN_EMAIL=admin@localhost
 Environment=SEMAPHORE_ADMIN=admin
-Environment=SEMAPHORE_ACCESS_KEY_ENCRYPTION=$SEMAPHORE_ACCESS_KEY_ENCRYPTION_KEY
+Environment=SEMAPHORE_ACCESS_KEY_ENCRYPTION="$SEMAPHORE_ACCESS_KEY_ENCRYPTION_KEY"
 Environment=SEMAPHORE_PLAYBOOK_PATH=/tmp/semaphore/
 Environment=TZ=UTC
 Volume=/opt/semaphore/app/data:/etc/semaphore:Z
