@@ -130,11 +130,7 @@ bootstrap/              # Bootstrap infrastructure and scripts
 ├── lib/               # Shared libraries
 └── deploy-to-server.sh  # Remote deployment tool
 
-ansible/                # Ansible automation (future implementation)
-├── inventories/        # Environment-specific inventory files
-├── roles/              # Modular, reusable Ansible roles
-├── playbooks/          # Orchestration playbooks
-└── ansible.cfg         # Ansible configuration
+docs/                   # Project documentation
 
 quickstart.sh          # One-line installer script
 ```
@@ -230,16 +226,16 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 - ✅ **Network Auto-Discovery**: Automatic detection of network configuration
 - ✅ **Management Tools**: Portainer and Semaphore pre-installed and configured
 - ✅ **Quick Start Script**: One-line installation for easy deployment
-- 🚧 **Ansible Roles**: Basic structure in place, implementation in progress
+- 📋 **Ansible Automation**: To be rebuilt from scratch with simpler approach
 - 📋 **Privacy Services**: Planned deployment via Ansible (OPNSense, AdGuard, etc.)
 
 ## Next Steps
 
+- Design and implement simple Ansible structure from scratch
+- Create basic playbooks for service deployment
 - Develop secure secrets and credential management process
-- Implement reusable Ansible roles for all required services
-- Integrate dynamic inventory with Proxmox
-- Establish backup and disaster recovery strategies
-- Create playbook testing processes and documentation
+- Integrate with existing Semaphore installation
+- Test deployment of privacy services (OPNSense, AdGuard, etc.)
 
 ## Contributing
 
