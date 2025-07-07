@@ -49,6 +49,42 @@ generate_ssh_key_pair() {
     log_info "  Public key: ${SSH_PUBLIC_KEY_PATH}"
 }
 
+# Function to generate SSH key pair for VM self-management
+generate_vm_ssh_key_pair() {
+    log_info "Generating SSH key pair for VM self-management..."
+    
+    local vm_key_path="/root/.credentials/semaphore_vm_key"
+    local vm_key_comment="semaphore-vm-self-management@$(hostname)"
+    
+    # Ensure credentials directory exists
+    mkdir -p /root/.credentials
+    chmod 700 /root/.credentials
+    
+    # Remove existing keys if they exist
+    rm -f "${vm_key_path}" "${vm_key_path}.pub"
+    
+    # Generate new SSH key pair
+    ssh-keygen -t ed25519 -f "${vm_key_path}" -C "${vm_key_comment}" -N "" -q
+    
+    if [ $? -ne 0 ]; then
+        log_info "ERROR: Failed to generate VM SSH key pair"
+        return 1
+    fi
+    
+    # Set secure permissions
+    chmod 600 "${vm_key_path}"
+    chmod 644 "${vm_key_path}.pub"
+    
+    # Add public key to VM's own authorized_keys
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
+    cat "${vm_key_path}.pub" >> /root/.ssh/authorized_keys
+    chmod 600 /root/.ssh/authorized_keys
+    
+    log_info "VM SSH key pair generated and added to authorized_keys"
+    return 0
+}
+
 # Main setup function - orchestrates the entire Semaphore installation
 setup_semaphore() {
     log_info "Setting up SemaphoreUI with MySQL in containers..."
@@ -111,6 +147,9 @@ generate_and_save_credentials() {
     # Generate SSH key pair for Ansible automation
     generate_ssh_key_pair
 
+    # Generate SSH key pair for VM self-management
+    generate_vm_ssh_key_pair
+
     # Save passwords to a secure file with extra safeguards
     mkdir -p /root/.credentials
     chmod 700 /root/.credentials  # Secure the directory itself
@@ -134,6 +173,10 @@ Semaphore Access Key Encryption: $SEMAPHORE_ACCESS_KEY_ENCRYPTION_KEY
 ## SSH Keys
 SSH Private Key Path: /root/.credentials/semaphore_ansible_key
 SSH Public Key Path: /root/.credentials/semaphore_ansible_key.pub
+
+## VM Self-Management SSH Keys
+VM SSH Private Key Path: /root/.credentials/semaphore_vm_key
+VM SSH Public Key Path: /root/.credentials/semaphore_vm_key.pub
 
 ## Security Note
 # These passwords were automatically generated with strong security requirements.
@@ -1225,6 +1268,7 @@ create_semaphore_ssh_key() {
     local key_name="$2"
     local key_type="${3:-ssh}"  # Default to ssh type
     local admin_session="${4:-}"  # Optional parameter
+    local key_path="${5:-$SSH_PRIVATE_KEY_PATH}"  # Use provided path or default
     
     log_info "Creating SSH key '$key_name' for project ID $project_id..."
     
@@ -1242,12 +1286,12 @@ create_semaphore_ssh_key() {
     # Read the private key content
     local private_key_content
     
-    if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
-        log_info "ERROR: SSH private key not found at $SSH_PRIVATE_KEY_PATH"
+    if [ ! -f "$key_path" ]; then
+        log_info "ERROR: SSH private key not found at $key_path"
         return 1
     fi
     
-    private_key_content=$(cat "$SSH_PRIVATE_KEY_PATH")
+    private_key_content=$(cat "$key_path")
     if [ -z "$private_key_content" ]; then
         log_info "ERROR: Failed to read SSH private key content"
         return 1
@@ -1260,12 +1304,12 @@ create_semaphore_ssh_key() {
         --arg name "$key_name" \
         --arg type "$key_type" \
         --arg login "root" \
-        --rawfile private_key "$SSH_PRIVATE_KEY_PATH" \
+        --rawfile private_key "$key_path" \
         --argjson pid "$project_id" \
         '{name: $name, type: $type, project_id: $pid, ssh: {login: $login, passphrase: "", private_key: $private_key}}')
     
     # Debug logging
-    log_info "DEBUG: SSH private key path: $SSH_PRIVATE_KEY_PATH"
+    log_info "DEBUG: SSH private key path: $key_path"
     log_info "DEBUG: Private key content length: ${#private_key_content}"
     log_info "DEBUG: First 50 chars of key: ${private_key_content:0:50}..."
     log_info "DEBUG: Payload preview: $(echo "$ssh_key_payload" | jq -c '{name, type, project_id, ssh: {login: .ssh.login, passphrase: .ssh.passphrase, private_key: (.ssh.private_key | .[0:50] + "...")}}')"
@@ -1353,6 +1397,9 @@ create_infrastructure_project_with_ssh_key() {
             
             # Create SSH key for this project
             create_semaphore_ssh_key "$project_id" "Proxmox-SSH-Key" "ssh" "$admin_session"
+            
+            # Create SSH key for VM self-management
+            create_semaphore_ssh_key "$project_id" "VM-Self-Management-Key" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key"
             
             return 0
         else
