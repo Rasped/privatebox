@@ -1396,10 +1396,10 @@ create_infrastructure_project_with_ssh_key() {
             create_default_inventory "$project_name" "$project_id" "$admin_session"
             
             # Create SSH key for this project
-            create_semaphore_ssh_key "$project_id" "Proxmox-SSH-Key" "ssh" "$admin_session"
+            create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session"
             
             # Create SSH key for VM self-management
-            create_semaphore_ssh_key "$project_id" "VM-Self-Management-Key" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key"
+            create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key"
             
             return 0
         else
