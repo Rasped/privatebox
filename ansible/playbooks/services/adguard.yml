@@ -1,0 +1,281 @@
+---
+- name: Deploy AdGuard Home DNS Filter
+  hosts: privatebox
+  become: true
+  gather_facts: true
+  
+  vars:
+    service_name: "AdGuard Home"
+    service_description: "Network-wide ads & trackers blocking DNS server"
+    service_tag: "adguard"
+    
+  # Allow override from SemaphoreUI survey
+  vars_prompt:
+    - name: confirm_deploy
+      prompt: "Deploy {{ service_name }}? (yes/no)"
+      default: "yes"
+      private: no
+      
+    - name: custom_web_port
+      prompt: "Web UI port (default: {{ adguard_web_port }})"
+      default: "{{ adguard_web_port }}"
+      private: no
+
+  tasks:
+    # Pre-deployment validation
+    - name: "{{ service_name }} - Pre-deployment checks"
+      when: confirm_deploy | bool
+      tags: [adguard, preflight]
+      block:
+        - name: Check system requirements
+          assert:
+            that:
+              - ansible_distribution == "Ubuntu"
+              - ansible_distribution_version is version('22.04', '>=')
+            fail_msg: "This playbook requires Ubuntu 22.04 or later"
+            
+        - name: Check if Podman is installed
+          command: which podman
+          register: podman_check
+          changed_when: false
+          failed_when: false
+          
+        - name: Install Podman if not present
+          when: podman_check.rc != 0
+          block:
+            - name: Update apt cache
+              apt:
+                update_cache: yes
+                cache_valid_time: 3600
+                
+            - name: Install Podman
+              apt:
+                name:
+                  - podman
+                  - podman-compose
+                  - containernetworking-plugins
+                state: present
+                
+        - name: Check Podman version
+          command: podman --version
+          register: podman_version
+          changed_when: false
+          
+        - name: Display Podman version
+          debug:
+            msg: "Podman version: {{ podman_version.stdout }}"
+            
+        - name: Check for port conflicts
+          wait_for:
+            port: "{{ item }}"
+            state: stopped
+            timeout: 1
+          loop:
+            - "{{ custom_web_port }}"
+            - "{{ adguard_dns_port }}"
+            - "{{ adguard_setup_port }}"
+          ignore_errors: true
+          register: port_check
+          
+        - name: Warn about port conflicts
+          debug:
+            msg: "WARNING: Port {{ item.item }} appears to be in use. Service may fail to start."
+          loop: "{{ port_check.results }}"
+          when: item.failed is defined and not item.failed
+
+    # Main deployment
+    - name: "{{ service_name }} - Deployment"
+      when: confirm_deploy | bool
+      tags: [adguard, deploy]
+      block:
+        - name: Create directory structure
+          file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner | default(ansible_user) }}"
+            group: "{{ item.group | default(ansible_user) }}"
+            mode: "{{ item.mode | default('0755') }}"
+          loop:
+            - { path: "{{ adguard_data_dir }}" }
+            - { path: "{{ adguard_config_dir }}" }
+            - { path: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}" }
+            
+        - name: Set SELinux context for data directories
+          when: ansible_selinux.status is defined and ansible_selinux.status == "enabled"
+          command: |
+            chcon -R -t container_file_t {{ item }}
+          loop:
+            - "{{ adguard_data_dir }}"
+            - "{{ adguard_config_dir }}"
+          changed_when: true
+            
+        - name: Deploy Quadlet unit file
+          template:
+            src: ../../files/quadlet/adguard.container.j2
+            dest: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}/adguard.container"
+            owner: root
+            group: root
+            mode: '0644'
+          register: quadlet_deployed
+          
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+          when: quadlet_deployed.changed
+            
+        - name: Enable AdGuard Home service
+          systemd:
+            name: adguard-container.service
+            enabled: true
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+            
+        - name: Start AdGuard Home service
+          systemd:
+            name: adguard-container.service
+            state: started
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_start
+          
+        - name: Wait for AdGuard Home to be ready
+          wait_for:
+            port: "{{ custom_web_port }}"
+            delay: 5
+            timeout: 60
+          when: service_start.changed
+
+    # Post-deployment validation
+    - name: "{{ service_name }} - Post-deployment validation"
+      when: confirm_deploy | bool
+      tags: [adguard, validate]
+      block:
+        - name: Check service status
+          systemd:
+            name: adguard-container.service
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_status
+          
+        - name: Verify service is active
+          assert:
+            that:
+              - service_status.status.ActiveState == "active"
+            fail_msg: "AdGuard Home service is not active"
+            
+        - name: Check container status
+          command: podman ps --filter "name=adguard-home" --format json
+          register: container_status
+          changed_when: false
+          
+        - name: Parse container info
+          set_fact:
+            container_info: "{{ container_status.stdout | from_json | first | default({}) }}"
+          when: container_status.stdout
+          
+        - name: Display container status
+          debug:
+            msg:
+              - "Container: {{ container_info.Names | default(['Not found']) | first }}"
+              - "Status: {{ container_info.State | default('Unknown') }}"
+              - "Image: {{ container_info.Image | default('Unknown') }}"
+          when: container_info is defined
+          
+        - name: Test DNS resolution through AdGuard
+          command: >
+            dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
+            +short google.com
+          register: dns_test
+          changed_when: false
+          failed_when: false
+          
+        - name: Check DNS test result
+          debug:
+            msg: "DNS resolution test: {{ 'PASSED' if dns_test.rc == 0 else 'FAILED - DNS not yet configured' }}"
+            
+    # Display access information
+    - name: "{{ service_name }} - Access information"
+      when: confirm_deploy | bool
+      tags: [adguard, info]
+      block:
+        - name: Generate service information
+          set_fact:
+            service_info:
+              name: "{{ service_name }}"
+              status: "{{ 'Active' if service_status.status.ActiveState == 'active' else 'Inactive' }}"
+              web_url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
+              dns_server: "{{ ansible_default_ipv4.address }}"
+              dns_port: "{{ adguard_dns_port }}"
+              setup_required: true
+              
+        - name: Display access information
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "Service Status: {{ service_info.status }}"
+              - ""
+              - "Web Interface: {{ service_info.web_url }}"
+              - "DNS Server: {{ service_info.dns_server }}:{{ service_info.dns_port }}"
+              - ""
+              - "Initial Setup Required:"
+              - "1. Visit {{ service_info.web_url }}"
+              - "2. Complete the setup wizard"
+              - "3. Set admin username and password"
+              - "4. Configure your DNS settings"
+              - ""
+              - "To use AdGuard as your DNS:"
+              - "- Router: Set DNS to {{ service_info.dns_server }}"
+              - "- Individual devices: Use {{ service_info.dns_server }}:{{ service_info.dns_port }}"
+              - ""
+              - "Service Management:"
+              - "- Status: sudo systemctl status adguard-container"
+              - "- Logs: sudo podman logs adguard-home"
+              - "- Restart: sudo systemctl restart adguard-container"
+              - "=========================================="
+              
+        - name: Save deployment info
+          copy:
+            content: |
+              {{ service_name }} Deployment Information
+              =====================================
+              Deployed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+              
+              Access URLs:
+              - Web Interface: {{ service_info.web_url }}
+              - DNS Server: {{ service_info.dns_server }}:{{ service_info.dns_port }}
+              
+              Service: adguard-container.service
+              Container: adguard-home
+              
+              Data Directory: {{ adguard_data_dir }}
+              Config Directory: {{ adguard_config_dir }}
+            dest: "{{ privatebox_base_path }}/deployment-info-adguard.txt"
+            mode: '0644'
+
+    # Optional: Configure AdGuard initial settings
+    - name: "{{ service_name }} - Initial configuration (optional)"
+      when: 
+        - confirm_deploy | bool
+        - configure_adguard | default(false) | bool
+      tags: [adguard, configure, never]
+      block:
+        - name: Wait for AdGuard API to be ready
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
+            status_code: [200, 403]  # 403 if not yet configured
+          register: api_check
+          until: api_check.status in [200, 403]
+          retries: 10
+          delay: 3
+          
+        - name: Note about automatic configuration
+          debug:
+            msg: "Automatic configuration not implemented. Please complete setup via web interface."
+
+  handlers:
+    - name: restart adguard
+      systemd:
+        name: adguard-container.service
+        state: restarted
+        scope: "{{ 'system' if use_system_quadlet else 'user' }}"
