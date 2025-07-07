@@ -76,7 +76,7 @@ bootstrap/
 1. **Portainer** - Docker/Podman container management (port 9000)
 2. **Semaphore** - Ansible automation UI (port 3000)
 
-Note: The actual privacy router services (OPNSense, AdGuard Home, Unbound DNS) are deployed via Ansible playbooks from the privatebox-ansible repository.
+Note: The actual privacy router services (OPNSense, AdGuard Home, Unbound DNS) are deployed via Ansible playbooks from this repository (see the ansible/ directory).
 
 ## Mass Production
 
