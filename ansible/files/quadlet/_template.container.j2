@@ -1,0 +1,133 @@
+# Template Quadlet unit file for containerized services
+# Instructions:
+# 1. Copy this file to <service>.container.j2
+# 2. Replace SERVICE placeholders with actual service details
+# 3. Update port mappings, volumes, and environment variables
+# 4. Remove any sections not needed for your service
+
+[Unit]
+Description=SERVICE_DESCRIPTION
+Documentation=SERVICE_DOCUMENTATION_URL
+Wants=network-online.target
+After=network-online.target
+{% if use_system_quadlet | default(true) %}
+Before=multi-user.target
+{% endif %}
+
+[Container]
+# Container image
+Image={{ container_image_registry | default('docker.io') }}/{{ SERVICE_VAR_image }}:{{ SERVICE_VAR_version }}
+ContainerName=SERVICE_NAME
+
+# Network configuration
+# PublishPort={{ SERVICE_VAR_port }}:CONTAINER_PORT
+# PublishPort={{ SERVICE_VAR_admin_port }}:CONTAINER_ADMIN_PORT
+
+# If service needs host networking (e.g., DHCP, mDNS)
+# Network=host
+
+# Volume mounts
+Volume={{ SERVICE_VAR_data_dir }}:/data:{{ volume_mount_options | default('Z') }}
+Volume={{ SERVICE_VAR_config_dir }}:/config:{{ volume_mount_options | default('Z') }}
+
+# Additional volume examples:
+# Volume=/etc/localtime:/etc/localtime:ro
+# Volume={{ SERVICE_VAR_custom_dir }}:/custom:{{ volume_mount_options | default('Z') }}
+
+# Environment variables
+Environment="TZ={{ timezone | default('UTC') }}"
+# Environment="SERVICE_VAR1=value1"
+# Environment="SERVICE_VAR2=value2"
+
+# If service needs environment file
+# EnvironmentFile={{ SERVICE_VAR_config_dir }}/SERVICE.env
+
+# Security settings
+SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}
+NoNewPrivileges={{ container_no_new_privileges | default('true') | lower }}
+{% if container_drop_capabilities is defined %}
+{% for cap in container_drop_capabilities %}
+DropCapability={{ cap }}
+{% endfor %}
+{% endif %}
+
+# If service needs specific capabilities
+# AddCapability=CAP_NET_ADMIN
+# AddCapability=CAP_NET_RAW
+
+# Resource limits
+{% if SERVICE_VAR_memory_limit is defined %}
+MemoryLimit={{ SERVICE_VAR_memory_limit }}
+{% endif %}
+{% if SERVICE_VAR_cpu_quota is defined %}
+CPUQuota={{ SERVICE_VAR_cpu_quota }}
+{% endif %}
+
+# User namespace
+{% if container_user_namespace is defined %}
+UserNS={{ container_user_namespace }}
+{% endif %}
+
+# If service should run as specific user/group
+# User=1000
+# Group=1000
+
+# Health check
+HealthCmd=/bin/sh -c "wget -q --spider http://localhost:HEALTH_PORT/health || exit 1"
+HealthInterval={{ health_check_interval | default('30s') }}
+HealthRetries={{ health_check_retries | default(3) }}
+HealthStartPeriod={{ health_check_start_period | default('60s') }}
+HealthTimeout={{ health_check_timeout | default('10s') }}
+
+# Alternative health check examples:
+# HealthCmd=/usr/bin/curl -f http://localhost:HEALTH_PORT/ || exit 1
+# HealthCmd=/bin/sh -c "nc -z localhost SERVICE_PORT || exit 1"
+
+# Logging
+{% if container_log_driver is defined %}
+LogDriver={{ container_log_driver }}
+{% endif %}
+
+# Pull policy
+Pull={{ container_pull_policy | default('missing') }}
+
+# If service needs specific DNS servers
+# DNS=8.8.8.8
+# DNS=8.8.4.4
+
+# If service needs custom hosts entries
+# HostAdd=hostname:ip
+
+# Working directory inside container
+# WorkingDir=/app
+
+# Command override (if needed)
+# Exec=/custom/startup/script.sh
+
+[Service]
+# Restart policy
+Restart={{ container_restart_policy | default('always') }}
+RestartSec={{ container_restart_sec | default(30) }}
+
+# Systemd service settings
+TimeoutStartSec={{ systemd_timeout_start_sec | default(900) }}
+TimeoutStopSec={{ systemd_timeout_stop_sec | default(90) }}
+
+# Pre-start commands
+{% if SERVICE_VAR_data_dir is defined %}
+ExecStartPre=/bin/mkdir -p {{ SERVICE_VAR_data_dir }}
+ExecStartPre=/bin/mkdir -p {{ SERVICE_VAR_config_dir }}
+{% endif %}
+
+# If service needs specific permissions
+# ExecStartPre=/bin/chown -R 1000:1000 {{ SERVICE_VAR_data_dir }}
+
+# Post-start commands (if needed)
+# ExecStartPost=/bin/sh -c 'sleep 5 && curl -X POST http://localhost:PORT/init'
+
+# Pre-stop commands (if needed)
+# ExecStop=/bin/sh -c 'curl -X POST http://localhost:PORT/shutdown'
+
+[Install]
+# Enable service at boot
+WantedBy=multi-user.target default.target

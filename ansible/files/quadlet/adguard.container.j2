@@ -1,0 +1,91 @@
+[Unit]
+Description=AdGuard Home - Network-wide ads & trackers blocking DNS server
+Documentation=https://github.com/AdguardTeam/AdGuardHome
+Documentation=https://github.com/AdguardTeam/AdGuardHome/wiki
+Wants=network-online.target
+After=network-online.target
+{% if use_system_quadlet | default(true) %}
+Before=multi-user.target
+{% endif %}
+
+[Container]
+# Container image
+Image={{ container_image_registry | default('docker.io') }}/{{ adguard_image }}:{{ adguard_version }}
+ContainerName=adguard-home
+
+# Network configuration
+PublishPort={{ custom_web_port | default(adguard_web_port) }}:3000
+PublishPort={{ adguard_dns_port }}:53/tcp
+PublishPort={{ adguard_dns_port_udp }}:53/udp
+{% if adguard_setup_port is defined %}
+PublishPort={{ adguard_setup_port }}:3000
+{% endif %}
+{% if adguard_dns_over_tls is defined %}
+PublishPort={{ adguard_dns_over_tls }}:853/tcp
+{% endif %}
+{% if adguard_dns_over_quic is defined %}
+PublishPort={{ adguard_dns_over_quic }}:784/udp
+{% endif %}
+
+# Volume mounts
+Volume={{ adguard_data_dir }}:/opt/adguardhome/work:{{ volume_mount_options | default('Z') }}
+Volume={{ adguard_config_dir }}:/opt/adguardhome/conf:{{ volume_mount_options | default('Z') }}
+
+# Environment variables
+Environment="TZ={{ timezone | default('UTC') }}"
+
+# Security settings
+SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}
+NoNewPrivileges={{ container_no_new_privileges | default('true') | lower }}
+{% if container_drop_capabilities is defined %}
+{% for cap in container_drop_capabilities %}
+DropCapability={{ cap }}
+{% endfor %}
+{% endif %}
+
+# Resource limits
+{% if adguard_memory_limit is defined %}
+MemoryLimit={{ adguard_memory_limit }}
+{% endif %}
+{% if adguard_cpu_quota is defined %}
+CPUQuota={{ adguard_cpu_quota }}
+{% endif %}
+
+# User namespace
+{% if container_user_namespace is defined %}
+UserNS={{ container_user_namespace }}
+{% endif %}
+
+# Health check
+HealthCmd=/bin/sh -c "wget -q --spider http://localhost:3000 || exit 1"
+HealthInterval={{ health_check_interval | default('30s') }}
+HealthRetries={{ health_check_retries | default(3) }}
+HealthStartPeriod={{ health_check_start_period | default('60s') }}
+HealthTimeout={{ health_check_timeout | default('10s') }}
+
+# Logging
+{% if container_log_driver is defined %}
+LogDriver={{ container_log_driver }}
+{% endif %}
+
+# Pull policy
+Pull={{ container_pull_policy | default('missing') }}
+
+[Service]
+# Restart policy
+Restart={{ container_restart_policy | default('always') }}
+RestartSec={{ container_restart_sec | default(30) }}
+
+# Systemd service settings
+TimeoutStartSec={{ systemd_timeout_start_sec | default(900) }}
+TimeoutStopSec={{ systemd_timeout_stop_sec | default(90) }}
+
+# Run pre-start commands if needed
+{% if adguard_data_dir is defined %}
+ExecStartPre=/bin/mkdir -p {{ adguard_data_dir }}
+ExecStartPre=/bin/mkdir -p {{ adguard_config_dir }}
+{% endif %}
+
+[Install]
+# Enable service at boot
+WantedBy=multi-user.target default.target

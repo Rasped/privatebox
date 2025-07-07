@@ -29,7 +29,7 @@ PORTAINER_HTTPS_PORT="8000"
 SEMAPHORE_DATA_DIR="/opt/semaphore"
 SEMAPHORE_PORT="3000"
 SEMAPHORE_MYSQL_PORT="3306"
-SEMAPHORE_GIT_URL="https://github.com/Rasped/privatebox-ansible.git"
+SEMAPHORE_GIT_URL="https://github.com/Rasped/privatebox.git"
 
 # Proxmox Repository Settings
 PROXMOX_DEBIAN_VERSION="bookworm"
