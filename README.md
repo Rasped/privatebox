@@ -130,7 +130,7 @@ bootstrap/              # Bootstrap infrastructure and scripts
 ├── lib/               # Shared libraries
 └── deploy-to-server.sh  # Remote deployment tool
 
-docs/                   # Project documentation
+dev-notes/              # Development notes and technical guides
 
 quickstart.sh          # One-line installer script
 ```
