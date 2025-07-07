@@ -1,0 +1,122 @@
+---
+# Test playbook for cloud image VM creation
+# This demonstrates the cloud image support in the proxmox role
+#
+# Usage:
+#   ansible-playbook test_cloud_image_vm.yml -i inventory/development/hosts.yml -e proxmox_vm_vmid=9999
+
+- name: Test Cloud Image VM Creation
+  hosts: proxmox_hosts
+  gather_facts: yes
+  
+  vars:
+    # Test VM configuration
+    test_vm_name: "test-cloud-{{ ansible_date_time.epoch }}"
+    test_vm_id: "{{ proxmox_vm_vmid | default(9999) }}"
+    
+  tasks:
+    - name: Display test information
+      debug:
+        msg:
+          - "Testing cloud image VM creation"
+          - "VM Name: {{ test_vm_name }}"
+          - "VM ID: {{ test_vm_id }}"
+          - "Target Node: {{ ansible_hostname }}"
+    
+    - name: Remove test VM if it exists
+      community.general.proxmox_kvm:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password }}"
+        validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+        node: "{{ ansible_hostname }}"
+        vmid: "{{ test_vm_id }}"
+        state: absent
+      failed_when: false
+      tags: cleanup
+    
+    - name: Create Ubuntu 24.04 VM from cloud image
+      include_role:
+        name: proxmox
+      vars:
+        proxmox_operation: create_vm
+        proxmox_vm_name: "{{ test_vm_name }}"
+        proxmox_vm_vmid: "{{ test_vm_id }}"
+        proxmox_vm_node: "{{ ansible_hostname }}"
+        # Cloud image configuration
+        proxmox_vm_cloud_image_url: "{{ proxmox_cloud_image_urls['ubuntu-24.04'] }}"
+        # VM resources
+        proxmox_vm_cores: 2
+        proxmox_vm_memory: 2048
+        # Cloud-init configuration
+        proxmox_vm_cloud_init_user: testuser
+        proxmox_vm_cloud_init_password: "TestPass123!"
+        proxmox_vm_cloud_init_ssh_keys:
+          - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDxxxxx test@ansible"
+        # Network - using DHCP for simplicity
+        proxmox_vm_cloud_init_ip: "dhcp"
+    
+    - name: Wait for VM to be accessible (if using static IP)
+      wait_for:
+        host: "{{ proxmox_vm_cloud_init_ip | regex_replace('/\\d+$', '') }}"
+        port: 22
+        delay: 30
+        timeout: 300
+      when: 
+        - proxmox_vm_cloud_init_ip is defined
+        - proxmox_vm_cloud_init_ip != "dhcp"
+      delegate_to: localhost
+      ignore_errors: yes
+    
+    - name: Get VM status
+      command: "qm status {{ test_vm_id }}"
+      register: vm_status
+      changed_when: false
+    
+    - name: Get VM configuration
+      command: "qm config {{ test_vm_id }}"
+      register: vm_config
+      changed_when: false
+    
+    - name: Display VM details
+      debug:
+        msg:
+          - "VM Status: {{ vm_status.stdout }}"
+          - "VM Configuration:"
+          - "{{ vm_config.stdout_lines }}"
+    
+    - name: Test cleanup - Stop and remove VM
+      block:
+        - name: Stop test VM
+          community.general.proxmox_kvm:
+            api_host: "{{ proxmox_api_host }}"
+            api_user: "{{ proxmox_api_user }}"
+            api_password: "{{ proxmox_api_password }}"
+            validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+            node: "{{ ansible_hostname }}"
+            vmid: "{{ test_vm_id }}"
+            state: stopped
+          failed_when: false
+        
+        - name: Remove test VM
+          community.general.proxmox_kvm:
+            api_host: "{{ proxmox_api_host }}"
+            api_user: "{{ proxmox_api_user }}"
+            api_password: "{{ proxmox_api_password }}"
+            validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+            node: "{{ ansible_hostname }}"
+            vmid: "{{ test_vm_id }}"
+            state: absent
+          failed_when: false
+      when: cleanup | default(true) | bool
+      tags: cleanup
+    
+  post_tasks:
+    - name: Test summary
+      debug:
+        msg:
+          - "Cloud image VM test completed"
+          - "VM Name: {{ test_vm_name }}"
+          - "VM ID: {{ test_vm_id }}"
+          - "{% if cleanup | default(true) %}VM has been cleaned up{% else %}VM is still running for inspection{% endif %}"
+          - "To keep VM for inspection, run with: -e cleanup=false"
