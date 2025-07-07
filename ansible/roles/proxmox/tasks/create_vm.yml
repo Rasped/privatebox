@@ -20,6 +20,12 @@
   register: node_info
   failed_when: node_info.proxmox_nodes | length == 0
 
+- name: Handle cloud image preparation if specified
+  include_tasks: prepare_cloud_image.yml
+  when: 
+    - proxmox_vm_cloud_image_url is defined
+    - proxmox_vm_cloud_image_url | length > 0
+
 - name: Create VM with specified configuration
   community.general.proxmox_kvm:
     api_host: "{{ proxmox_api_host }}"
@@ -72,6 +78,23 @@
     seconds: 5
   when: vm_creation_result is changed
 
+- name: Import cloud image as VM disk
+  include_tasks: import_cloud_image.yml
+  when: 
+    - vm_creation_result is changed
+    - proxmox_vm_cloud_image_url is defined
+    - proxmox_vm_cloud_image_url | length > 0
+    - _cloud_image_ready is defined
+    - _cloud_image_ready | bool
+
+- name: Configure cloud-init for VM
+  include_tasks: configure_cloud_init.yml
+  when:
+    - vm_creation_result is changed
+    - proxmox_vm_cloud_image_url is defined
+    - proxmox_vm_cloud_image_url | length > 0
+    - proxmox_vm_cloud_init_enabled | default(true)
+
 - name: Start VM after creation
   community.general.proxmox_kvm:
     api_host: "{{ proxmox_api_host }}"
@@ -106,6 +129,22 @@
 #     proxmox_vm_node: pve01
 #     proxmox_vm_vmid: 100
 #     proxmox_vm_cores: 2
+#
+# Example with cloud image:
+# - name: Create Ubuntu VM from cloud image
+#   include_role:
+#     name: proxmox
+#   vars:
+#     proxmox_operation: create_vm
+#     proxmox_vm_name: ubuntu-cloud-01
+#     proxmox_vm_node: pve01
+#     proxmox_vm_vmid: 200
+#     proxmox_vm_cloud_image_url: "{{ proxmox_cloud_image_urls['ubuntu-24.04'] }}"
+#     proxmox_vm_cloud_init_user: myuser
+#     proxmox_vm_cloud_init_ssh_keys:
+#       - "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+#     proxmox_vm_cloud_init_ip: "192.168.1.100/24"
+#     proxmox_vm_cloud_init_gw: "192.168.1.1"
 #     proxmox_vm_memory: 4096
 #     proxmox_vm_disks:
 #       scsi0: "local-lvm:32,format=qcow2"

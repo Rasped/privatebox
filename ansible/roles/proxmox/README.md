@@ -35,6 +35,24 @@ When using `proxmox_operation: create_vm`:
 - `proxmox_vm_disks`: Dictionary of disk configurations
 - `proxmox_vm_networks`: Dictionary of network interfaces
 
+### Cloud Image Variables (Optional)
+
+When creating VMs from cloud images:
+- `proxmox_vm_cloud_image_url`: URL to cloud image (triggers cloud image mode)
+- `proxmox_vm_cloud_image_checksum`: Optional checksum for verification
+- `proxmox_cloud_image_cache_dir`: Cache directory (default: `/var/lib/vz/template/iso`)
+
+### Cloud-Init Variables (Optional)
+
+For cloud-init configuration:
+- `proxmox_vm_cloud_init_enabled`: Enable cloud-init (default: true)
+- `proxmox_vm_cloud_init_user`: Default username (default: ubuntu)
+- `proxmox_vm_cloud_init_password`: User password (SSH keys preferred)
+- `proxmox_vm_cloud_init_ssh_keys`: List of SSH public keys
+- `proxmox_vm_cloud_init_ip`: IP config - "dhcp" or "192.168.1.100/24"
+- `proxmox_vm_cloud_init_gw`: Gateway (required for static IP)
+- `proxmox_vm_cloud_init_dns`: DNS servers (space-separated)
+
 ### Network Configuration Variables
 
 When using `proxmox_operation: configure_network`:
@@ -79,6 +97,33 @@ When using `proxmox_operation: manage_storage`:
         proxmox_vm_networks:
           net0: "virtio,bridge=vmbr0,firewall=1"
           net1: "virtio,bridge=vmbr1,firewall=1"
+```
+
+### Create VM from Cloud Image
+
+```yaml
+- name: Create Ubuntu VM from cloud image
+  hosts: localhost
+  tasks:
+    - include_role:
+        name: proxmox
+      vars:
+        proxmox_operation: create_vm
+        proxmox_api_host: "192.168.1.100"
+        proxmox_api_user: "root@pam"
+        proxmox_api_password: "{{ vault_proxmox_password }}"
+        proxmox_vm_name: "ubuntu-cloud-01"
+        proxmox_vm_vmid: 200
+        proxmox_vm_node: "pve01"
+        # Cloud image configuration
+        proxmox_vm_cloud_image_url: "{{ proxmox_cloud_image_urls['ubuntu-24.04'] }}"
+        # Cloud-init configuration
+        proxmox_vm_cloud_init_user: "myuser"
+        proxmox_vm_cloud_init_ssh_keys:
+          - "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        proxmox_vm_cloud_init_ip: "192.168.1.150/24"
+        proxmox_vm_cloud_init_gw: "192.168.1.1"
+        proxmox_vm_cloud_init_dns: "8.8.8.8 8.8.4.4"
 ```
 
 ### Configure Network
@@ -164,6 +209,22 @@ The role includes predefined VM templates in `defaults/main.yml`:
 - `opnsense`: Optimized for OPNsense firewall
 - `ubuntu_server`: General purpose Ubuntu server
 - `docker_host`: Docker container host with increased resources
+
+## Predefined Cloud Images
+
+The role includes URLs for common cloud images in `proxmox_cloud_image_urls`:
+- `ubuntu-24.04`: Ubuntu 24.04 LTS Server
+- `ubuntu-22.04`: Ubuntu 22.04 LTS Server
+- `ubuntu-20.04`: Ubuntu 20.04 LTS Server
+- `debian-12`: Debian 12 (Bookworm)
+- `debian-11`: Debian 11 (Bullseye)
+- `centos-9-stream`: CentOS 9 Stream
+- `centos-8-stream`: CentOS 8 Stream
+
+Example usage:
+```yaml
+proxmox_vm_cloud_image_url: "{{ proxmox_cloud_image_urls['ubuntu-24.04'] }}"
+```
 
 ## Handlers
 

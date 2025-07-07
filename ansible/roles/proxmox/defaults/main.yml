@@ -95,3 +95,37 @@ proxmox_vm_templates:
     ostype: l26
     hotplug: "network,disk,cpu,memory"
     description: "Docker Container Host"
+
+# Cloud Image Support
+# These variables enable VM creation from cloud images when proxmox_vm_cloud_image_url is set
+
+# Cloud image URLs for common distributions
+proxmox_cloud_image_urls:
+  ubuntu-24.04: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+  ubuntu-22.04: "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img"
+  ubuntu-20.04: "https://cloud-images.ubuntu.com/releases/20.04/release/ubuntu-20.04-server-cloudimg-amd64.img"
+  debian-12: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
+  debian-11: "https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-generic-amd64.qcow2"
+  centos-9-stream: "https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2"
+  centos-8-stream: "https://cloud.centos.org/centos/8-stream/x86_64/images/CentOS-Stream-GenericCloud-8-latest.x86_64.qcow2"
+
+# Cloud image cache directory on Proxmox host
+proxmox_cloud_image_cache_dir: "/var/lib/vz/template/iso"
+
+# Cloud-init defaults
+proxmox_vm_cloud_init_enabled: true
+proxmox_vm_cloud_init_user: "{{ ansible_user | default('ubuntu') }}"
+proxmox_vm_cloud_init_password: ""  # Empty by default, SSH keys preferred
+proxmox_vm_cloud_init_ssh_keys: []  # List of SSH public keys
+proxmox_vm_cloud_init_ssh_keys_file: ""  # Path to file containing SSH keys
+proxmox_vm_cloud_init_ip: "dhcp"  # Can be "dhcp" or specific IP like "192.168.1.100/24"
+proxmox_vm_cloud_init_gw: ""  # Gateway, required if static IP is set
+proxmox_vm_cloud_init_dns: ""  # DNS servers, space-separated
+proxmox_vm_cloud_init_domain: ""  # Search domain
+
+# Disk import settings for cloud images
+proxmox_vm_import_disk_format: "qcow2"
+proxmox_vm_import_disk_size_increase: "+5G"  # Resize after import
+
+# When using cloud images, override default disk config
+proxmox_vm_cloud_image_disk_override: true
