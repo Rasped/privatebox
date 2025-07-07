@@ -814,7 +814,7 @@ function wait_for_cloud_init() {
     # First wait for SSH to be available
     log_info "Waiting for SSH to become available..."
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-        if ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" 2>/dev/null; then
+        if ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "exit 0" 2>/dev/null; then
             log_info "SSH is now available"
             break
         fi
