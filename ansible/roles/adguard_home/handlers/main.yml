@@ -1,8 +1,0 @@
----
-# Handlers for AdGuard Home
-
-- name: restart adguard container
-  containers.podman.podman_container:
-    name: "{{ adguard_container_name }}"
-    state: restarted
-  listen: "restart adguard container"
