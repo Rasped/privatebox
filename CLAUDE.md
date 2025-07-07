@@ -289,3 +289,214 @@ When any agent works on this codebase or discusses technical topics:
 2. **Load multiple libraries** if the task involves multiple technologies
 3. **Reference loaded documentation** explicitly when implementing features
 4. **Update this list** if you discover useful library IDs for this project
+
+## Deep Thinking Requirements
+
+### STOP AND THINK Protocol
+Before ANY action (planning, coding, or responding), you MUST:
+
+1. **PAUSE for 30-60 seconds** to consider:
+   - What is the user REALLY asking for?
+   - What are the hidden complexities?
+   - What could go wrong?
+   - Is there a simpler approach?
+
+2. **Three Perspectives Analysis**:
+   - **User Perspective**: What problem are they trying to solve?
+   - **System Perspective**: How does this fit the architecture?
+   - **Future Perspective**: How will this decision age?
+
+3. **Document Your Thinking**:
+   - Use the feature documentation structure (see below)
+   - Write out ALL options considered
+   - Explain WHY you rejected alternatives
+   - This creates a decision trail
+
+### Thinking Harder Checklist:
+- [ ] Did I load Context7 docs BEFORE forming opinions?
+- [ ] Did I consider at least 3 different approaches?
+- [ ] Did I question every assumption?
+- [ ] Did I look for existing solutions first?
+- [ ] Did I consider the maintenance burden?
+- [ ] Did I think about edge cases and failures?
+
+## Context7-First Thinking
+
+### RULE: No Assumptions Without Documentation
+1. **ALWAYS start with Context7** - even for "simple" tasks
+2. **Load multiple sources** to get different perspectives
+3. **Read examples** before designing solutions
+4. **Challenge your memory** - docs might have better ways
+
+### Thinking With Context7:
+```
+User asks for feature X
+↓
+STOP - Load Context7 docs for X, related tools, and alternatives
+↓
+Read and analyze multiple approaches from docs
+↓
+ONLY THEN start thinking about implementation
+```
+
+### Required Context7 Loads by Task:
+- **Any Ansible work**: Load ansible + relevant collections + best practices
+- **Any scripting**: Load shell/bash + coreutils + error handling guides
+- **Any container work**: Load docker + compose + security practices
+- **Any Proxmox work**: Load proxmox + API + ansible integration
+
+## Documentation-Driven Thinking
+
+### MANDATORY: Create Feature Doc First
+Path: `documentation/features/[feature-name]/`
+
+Structure:
+```
+documentation/features/[feature-name]/
+├── README.md           # Overview and current status
+├── analysis.md         # Deep thinking documentation
+├── implementation.md   # Chosen approach with rationale
+├── alternatives.md     # Rejected approaches and why
+└── testing.md         # How we'll verify it works
+```
+
+### analysis.md Template:
+```markdown
+# Deep Analysis: [Feature Name]
+
+## Initial Thoughts (Before Research)
+[Write your first instincts - these might be wrong!]
+
+## Context7 Research Performed
+- Loaded: [library 1] - Key insights: ...
+- Loaded: [library 2] - Key insights: ...
+
+## Problem Decomposition
+1. Core problem: ...
+2. Sub-problems: ...
+3. Hidden complexities discovered: ...
+
+## Stakeholder Analysis
+- User needs: ...
+- System constraints: ...
+- Future implications: ...
+
+## Risk Analysis
+- What could break: ...
+- Security concerns: ...
+- Performance impacts: ...
+
+## Simplicity Check
+- Simplest possible solution: ...
+- Why we can/cannot use it: ...
+```
+
+## Planning as Thinking Exercise
+
+### TodoWrite as Thinking Tool
+Don't just list tasks - use todos to THINK THROUGH the problem:
+
+1. **Break Down Until It Hurts**:
+   - Each todo should be <15 minutes of work
+   - If unsure how to do it, break it down more
+   - This forces you to think through details
+
+2. **Question Each Todo**:
+   - Is this necessary?
+   - What depends on this?
+   - What could go wrong?
+   - Is there a simpler way?
+
+3. **Order Reveals Dependencies**:
+   - Arrange todos to surface hidden dependencies
+   - This often reveals flawed assumptions
+
+### Example Thinking Through Todos:
+```
+BAD: "Implement OPNsense deployment"
+
+GOOD:
+1. Research OPNsense VM requirements in docs
+2. Analyze existing VM creation patterns
+3. Document network architecture decisions
+4. Create feature documentation structure
+5. Design Ansible role variables
+6. Plan testing approach
+7. Consider rollback strategy
+[... each todo forces specific thinking]
+```
+
+## Simplicity Through Deep Thinking
+
+### The Simplicity Paradox
+Simple solutions require the MOST thinking, not the least.
+
+### Simplicity Thinking Process:
+1. **First Solution**: What comes to mind immediately?
+2. **Complex Solution**: What would "enterprise" do?
+3. **Stupid Simple**: What would a bash one-liner do?
+4. **Right Simple**: What's the sweet spot?
+
+### Questions for Simpler Code:
+- Can existing tools do this?
+- Are we inventing problems?
+- What if we just... didn't?
+- Would a config file suffice?
+- Is this flexibility actually needed?
+
+### Document Simplicity Decisions:
+In implementation.md, always include:
+```markdown
+## Simplicity Analysis
+- Initial approach: [complex thing]
+- Simplified to: [simpler thing]
+- Because: [specific reason]
+- Trade-offs accepted: [what we gave up]
+```
+
+## Thinking Accountability
+
+### Every Significant Decision Requires:
+1. **A Feature Documentation Set** (in documentation/features/[feature-name]/)
+2. **Context7 Evidence** (what docs influenced this?)
+3. **Alternative Analysis** (what else was considered?)
+4. **Simplicity Justification** (why this level of complexity?)
+
+### Thinking Review Checklist:
+Before presenting ANY plan:
+- [ ] Have I spent at least 5 minutes just thinking?
+- [ ] Have I loaded and read relevant Context7 docs?
+- [ ] Have I written out my thinking process?
+- [ ] Have I considered simpler alternatives?
+- [ ] Have I planned for failure cases?
+- [ ] Would I be happy maintaining this in 6 months?
+
+### Red Flags That Indicate More Thinking Needed:
+- "This should work" → Think about failure modes
+- "It's standard practice" → Load Context7 and verify
+- "We'll figure it out later" → Think through it now
+- "This is temporary" → Design it properly anyway
+
+## Thinking Harder in Practice
+
+### The Three-Read Rule:
+1. Read the user's request
+2. Read it again, looking for implicit requirements
+3. Read it a third time, questioning your understanding
+
+### The Five Whys for Features:
+1. Why do they want this feature?
+2. Why is that important?
+3. Why now?
+4. Why this way?
+5. Why not something simpler?
+
+### The Context7 Cascade:
+1. Load primary documentation
+2. Load related/alternative solutions
+3. Load anti-patterns and what to avoid
+4. Read examples of both good and bad approaches
+5. Only THEN start forming opinions
+
+### The Simplicity Test:
+Can you explain your solution to someone unfamiliar with the project in under 2 minutes? If not, it might be too complex.
