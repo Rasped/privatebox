@@ -29,7 +29,13 @@ ansible/
 
 1. PrivateBox VM created by bootstrap process
 2. SemaphoreUI installed and configured
-3. SSH access to target hosts
+3. SSH keys configured in SemaphoreUI:
+   - The bootstrap process creates two SSH keys:
+     - **"proxmox-host"** - For managing the Proxmox host
+     - **"vm-container-host"** - For managing VMs and containers (use this one)
+   - These keys are automatically added to SemaphoreUI
+   - When creating job templates, select "vm-container-host" from the SSH Key dropdown
+4. Target hosts must have the public key in `~/.ssh/authorized_keys`
 
 ### Deploy AdGuard Home
 
@@ -42,12 +48,19 @@ ansible-playbook -i inventories/development/hosts.yml playbooks/services/adguard
 
 ### Deploy via SemaphoreUI
 
-1. Create a new job template in SemaphoreUI
-2. Set playbook to `playbooks/services/adguard.yml`
-3. Select appropriate inventory
-4. Configure survey variables:
+1. Create a new job template in SemaphoreUI:
+   - **Name**: "Deploy AdGuard Home"
+   - **Playbook**: `playbooks/services/adguard.yml`
+   - **Inventory**: Select "Development" or "Production"
+   - **Repository**: PrivateBox (already configured)
+   - **Environment**: Select appropriate environment
+   - **SSH Key**: Select "vm-container-host" (created during bootstrap)
+   
+2. Configure survey variables:
    - `confirm_deploy`: Boolean (default: yes)
    - `custom_web_port`: Integer (default: 8080)
+   
+3. Save and run the job template
 
 ## Available Services
 
