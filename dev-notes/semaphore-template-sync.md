@@ -28,28 +28,30 @@ This process is:
 │  - Playbooks with   │
 │    semaphore_*      │
 │    annotations      │
+│  - tools/           │
+│    semaphore-       │
+│    sync.py          │
 └──────────┬──────────┘
-           │ git clone/pull
-           ▼
-┌─────────────────────┐     ┌─────────────────────┐
-│   PrivateBox VM     │     │  Semaphore Container│
-│                     │     │                     │
-│ /opt/privatebox/    │     │  - Web UI           │
-│   repo/             │◄────┤  - API (port 3000)  │
-│   - tools/          │     │  - Stored API token │
-│     semaphore-      │     │    in environment   │
-│     sync.py         │     │                     │
-│                     │     │  "Sync Templates"   │
-│ Python script runs  │     │  job triggers       │
-│ locally, calls      │     │  script on VM       │
-│ API via localhost   │     │                     │
-└─────────────────────┘     └─────────────────────┘
-           │
-           │ API calls (localhost:3000)
-           │ Creates templates
+           │ Semaphore clones repo
            ▼
 ┌─────────────────────┐
-│ Created Templates   │
+│ Semaphore Container │
+│                     │
+│ - Web UI            │
+│ - API (port 3000)   │
+│ - Python 3          │
+│ - Cloned repo       │
+│                     │
+│ Task Execution:     │
+│ 1. Run playbook     │
+│ 2. Execute sync.py  │
+│ 3. API localhost    │
+└─────────────────────┘
+           │
+           │ Creates/Updates templates
+           ▼
+┌─────────────────────┐
+│ Semaphore Templates │
 │ - Name from file    │
 │ - Survey vars from  │
 │   vars_prompt       │
@@ -57,26 +59,88 @@ This process is:
 └─────────────────────┘
 ```
 
+## Implementation Plan
+
+This plan ensures a 100% hands-off solution where bootstrap automatically creates and configures everything needed for template synchronization.
+
+### Phase 1: Basic Infrastructure
+- Create minimal Python script (`tools/semaphore-sync.py`) that prints "Hello from sync script"
+- Create ansible playbook (`ansible/playbooks/maintenance/sync-templates.yml`) that runs the Python script
+- **[MANUAL]** Create Semaphore job template to test the playbook
+- **[MANUAL]** Run the job to verify execution works
+- **[CHECK]** Verify working directory when script runs
+- **[CHECK]** Confirm environment variables are passed through
+
+### Phase 2: API Setup
+- **[MANUAL]** Generate API token in Semaphore UI
+- **[MANUAL]** Create SemaphoreAPI environment with token
+- Update Python script to test API connection (just ping)
+- **[MANUAL]** Run job to verify API access works
+- **[CHECK]** Test if API token works directly or needs session cookie
+
+### Phase 3: Repository Setup
+- **[MANUAL]** Add PrivateBox repository to Semaphore
+- **[MANUAL]** Update Semaphore job to use the repository
+- **[MANUAL]** Test that script can read files from repo
+
+### Phase 4: Basic Sync Logic
+- Update Python script to list playbook files
+- Add parsing logic to read vars_prompt
+- Add one test playbook with semaphore_* metadata
+- **[MANUAL]** Test parsing works correctly
+
+### Phase 5: Template Creation
+- Add template creation logic to Python script
+- **[MANUAL]** Test creating one template
+- Add update logic
+- **[MANUAL]** Test updating works
+
+### Phase 6: Bootstrap Automation
+Update `semaphore-setup.sh` to:
+- **[AUTOMATES]** Generate API token programmatically
+- **[AUTOMATES]** Create SemaphoreAPI environment
+- **[AUTOMATES]** Create PrivateBox repository
+- **[AUTOMATES]** Create "Sync Templates" job template
+- **[AUTOMATES]** Run the sync job automatically
+
+Test fresh bootstrap creates everything AND syncs templates.
+
+### Phase 7: Full Implementation
+- Add error handling and logging to Python script
+- Add metadata to all service playbooks
+- Test complete bootstrap on fresh system
+- Verify all templates are created automatically
+
+### Final State
+- **Fresh install**: 100% automated - bootstrap creates infrastructure and runs initial sync
+- **Existing install**: One manual run of updated bootstrap script
+- **Ongoing use**: Click "Sync Templates" in UI or schedule it
+
 ## Design Decisions
 
 ### Why Python?
-- **Chosen**: Python script running on VM
+- **Chosen**: Python script running in Semaphore container
 - **Alternatives considered**:
-  - Go: Would require compilation step or installing Go toolchain in container
+  - Go: Would require compilation step and binary deployment
   - Pure Ansible: Limited YAML parsing capabilities, complex logic becomes painful
   - Shell script: Fragile YAML parsing, poor error handling
-- **Rationale**: Python provides proper YAML parsing, good error handling, and is pre-installed on Ubuntu VMs
+- **Rationale**: 
+  - Python 3 is pre-installed in Semaphore container
+  - Provides proper YAML parsing with PyYAML
+  - Good error handling and debugging capabilities
+  - No compilation or deployment of binaries needed
 
-### Why Run on VM Instead of Container?
-- **Chosen**: Script executes on PrivateBox VM
+### Why Run in Container Instead of VM?
+- **Chosen**: Script executes directly in Semaphore container
 - **Alternatives considered**:
-  - Running in Semaphore container: Would require installing Python/dependencies each run
+  - Running on VM: Would require SSH from container to VM, then API calls back to container
   - Custom container: Maintenance burden, diverges from official image
 - **Rationale**: 
-  - VM has all dependencies (Python, Git)
-  - Can access Semaphore API via localhost
-  - Easier debugging via SSH
-  - Follows pattern of VM being the management host
+  - Semaphore tasks naturally execute in the container
+  - Direct access to API via localhost:3000 (no network hops)
+  - Repository automatically cloned by Semaphore
+  - Simpler execution flow - no SSH required
+  - Python and all dependencies already available
 
 ### Why Inline Metadata?
 - **Chosen**: Add `semaphore_*` fields directly to vars_prompt
@@ -90,13 +154,6 @@ This process is:
   - Version controlled together
   - Clear and explicit
 
-### Why Store Repository Locally?
-- **Chosen**: Clone repository to `/opt/privatebox/repo` during bootstrap
-- **Alternatives considered**:
-  - GitHub API: Rate limits, needs auth, complex
-  - Semaphore workspace: Would need full clone just for template sync
-  - Read from Semaphore's clone: Can't access from VM
-- **Rationale**: Simple, reliable, no external dependencies
 
 ## Implementation Details
 
@@ -104,16 +161,11 @@ This process is:
 
 During initial bootstrap, `semaphore-setup.sh` must:
 
-1. **Clone Repository**
-   ```bash
-   git clone https://github.com/Rasped/privatebox.git /opt/privatebox/repo
-   ```
-
-2. **Create API Token**
+1. **Create API Token**
    - After Semaphore is running, generate an API token
    - Store in `/root/.credentials/semaphore_api_token`
 
-3. **Create Semaphore Environment**
+2. **Create Semaphore Environment**
    ```json
    {
      "name": "SemaphoreAPI",
@@ -121,13 +173,12 @@ During initial bootstrap, `semaphore-setup.sh` must:
      "password": null,
      "json": {
        "SEMAPHORE_URL": "http://localhost:3000",
-       "SEMAPHORE_API_TOKEN": "<generated-token>",
-       "REPO_PATH": "/opt/privatebox/repo"
+       "SEMAPHORE_API_TOKEN": "<generated-token>"
      }
    }
    ```
 
-4. **Create Repository**
+3. **Create Repository**
    ```json
    {
      "name": "PrivateBox",
@@ -138,8 +189,8 @@ During initial bootstrap, `semaphore-setup.sh` must:
    }
    ```
 
-5. **Create Initial Sync Template**
-   This is a one-time manual creation during bootstrap. The script will need to:
+4. **Create Initial Sync Template**
+   This is a one-time creation during bootstrap. The script will need to:
    - Look up the inventory ID for "Default Inventory"
    - Look up the repository ID for "PrivateBox"
    - Look up the environment ID for "SemaphoreAPI"
@@ -153,8 +204,7 @@ During initial bootstrap, `semaphore-setup.sh` must:
      "environment_id": <looked-up-id>,
      "playbook": "ansible/playbooks/maintenance/sync-templates.yml",
      "arguments": null,
-     "override_args": false,
-     "key_id": <id-for-vm-container-host-key>
+     "override_args": false
    }
    ```
 
@@ -165,19 +215,13 @@ During initial bootstrap, `semaphore-setup.sh` must:
 ```yaml
 ---
 - name: Synchronize Semaphore Templates
-  hosts: privatebox
+  hosts: localhost
+  connection: local
   gather_facts: no
   
   tasks:
-    - name: Update repository
-      git:
-        repo: https://github.com/Rasped/privatebox.git
-        dest: "{{ lookup('env', 'REPO_PATH') | default('/opt/privatebox/repo') }}"
-        version: main
-      
     - name: Run template sync script
-      command: >
-        python3 {{ lookup('env', 'REPO_PATH') }}/tools/semaphore-sync.py
+      command: python3 tools/semaphore-sync.py
       environment:
         SEMAPHORE_URL: "{{ lookup('env', 'SEMAPHORE_URL') }}"
         SEMAPHORE_API_TOKEN: "{{ lookup('env', 'SEMAPHORE_API_TOKEN') }}"
@@ -188,12 +232,39 @@ During initial bootstrap, `semaphore-setup.sh` must:
         var: sync_result.stdout_lines
 ```
 
+#### Python Dependencies
+The script requires:
+- `PyYAML` - Likely already available (required by Ansible/Semaphore)
+- `requests` - Installed at runtime if needed
+
+**Chosen approach: Runtime installation**
+
+The script will handle missing dependencies automatically:
+```python
+# At the top of semaphore-sync.py
+try:
+    import requests
+except ImportError:
+    import subprocess
+    print("Installing requests package...")
+    subprocess.check_call(['pip', 'install', 'requests'])
+    import requests
+```
+
+This approach was chosen because:
+- No custom Docker image needed (uses official Semaphore image)
+- No maintenance overhead when Semaphore updates
+- pip won't reinstall if package already exists
+- Clean and self-contained solution for a single dependency
+- Transparent - dependency management is visible in the code
+
 #### The Python Script
 `tools/semaphore-sync.py` will:
 
 1. **Discover Playbooks**
    ```python
-   playbook_dir = Path(os.environ['REPO_PATH']) / 'ansible' / 'playbooks' / 'services'
+   # Script runs from repository root
+   playbook_dir = Path('ansible/playbooks/services')
    playbooks = playbook_dir.glob('*.yml')
    ```
 
@@ -240,35 +311,91 @@ During initial bootstrap, `semaphore-setup.sh` must:
        return
    
    # Similar for repository_id, environment_id
-   
-   # Get SSH key ID for "vm-container-host"
-   keys = requests.get(f"{api_url}/project/1/keys",
-                      cookies={'semaphore': token}).json()
-   try:
-       key_id = next(k['id'] for k in keys 
-                    if k['name'] == 'vm-container-host')
-   except StopIteration:
-       print(f"ERROR: SSH key 'vm-container-host' not found")
-       return
    ```
 
-5. **Create Template**
+5. **Create or Update Template**
    ```python
+   template_name = f"Deploy: {playbook_name}"
    template_data = {
-       'name': f"Deploy: {playbook_name}",
+       'name': template_name,
        'project_id': 1,
        'inventory_id': inventory_id,
        'repository_id': repository_id,
        'environment_id': environment_id,
-       'key_id': key_id,
        'playbook': f"ansible/playbooks/services/{playbook_file.name}",
        'survey_vars': survey_vars
    }
    
-   response = requests.post(f"{api_url}/project/1/templates",
-                          json=template_data,
-                          cookies={'semaphore': token})
+   # Check if template already exists
+   existing_templates = requests.get(f"{api_url}/project/1/templates",
+                                   cookies={'semaphore': token}).json()
+   existing_template = next((t for t in existing_templates 
+                           if t['name'] == template_name), None)
+   
+   if existing_template:
+       # Update existing template
+       response = requests.put(f"{api_url}/project/1/templates/{existing_template['id']}",
+                             json=template_data,
+                             cookies={'semaphore': token})
+       print(f"✓ Updated template: {template_name}")
+   else:
+       # Create new template
+       response = requests.post(f"{api_url}/project/1/templates",
+                              json=template_data,
+                              cookies={'semaphore': token})
+       print(f"✓ Created template: {template_name}")
    ```
+
+## API Reference
+
+### Authentication
+Semaphore uses cookie-based sessions. To authenticate:
+
+```python
+# Login and get session cookie
+login_data = {
+    "auth": "admin",
+    "password": "your-admin-password"
+}
+response = requests.post(
+    "http://localhost:3000/api/auth/login",
+    json=login_data
+)
+# Extract cookie from response headers
+cookie = response.cookies.get('semaphore')
+```
+
+### Running Jobs Programmatically
+To trigger a job run after creating templates:
+
+```python
+# Get template ID (from creation response or by querying)
+template_id = 123  # The sync template ID
+
+# Start a job
+job_data = {}  # Empty for jobs without variables
+response = requests.post(
+    f"http://localhost:3000/api/project/1/tasks",
+    json={
+        "template_id": template_id,
+        "debug": False,
+        "diff": False,
+        "playbook": "",
+        "environment": "",
+        "limit": ""
+    },
+    cookies={'semaphore': cookie}
+)
+job_id = response.json()['id']
+```
+
+### Key API Endpoints
+- `POST /api/auth/login` - Authenticate and get session
+- `GET /api/project/{id}/templates` - List templates
+- `POST /api/project/{id}/templates` - Create template
+- `PUT /api/project/{id}/templates/{template_id}` - Update template
+- `POST /api/project/{id}/tasks` - Run a job
+- `GET /api/project/{id}/tasks/{task_id}` - Check job status
 
 ## Usage Guide
 
@@ -326,23 +453,40 @@ Add `semaphore_*` fields to vars_prompt in your playbook:
    - View output for results
 
 2. **What Happens**:
-   - Repository is updated via git pull
+   - Semaphore automatically clones/updates the repository
    - All service playbooks are scanned
    - New templates are created
-   - Existing templates are skipped
+   - Existing templates are updated with latest configuration
    - Errors are reported but don't stop the process
 
 ## Limitations
 
-1. **No Template Updates**: Only creates new templates, doesn't update existing ones
-2. **Simple Types Only**: Only supports text, integer, boolean (no arrays/objects)
-3. **No Jinja2 Evaluation**: Can't evaluate complex default values with Jinja2
-4. **Basic Error Handling**: Skips problematic playbooks with warnings
-5. **Fixed Conventions**: Assumes:
+1. **Simple Types Only**: Only supports text, integer, boolean (no arrays/objects)
+2. **No Jinja2 Evaluation**: Can't evaluate complex default values with Jinja2
+3. **Basic Error Handling**: Skips problematic playbooks with warnings
+4. **Fixed Conventions**: Assumes:
    - Inventory named "Default Inventory"
-   - SSH key named "vm-container-host"
    - Repository named "PrivateBox"
    - Project ID is always 1
+
+## Important Considerations
+
+### vars_prompt Extra Fields
+
+The use of `semaphore_*` fields in `vars_prompt` is **experimental**:
+
+1. **Not Officially Documented**: Ansible documentation doesn't explicitly state whether extra fields in vars_prompt are supported
+2. **Version Compatibility**: Future Ansible versions might validate vars_prompt more strictly
+3. **Testing Recommended**: 
+   - Test playbooks with ansible-lint before deploying
+   - Verify playbooks still work with your Ansible version
+   - Consider this a "use at your own risk" feature
+
+### Template Updates
+
+1. **Overwrites Manual Changes**: Updates will overwrite any manual customizations made to templates in Semaphore UI
+2. **No Rollback**: There's no built-in way to restore previous template configurations
+3. **Consider Version Control**: Keep important template configurations in a separate file if manual customization is needed
 
 ## Error Handling
 
@@ -357,10 +501,10 @@ Example output:
 Syncing Semaphore templates...
 ✓ Created template: Deploy: AdGuard Home
 ✗ Skipped: complex-service.yml (Error: Unable to parse vars_prompt)
-✓ Created template: Deploy: Pi-hole
-! Skipped: wireguard.yml (Template already exists)
+✓ Updated template: Deploy: Pi-hole
+✓ Created template: Deploy: WireGuard
 
-Summary: 2 created, 1 skipped, 1 error
+Summary: 2 created, 1 updated, 1 error
 ```
 
 ## Troubleshooting
@@ -378,23 +522,23 @@ Summary: 2 created, 1 skipped, 1 error
 4. Check Semaphore logs: `podman logs semaphore-ui`
 
 ### Repository Issues
-1. Ensure `/opt/privatebox/repo` exists and is up-to-date
-2. Check git credentials if using private repository
+1. Ensure Semaphore can access the Git repository
+2. Check SSH keys or credentials in Key Store if using private repository
 3. Verify network connectivity to GitHub
 
 ## Future Enhancements
 
-1. **Update Existing Templates**: Detect changes and update templates
-2. **Template Deletion**: Remove templates for deleted playbooks
-3. **Complex Types**: Support for lists, dicts in survey variables
-4. **Scheduled Sync**: Automatic daily/weekly synchronization
-5. **Dry Run Mode**: Preview changes without creating templates
-6. **Custom Field Mapping**: Configuration file for type mappings
-7. **Validation**: Pre-flight checks for playbook compatibility
+1. **Template Deletion**: Remove templates for deleted playbooks
+2. **Complex Types**: Support for lists, dicts in survey variables
+3. **Scheduled Sync**: Automatic daily/weekly synchronization
+4. **Dry Run Mode**: Preview changes without creating templates
+5. **Custom Field Mapping**: Configuration file for type mappings
+6. **Validation**: Pre-flight checks for playbook compatibility
+7. **Change Detection**: Only update templates when playbook actually changes
 
 ## Security Considerations
 
 1. **API Token**: Stored encrypted in Semaphore environment
 2. **Repository Access**: Uses HTTPS, no credentials stored
-3. **Local Execution**: No external network calls except git pull
+3. **Container Execution**: Runs in isolated Semaphore container environment
 4. **Audit Trail**: All actions logged in Semaphore task output
