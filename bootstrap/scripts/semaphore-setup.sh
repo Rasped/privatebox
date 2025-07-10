@@ -323,7 +323,7 @@ get_repository_id_by_name() {
     local project_id="$3"
     local repo_name="$4"
     
-    log_info "Looking up repository '$repo_name' in project $project_id..."
+    log_info "Looking up repository '$repo_name' in project $project_id..." >&2
     
     local api_result=$(make_api_request "GET" \
         "$base_url/api/project/$project_id/repositories" "" "$session" "Getting repositories")
@@ -335,11 +335,11 @@ get_repository_id_by_name() {
         if [ "$status_code" -eq 200 ]; then
             local repo_id=$(echo "$repos" | jq -r ".[] | select(.name==\"$repo_name\") | .id" 2>/dev/null)
             if [ -n "$repo_id" ] && [ "$repo_id" != "null" ]; then
-                log_info "Found repository '$repo_name' with ID: $repo_id"
+                log_info "Found repository '$repo_name' with ID: $repo_id" >&2
                 echo "$repo_id"
             else
-                log_info "WARNING: Repository '$repo_name' not found in project"
-                log_info "Available repositories: $(echo "$repos" | jq -r '.[].name' 2>/dev/null | tr '\n' ', ')"
+                log_info "WARNING: Repository '$repo_name' not found in project" >&2
+                log_info "Available repositories: $(echo "$repos" | jq -r '.[].name' 2>/dev/null | tr '\n' ', ')" >&2
             fi
         else
             log_error "Failed to list repositories. Status: $status_code"
@@ -391,21 +391,21 @@ create_repository() {
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local repo_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$repo_id" ] && [ "$repo_id" != "null" ]; then
-            log_info "✓ Repository '$repo_name' created successfully with ID: $repo_id"
+            log_info "✓ Repository '$repo_name' created successfully with ID: $repo_id" >&2
             echo "$repo_id"
             return 0
         else
-            log_info "WARNING: Repository '$repo_name' created but couldn't extract ID from response"
-            log_info "Response body: $response_body"
+            log_info "WARNING: Repository '$repo_name' created but couldn't extract ID from response" >&2
+            log_info "Response body: $response_body" >&2
             return 0
         fi
     elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
          echo "$response_body" | jq -e '.message' 2>/dev/null | grep -q "already exists"); then
-        log_info "Repository '$repo_name' already exists, looking up ID..."
+        log_info "Repository '$repo_name' already exists, looking up ID..." >&2
         # Get the existing repository ID
         local existing_id=$(get_repository_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "$repo_name")
         if [ -n "$existing_id" ] && [ "$existing_id" != "null" ]; then
-            log_info "✓ Using existing repository with ID: $existing_id"
+            log_info "✓ Using existing repository with ID: $existing_id" >&2
             echo "$existing_id"
             return 0
         else
@@ -511,12 +511,12 @@ create_semaphore_api_environment() {
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
-            log_info "✓ SemaphoreAPI environment created successfully with ID: $env_id"
+            log_info "✓ SemaphoreAPI environment created successfully with ID: $env_id" >&2
             echo "$env_id"
             return 0
         else
-            log_info "WARNING: Environment created but couldn't extract ID"
-            log_info "Response body: $response_body"
+            log_info "WARNING: Environment created but couldn't extract ID" >&2
+            log_info "Response body: $response_body" >&2
             # Check if environment already exists
             local existing_env=$(make_api_request "GET" \
                 "http://localhost:3000/api/project/$project_id/environment" \
@@ -525,7 +525,7 @@ create_semaphore_api_environment() {
                 local envs=$(echo "$existing_env" | cut -d'|' -f2-)
                 local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="SemaphoreAPI") | .id' 2>/dev/null)
                 if [ -n "$found_id" ] && [ "$found_id" != "null" ]; then
-                    log_info "Found existing SemaphoreAPI environment with ID: $found_id"
+                    log_info "Found existing SemaphoreAPI environment with ID: $found_id" >&2
                     echo "$found_id"
                     return 0
                 fi
@@ -533,7 +533,7 @@ create_semaphore_api_environment() {
         fi
     elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
          echo "$response_body" | jq -e '.message' 2>/dev/null | grep -q "already exists"); then
-        log_info "SemaphoreAPI environment already exists, looking up ID..."
+        log_info "SemaphoreAPI environment already exists, looking up ID..." >&2
         # Get the existing environment ID
         local existing_env=$(make_api_request "GET" \
             "http://localhost:3000/api/project/$project_id/environment" \
@@ -542,7 +542,7 @@ create_semaphore_api_environment() {
             local envs=$(echo "$existing_env" | cut -d'|' -f2-)
             local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="SemaphoreAPI") | .id' 2>/dev/null)
             if [ -n "$found_id" ] && [ "$found_id" != "null" ]; then
-                log_info "Using existing SemaphoreAPI environment with ID: $found_id"
+                log_info "Using existing SemaphoreAPI environment with ID: $found_id" >&2
                 echo "$found_id"
                 return 0
             fi
@@ -604,7 +604,7 @@ create_template_generator_task() {
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local template_id=$(echo "$response_body" | jq -r '.id')
         if [ -n "$template_id" ] && [ "$template_id" != "null" ]; then
-            log_info "✓ Generate Templates task created successfully with ID: $template_id"
+            log_info "✓ Generate Templates task created successfully with ID: $template_id" >&2
             echo "$template_id"
             return 0
         else
