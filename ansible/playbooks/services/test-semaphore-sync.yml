@@ -1,0 +1,45 @@
+---
+- name: Test Semaphore Template Sync
+  hosts: privatebox
+  gather_facts: no
+  
+  vars_prompt:
+    - name: service_enabled
+      prompt: "Enable the test service?"
+      default: "yes"
+      private: no
+      # Semaphore template metadata
+      semaphore_type: boolean
+      semaphore_description: "Enable or disable the test service"
+      semaphore_required: true
+      
+    - name: service_port
+      prompt: "Service port number"
+      default: "8080"
+      private: no
+      semaphore_type: integer
+      semaphore_description: "Port number for the test service"
+      semaphore_min: 1024
+      semaphore_max: 65535
+      semaphore_required: true
+      
+    - name: service_name
+      prompt: "Service display name"
+      default: "Test Service"
+      private: no
+      semaphore_type: text
+      semaphore_description: "Display name for the service"
+      semaphore_required: false
+      
+    - name: admin_password
+      prompt: "Admin password"
+      private: yes
+      # This variable has no semaphore metadata, so it won't be included
+      
+  tasks:
+    - name: Display configuration
+      debug:
+        msg: |
+          Service enabled: {{ service_enabled }}
+          Service port: {{ service_port }}
+          Service name: {{ service_name }}

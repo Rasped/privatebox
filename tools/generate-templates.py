@@ -6,8 +6,9 @@ This will eventually parse Ansible playbooks and create Semaphore templates.
 import os
 import sys
 import json
+from pathlib import Path
 
-# Auto-install requests if not available
+# Auto-install dependencies if not available
 try:
     import requests
 except ImportError:
@@ -15,6 +16,14 @@ except ImportError:
     print("Installing requests package...")
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'requests'])
     import requests
+
+try:
+    import yaml
+except ImportError:
+    import subprocess
+    print("Installing PyYAML package...")
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'PyYAML'])
+    import yaml
 
 
 def test_connectivity(base_url):
@@ -85,6 +94,83 @@ def list_projects(base_url, api_token):
         return False
 
 
+def discover_playbooks(base_dir):
+    """Discover all playbook files in the services directory."""
+    playbook_dir = Path(base_dir) / 'ansible' / 'playbooks' / 'services'
+    if not playbook_dir.exists():
+        print(f"✗ Playbook directory not found: {playbook_dir}")
+        return []
+    
+    playbooks = list(playbook_dir.glob('*.yml'))
+    # Exclude template files
+    playbooks = [p for p in playbooks if not p.name.startswith('_')]
+    return sorted(playbooks)
+
+
+def parse_playbook(playbook_path):
+    """Parse a playbook and extract vars_prompt with semaphore metadata."""
+    try:
+        with open(playbook_path, 'r') as f:
+            data = yaml.safe_load(f)
+        
+        if not data or not isinstance(data, list):
+            return None
+        
+        # Get the first play
+        play = data[0]
+        if not isinstance(play, dict):
+            return None
+        
+        vars_prompt = play.get('vars_prompt', [])
+        if not vars_prompt:
+            return None
+        
+        # Extract variables with semaphore metadata
+        semaphore_vars = []
+        for var in vars_prompt:
+            # Check if this variable has any semaphore_* fields
+            has_semaphore_metadata = any(key.startswith('semaphore_') for key in var.keys())
+            if has_semaphore_metadata:
+                semaphore_vars.append(var)
+        
+        if not semaphore_vars:
+            return None
+        
+        return {
+            'name': play.get('name', 'Unnamed playbook'),
+            'vars': semaphore_vars
+        }
+    
+    except Exception as e:
+        print(f"✗ Error parsing {playbook_path}: {e}")
+        return None
+
+
+def display_playbook_info(playbook_path, info):
+    """Display parsed playbook information."""
+    print(f"\n📄 {playbook_path.name}")
+    print(f"   Name: {info['name']}")
+    print(f"   Variables with Semaphore metadata:")
+    
+    for var in info['vars']:
+        var_name = var.get('name', 'unnamed')
+        var_type = var.get('semaphore_type', 'text')
+        description = var.get('semaphore_description', var.get('prompt', ''))
+        required = var.get('semaphore_required', not var.get('private', True))
+        
+        print(f"\n   - Variable: {var_name}")
+        print(f"     Type: {var_type}")
+        print(f"     Description: {description}")
+        print(f"     Required: {required}")
+        
+        # Show additional fields for specific types
+        if var_type == 'integer':
+            if 'semaphore_min' in var:
+                print(f"     Min: {var['semaphore_min']}")
+            if 'semaphore_max' in var:
+                print(f"     Max: {var['semaphore_max']}")
+
+
 def main():
     print("=== Semaphore Template Generator ===")
     print(f"Python version: {sys.version.split()[0]}")
@@ -131,9 +217,35 @@ def main():
         sys.exit(1)
     
     print("\n✅ All API tests passed! Ready for template synchronization.")
-    print("\nNext steps (Phase 4+):")
-    print("  - Parse Ansible playbooks with semaphore_* metadata")
-    print("  - Create/update Semaphore templates via API")
+    
+    # Phase 4: Discover and parse playbooks
+    print("\n=== Phase 4: Discovering Playbooks ===")
+    playbooks = discover_playbooks(os.getcwd())
+    
+    if not playbooks:
+        print("✗ No playbooks found in ansible/playbooks/services/")
+        return
+    
+    print(f"✓ Found {len(playbooks)} playbook(s)")
+    
+    # Parse each playbook
+    print("\n=== Parsing Playbooks for Semaphore Metadata ===")
+    templates_found = 0
+    
+    for playbook in playbooks:
+        info = parse_playbook(playbook)
+        if info:
+            templates_found += 1
+            display_playbook_info(playbook, info)
+    
+    if templates_found == 0:
+        print("\n⚠️  No playbooks with semaphore_* metadata found.")
+        print("To enable template generation, add semaphore_* fields to vars_prompt in your playbooks.")
+    else:
+        print(f"\n✓ Found {templates_found} playbook(s) with Semaphore metadata")
+        print("\nNext steps (Phase 5):")
+        print("  - Create Semaphore templates via API")
+        print("  - Update existing templates if they already exist")
 
 
 if __name__ == "__main__":
