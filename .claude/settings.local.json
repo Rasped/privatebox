@@ -14,7 +14,13 @@
       "Bash(/mnt/c/Program Files/Git/cmd/git.exe add .claude/)",
       "WebFetch(domain:semaphoreui.com)",
       "Bash(mcp__context7__resolve-library-id:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(ssh:*)",
+      "Bash(curl:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs"
     ],
     "deny": []
   }
