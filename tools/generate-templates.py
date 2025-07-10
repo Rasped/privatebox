@@ -270,7 +270,7 @@ def convert_to_survey_vars(vars_list):
         # Map our metadata types to Semaphore types
         var_type = var.get('semaphore_type', 'text')
         if var_type == 'boolean':
-            survey_type = ''  # Semaphore uses empty string for boolean
+            survey_type = 'enum'  # Use enum for boolean with True/False options
         elif var_type == 'integer':
             survey_type = 'int'
         elif var_type == 'password' or var.get('private', False):
@@ -286,15 +286,15 @@ def convert_to_survey_vars(vars_list):
             'required': var.get('semaphore_required', not var.get('private', True))
         }
         
-        # Add default value for boolean types (as string since it's a text field)
+        # Add enum values for boolean types
         if var_type == 'boolean':
-            # Use the default from the playbook, or 'false' if not specified
-            default_value = var.get('default', 'no')
-            # Convert common boolean values to 'true'/'false' strings
-            if default_value in ['yes', 'Yes', 'YES', 'true', 'True', 'TRUE', '1']:
-                survey_var['default'] = 'true'
-            else:
-                survey_var['default'] = 'false'
+            # Use the default from the playbook
+            default_value = var.get('default', 'yes')
+            # Add True/False options
+            survey_var['values'] = [
+                {'name': 'True', 'value': 'true'},
+                {'name': 'False', 'value': 'false'}
+            ]
         
         # Add integer constraints if present
         if var_type == 'integer':
