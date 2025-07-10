@@ -551,9 +551,12 @@ def main():
             templates_failed += 1
             continue
         
-        environment_id = get_environment_id(semaphore_url, api_token, project_id, environment_name) if environment_name else None
+        # Always try to get environment ID - defaults to "Empty" if not specified
+        environment_id = get_environment_id(semaphore_url, api_token, project_id, environment_name)
         if environment_name and not environment_id:
             print(f"   ⚠️  Warning: Environment '{environment_name}' not found, continuing without it")
+        elif not environment_name and not environment_id:
+            print(f"   ⚠️  Warning: Default environment 'Empty' not found")
         
         # Prepare resource IDs
         resource_ids = {
