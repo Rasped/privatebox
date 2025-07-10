@@ -343,7 +343,8 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
         'allow_override_args_in_task': False,
         'survey_vars': survey_vars,
         'type': playbook_info.get('template_config', {}).get('semaphore_template_type', 'deploy'),
-        'app': 'ansible'  # Specify this is an Ansible template
+        'app': 'ansible',  # Specify this is an Ansible template
+        'build_template_id': None  # No build template needed for simple deployments
     }
     
     # Add view_id if available
