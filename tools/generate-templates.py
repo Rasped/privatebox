@@ -315,6 +315,11 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
     # Convert variables to survey format
     survey_vars = convert_to_survey_vars(playbook_info['vars'])
     
+    # Debug: Print survey vars
+    print(f"\n   Survey variables:")
+    for var in survey_vars:
+        print(f"     {json.dumps(var, indent=6)}")
+    
     # Build template data
     template_data = {
         'name': template_name,
