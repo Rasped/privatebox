@@ -472,8 +472,8 @@ create_semaphore_api_environment() {
     local api_token="$2"
     local admin_session="$3"
     
-    log_info "Creating SemaphoreAPI environment for project $project_id..."
-    log_info "API Token (first 10 chars): ${api_token:0:10}..."
+    log_info "Creating SemaphoreAPI environment for project $project_id..." >&2
+    log_info "API Token (first 10 chars): ${api_token:0:10}..." >&2
     
     # Create environment payload - Semaphore stores variables as a JSON string
     # Both regular variables and secrets go in the json field as a string
@@ -492,7 +492,7 @@ create_semaphore_api_environment() {
             json: $json
         }')
     
-    log_info "Environment payload: $(echo "$env_payload" | jq -c '{name, project_id, json: {SEMAPHORE_URL: .json.SEMAPHORE_URL, SEMAPHORE_API_TOKEN: "***"}}')"
+    log_info "Environment payload: $(echo "$env_payload" | jq -c '{name, project_id, json: {SEMAPHORE_URL: .json.SEMAPHORE_URL, SEMAPHORE_API_TOKEN: "***"}}')" >&2
     
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/environment" \
@@ -506,7 +506,7 @@ create_semaphore_api_environment() {
     local status_code=$(echo "$api_result" | cut -d'|' -f1)
     local response_body=$(echo "$api_result" | cut -d'|' -f2-)
     
-    log_info "Environment creation response - Status: $status_code"
+    log_info "Environment creation response - Status: $status_code" >&2
     
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
