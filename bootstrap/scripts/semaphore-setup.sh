@@ -332,6 +332,69 @@ get_repository_id_by_name() {
     fi
 }
 
+# Create repository in Semaphore
+create_repository() {
+    local project_id="$1"
+    local repo_name="$2"
+    local git_url="$3"
+    local admin_session="$4"
+    
+    log_info "Creating repository '$repo_name' in project $project_id..."
+    
+    # Create repository payload
+    local repo_payload=$(jq -n \
+        --arg name "$repo_name" \
+        --arg url "$git_url" \
+        --argjson pid "$project_id" \
+        '{
+            name: $name,
+            project_id: $pid,
+            git_url: $url,
+            git_branch: "main",
+            ssh_key_id: null
+        }')
+    
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/repositories" \
+        "$repo_payload" "$admin_session" "Creating repository $repo_name")
+    
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local repo_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
+        if [ -n "$repo_id" ] && [ "$repo_id" != "null" ]; then
+            log_info "Repository '$repo_name' created with ID: $repo_id"
+            echo "$repo_id"
+            return 0
+        else
+            log_info "Repository '$repo_name' created but couldn't extract ID"
+            return 0
+        fi
+    elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
+         echo "$response_body" | jq -e '.message' 2>/dev/null | grep -q "already exists"); then
+        log_info "Repository '$repo_name' already exists, looking up ID..."
+        # Get the existing repository ID
+        local existing_id=$(get_repository_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "$repo_name")
+        if [ -n "$existing_id" ] && [ "$existing_id" != "null" ]; then
+            log_info "Using existing repository with ID: $existing_id"
+            echo "$existing_id"
+            return 0
+        fi
+    else
+        log_error "Failed to create repository. Status: $status_code"
+        if [ -n "$response_body" ]; then
+            log_error "Response: $response_body"
+        fi
+    fi
+    
+    return 1
+}
+
 # Get inventory ID by name
 get_inventory_id_by_name() {
     local base_url="$1"
@@ -1700,6 +1763,9 @@ create_infrastructure_project_with_ssh_key() {
             
             # Create default inventory
             create_default_inventory "$project_name" "$project_id" "$admin_session"
+            
+            # Create repository for the project
+            create_repository "$project_id" "PrivateBox" "$PRIVATEBOX_GIT_URL" "$admin_session"
             
             # Create SSH key for this project
             create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session"
