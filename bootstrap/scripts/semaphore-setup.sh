@@ -440,14 +440,14 @@ create_api_token() {
     local admin_session="$1"
     local token_name="template-generator"
     
-    log_info "Creating API token for template generator..."
+    log_info "Creating API token for template generator..." >&2
     
     # Create token via API
     local api_result=$(make_api_request "POST" "http://localhost:3000/api/user/tokens" \
         "{\"name\": \"$token_name\"}" "$admin_session" "Creating API token")
     
     if [ $? -ne 0 ]; then
-        log_error "Failed to create API token"
+        log_error "Failed to create API token" >&2
         return 1
     fi
     
@@ -462,7 +462,7 @@ create_api_token() {
         fi
     fi
     
-    log_error "Failed to extract token from response"
+    log_error "Failed to extract token from response" >&2
     return 1
 }
 
@@ -475,19 +475,21 @@ create_semaphore_api_environment() {
     log_info "Creating SemaphoreAPI environment for project $project_id..."
     log_info "API Token (first 10 chars): ${api_token:0:10}..."
     
-    # Create environment payload - Semaphore stores variables as a JSON object
-    # Both regular variables and secrets go in the json field
+    # Create environment payload - Semaphore stores variables as a JSON string
+    # Both regular variables and secrets go in the json field as a string
+    local json_vars=$(jq -n \
+        --arg url "http://localhost:3000" \
+        --arg token "$api_token" \
+        '{SEMAPHORE_URL: $url, SEMAPHORE_API_TOKEN: $token}' | jq -Rs .)
+    
     local env_payload=$(jq -n \
         --arg name "SemaphoreAPI" \
         --argjson pid "$project_id" \
-        --arg token "$api_token" \
+        --arg json "$json_vars" \
         '{
             name: $name,
             project_id: $pid,
-            json: {
-                SEMAPHORE_URL: "http://localhost:3000",
-                SEMAPHORE_API_TOKEN: $token
-            }
+            json: $json
         }')
     
     log_info "Environment payload: $(echo "$env_payload" | jq -c '{name, project_id, json: {SEMAPHORE_URL: .json.SEMAPHORE_URL, SEMAPHORE_API_TOKEN: "***"}}')"
