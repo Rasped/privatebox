@@ -278,12 +278,12 @@ def convert_to_survey_vars(vars_list):
         else:
             survey_type = ''  # Default to text (empty string)
         
-        # Build description, optionally adding recommended value
+        # Build description, optionally adding default value
         description = var.get('semaphore_description', var.get('prompt', ''))
         if 'default' in var and description:
-            description = f"{description} (recommended: {var['default']})"
+            description = f"{description} (default: {var['default']})"
         elif 'default' in var:
-            description = f"Recommended: {var['default']}"
+            description = f"Default: {var['default']}"
         
         survey_var = {
             'name': var.get('name'),
