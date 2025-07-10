@@ -90,6 +90,15 @@ def main():
     print(f"Python version: {sys.version.split()[0]}")
     print(f"Current working directory: {os.getcwd()}")
     
+    # Debug: Show all environment variables
+    print("\n=== All Environment Variables ===")
+    for key, value in sorted(os.environ.items()):
+        # Hide sensitive values
+        if 'TOKEN' in key or 'PASSWORD' in key:
+            print(f"  {key}: {'*' * 10}")
+        else:
+            print(f"  {key}: {value}")
+    
     # Check for required environment variables
     semaphore_url = os.environ.get('SEMAPHORE_URL')
     api_token = os.environ.get('SEMAPHORE_API_TOKEN')
