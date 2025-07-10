@@ -145,9 +145,9 @@ def get_repository_id(base_url, api_token, project_id, repository_name="PrivateB
 
 
 def get_environment_id(base_url, api_token, project_id, environment_name=None):
-    """Get environment ID by name. If not specified, looks for 'None' environment."""
+    """Get environment ID by name. If not specified, looks for 'Empty' environment."""
     if not environment_name:
-        environment_name = "None"  # Default to "None" environment
+        environment_name = "Empty"  # Default to "Empty" environment
     
     headers = {"Authorization": f"Bearer {api_token}"}
     
