@@ -270,8 +270,7 @@ def convert_to_survey_vars(vars_list):
         # Map our metadata types to Semaphore types
         var_type = var.get('semaphore_type', 'text')
         if var_type == 'boolean':
-            # Handle boolean as enum with yes/no values
-            survey_type = 'enum'
+            survey_type = ''  # Semaphore uses empty string for boolean
         elif var_type == 'integer':
             survey_type = 'int'
         elif var_type == 'password' or var.get('private', False):
@@ -287,16 +286,8 @@ def convert_to_survey_vars(vars_list):
             'required': var.get('semaphore_required', not var.get('private', True))
         }
         
-        # Add boolean as enum with yes/no values
-        if var_type == 'boolean':
-            default_value = var.get('default', 'yes')
-            survey_var['values'] = [
-                {'name': 'Yes', 'value': 'yes'},
-                {'name': 'No', 'value': 'no'}
-            ]
-        
         # Add integer constraints if present
-        elif var_type == 'integer':
+        if var_type == 'integer':
             if 'semaphore_min' in var:
                 survey_var['min'] = var['semaphore_min']
             if 'semaphore_max' in var:
