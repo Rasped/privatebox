@@ -286,6 +286,10 @@ def convert_to_survey_vars(vars_list):
             'required': var.get('semaphore_required', not var.get('private', True))
         }
         
+        # Add default value if present in playbook
+        if 'default' in var:
+            survey_var['default'] = str(var['default'])
+        
         # Add enum values for boolean types
         if var_type == 'boolean':
             # Use the default from the playbook
