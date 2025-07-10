@@ -90,6 +90,10 @@ def main():
     print(f"Python version: {sys.version.split()[0]}")
     print(f"Current working directory: {os.getcwd()}")
     
+    # Debug: Show command line arguments
+    print(f"\n=== Command Line Arguments ===")
+    print(f"  sys.argv: {sys.argv}")
+    
     # Debug: Show all environment variables
     print("\n=== All Environment Variables ===")
     for key, value in sorted(os.environ.items()):
@@ -98,6 +102,15 @@ def main():
             print(f"  {key}: {'*' * 10}")
         else:
             print(f"  {key}: {value}")
+    
+    # Debug: Check for JSON files in working directory
+    print("\n=== Files in Current Directory ===")
+    try:
+        files = os.listdir('.')
+        for f in sorted(files):
+            print(f"  {f}")
+    except Exception as e:
+        print(f"  Error listing files: {e}")
     
     # Check for required environment variables
     semaphore_url = os.environ.get('SEMAPHORE_URL')
