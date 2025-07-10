@@ -94,6 +94,106 @@ def list_projects(base_url, api_token):
         return False
 
 
+def get_inventory_id(base_url, api_token, project_id, inventory_name="Default Inventory"):
+    """Get inventory ID by name, with configurable default."""
+    headers = {"Authorization": f"Bearer {api_token}"}
+    
+    try:
+        response = requests.get(f"{base_url}/api/project/{project_id}/inventory", headers=headers, timeout=5)
+        if response.status_code == 200:
+            inventories = response.json()
+            for inventory in inventories:
+                if inventory.get('name') == inventory_name:
+                    return inventory.get('id')
+            
+            # If not found, list available inventories
+            print(f"\n⚠️  Inventory '{inventory_name}' not found. Available inventories:")
+            for inv in inventories:
+                print(f"    - {inv.get('name')} (ID: {inv.get('id')})")
+            return None
+        else:
+            print(f"✗ Failed to list inventories: {response.status_code}")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"✗ Failed to get inventories: {e}")
+        return None
+
+
+def get_repository_id(base_url, api_token, project_id, repository_name="PrivateBox"):
+    """Get repository ID by name, with configurable default."""
+    headers = {"Authorization": f"Bearer {api_token}"}
+    
+    try:
+        response = requests.get(f"{base_url}/api/project/{project_id}/repositories", headers=headers, timeout=5)
+        if response.status_code == 200:
+            repositories = response.json()
+            for repo in repositories:
+                if repo.get('name') == repository_name:
+                    return repo.get('id')
+            
+            # If not found, list available repositories
+            print(f"\n⚠️  Repository '{repository_name}' not found. Available repositories:")
+            for repo in repositories:
+                print(f"    - {repo.get('name')} (ID: {repo.get('id')})")
+            return None
+        else:
+            print(f"✗ Failed to list repositories: {response.status_code}")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"✗ Failed to get repositories: {e}")
+        return None
+
+
+def get_environment_id(base_url, api_token, project_id, environment_name=None):
+    """Get environment ID by name. Returns None if not specified."""
+    if not environment_name:
+        return None
+    
+    headers = {"Authorization": f"Bearer {api_token}"}
+    
+    try:
+        response = requests.get(f"{base_url}/api/project/{project_id}/environment", headers=headers, timeout=5)
+        if response.status_code == 200:
+            environments = response.json()
+            for env in environments:
+                if env.get('name') == environment_name:
+                    return env.get('id')
+            
+            # If not found, list available environments
+            print(f"\n⚠️  Environment '{environment_name}' not found. Available environments:")
+            for env in environments:
+                print(f"    - {env.get('name')} (ID: {env.get('id')})")
+            return None
+        else:
+            print(f"✗ Failed to list environments: {response.status_code}")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"✗ Failed to get environments: {e}")
+        return None
+
+
+def get_view_id(base_url, api_token, project_id):
+    """Get the first available view ID for the project."""
+    headers = {"Authorization": f"Bearer {api_token}"}
+    
+    try:
+        response = requests.get(f"{base_url}/api/project/{project_id}/views", headers=headers, timeout=5)
+        if response.status_code == 200:
+            views = response.json()
+            if views:
+                # Return the first view ID
+                return views[0].get('id')
+            else:
+                print("✗ No views found in project")
+                return None
+        else:
+            # Views might not be available in all versions, try to continue without it
+            return None
+    except requests.exceptions.RequestException as e:
+        # Views might not be available, continue without it
+        return None
+
+
 def discover_playbooks(base_dir):
     """Discover all playbook files in the services directory."""
     playbook_dir = Path(base_dir) / 'ansible' / 'playbooks' / 'services'
@@ -125,31 +225,181 @@ def parse_playbook(playbook_path):
         if not vars_prompt:
             return None
         
-        # Extract variables with semaphore metadata
+        # Extract template configuration and variables
+        template_config = {}
         semaphore_vars = []
+        
         for var in vars_prompt:
+            # Check for template configuration
+            if var.get('name') == 'semaphore_template_config' or 'semaphore_template_config' in var:
+                # Extract template-level configuration
+                config = var.get('semaphore_template_config', {})
+                template_config.update(config)
+                continue
+            
             # Check if this variable has any semaphore_* fields
             has_semaphore_metadata = any(key.startswith('semaphore_') for key in var.keys())
             if has_semaphore_metadata:
                 semaphore_vars.append(var)
         
-        if not semaphore_vars:
+        if not semaphore_vars and not template_config:
             return None
         
-        return {
+        result = {
             'name': play.get('name', 'Unnamed playbook'),
-            'vars': semaphore_vars
+            'vars': semaphore_vars,
+            'template_config': template_config
         }
+        
+        # Allow template name override from config
+        if 'semaphore_template_name' in template_config:
+            result['template_name'] = template_config['semaphore_template_name']
+        
+        return result
     
     except Exception as e:
         print(f"✗ Error parsing {playbook_path}: {e}")
         return None
 
 
+def convert_to_survey_vars(vars_list):
+    """Convert playbook variables with semaphore metadata to survey_vars format."""
+    survey_vars = []
+    
+    for var in vars_list:
+        # Map our metadata types to Semaphore types
+        var_type = var.get('semaphore_type', 'text')
+        if var_type == 'boolean':
+            survey_type = ''  # Semaphore uses empty string for boolean
+        elif var_type == 'integer':
+            survey_type = 'int'
+        elif var_type == 'password' or var.get('private', False):
+            survey_type = 'secret'
+        else:
+            survey_type = ''  # Default to text (empty string)
+        
+        survey_var = {
+            'name': var.get('name'),
+            'title': var.get('name', 'Unnamed variable'),
+            'description': var.get('semaphore_description', var.get('prompt', '')),
+            'type': survey_type,
+            'required': var.get('semaphore_required', not var.get('private', True))
+        }
+        
+        # Add integer constraints if present
+        if var_type == 'integer':
+            if 'semaphore_min' in var:
+                survey_var['min'] = var['semaphore_min']
+            if 'semaphore_max' in var:
+                survey_var['max'] = var['semaphore_max']
+        
+        # Handle enum type if we have predefined values
+        if 'semaphore_values' in var:
+            survey_var['type'] = 'enum'
+            survey_var['values'] = [
+                {'name': str(v), 'value': str(v)} for v in var['semaphore_values']
+            ]
+        
+        survey_vars.append(survey_var)
+    
+    return survey_vars
+
+
+def create_or_update_template(base_url, api_token, project_id, playbook_path, playbook_info, resource_ids):
+    """Create or update a template based on playbook information."""
+    headers = {"Authorization": f"Bearer {api_token}"}
+    
+    # Determine template name
+    template_name = playbook_info.get('template_name', f"Deploy: {playbook_path.stem}")
+    
+    # Convert variables to survey format
+    survey_vars = convert_to_survey_vars(playbook_info['vars'])
+    
+    # Build template data
+    template_data = {
+        'name': template_name,
+        'project_id': project_id,
+        'inventory_id': resource_ids['inventory_id'],
+        'repository_id': resource_ids['repository_id'],
+        'environment_id': resource_ids.get('environment_id'),
+        'playbook': f"ansible/playbooks/services/{playbook_path.name}",
+        'arguments': '[]',
+        'description': f"Generated from {playbook_path.name}",
+        'allow_override_args_in_task': False,
+        'survey_vars': survey_vars,
+        'type': playbook_info.get('template_config', {}).get('semaphore_template_type', 'deploy')
+    }
+    
+    # Add view_id if available
+    if resource_ids.get('view_id'):
+        template_data['view_id'] = resource_ids['view_id']
+    
+    try:
+        # Check if template exists
+        response = requests.get(f"{base_url}/api/project/{project_id}/templates", headers=headers, timeout=5)
+        if response.status_code == 200:
+            existing_templates = response.json()
+            existing_template = next((t for t in existing_templates if t['name'] == template_name), None)
+            
+            if existing_template:
+                # Update existing template
+                template_id = existing_template['id']
+                response = requests.put(
+                    f"{base_url}/api/project/{project_id}/templates/{template_id}",
+                    json=template_data,
+                    headers=headers,
+                    timeout=10
+                )
+                if response.status_code in [200, 204]:
+                    print(f"\n✓ Updated template: {template_name} (ID: {template_id})")
+                    return True
+                else:
+                    print(f"\n✗ Failed to update template: {response.status_code}")
+                    print(f"   Response: {response.text}")
+                    return False
+            else:
+                # Create new template
+                response = requests.post(
+                    f"{base_url}/api/project/{project_id}/templates",
+                    json=template_data,
+                    headers=headers,
+                    timeout=10
+                )
+                if response.status_code in [200, 201]:
+                    new_template = response.json()
+                    print(f"\n✓ Created template: {template_name} (ID: {new_template.get('id', 'unknown')})")
+                    return True
+                else:
+                    print(f"\n✗ Failed to create template: {response.status_code}")
+                    print(f"   Response: {response.text}")
+                    return False
+        else:
+            print(f"\n✗ Failed to list templates: {response.status_code}")
+            return False
+    
+    except requests.exceptions.RequestException as e:
+        print(f"\n✗ Error creating/updating template: {e}")
+        return False
+
+
 def display_playbook_info(playbook_path, info):
     """Display parsed playbook information."""
     print(f"\n📄 {playbook_path.name}")
     print(f"   Name: {info['name']}")
+    
+    # Display template configuration if present
+    if info.get('template_config'):
+        print("   Template Configuration:")
+        config = info['template_config']
+        if 'semaphore_template_name' in config:
+            print(f"     Custom name: {config['semaphore_template_name']}")
+        if 'semaphore_inventory' in config:
+            print(f"     Inventory: {config['semaphore_inventory']}")
+        if 'semaphore_repository' in config:
+            print(f"     Repository: {config['semaphore_repository']}")
+        if 'semaphore_environment' in config:
+            print(f"     Environment: {config['semaphore_environment']}")
+    
     print(f"   Variables with Semaphore metadata:")
     
     for var in info['vars']:
@@ -230,22 +480,85 @@ def main():
     
     # Parse each playbook
     print("\n=== Parsing Playbooks for Semaphore Metadata ===")
-    templates_found = 0
+    playbooks_with_metadata = []
     
     for playbook in playbooks:
         info = parse_playbook(playbook)
         if info:
-            templates_found += 1
+            playbooks_with_metadata.append((playbook, info))
             display_playbook_info(playbook, info)
     
-    if templates_found == 0:
+    if not playbooks_with_metadata:
         print("\n⚠️  No playbooks with semaphore_* metadata found.")
         print("To enable template generation, add semaphore_* fields to vars_prompt in your playbooks.")
-    else:
-        print(f"\n✓ Found {templates_found} playbook(s) with Semaphore metadata")
-        print("\nNext steps (Phase 5):")
-        print("  - Create Semaphore templates via API")
-        print("  - Update existing templates if they already exist")
+        return
+    
+    print(f"\n✓ Found {len(playbooks_with_metadata)} playbook(s) with Semaphore metadata")
+    
+    # Phase 5: Create/Update templates
+    print("\n=== Phase 5: Creating/Updating Templates ===")
+    
+    # Use project ID 1 (from our earlier check)
+    project_id = 1
+    
+    # Get view ID (might not be available in all versions)
+    view_id = get_view_id(semaphore_url, api_token, project_id)
+    
+    templates_processed = 0
+    templates_created = 0
+    templates_updated = 0
+    templates_failed = 0
+    
+    for playbook_path, playbook_info in playbooks_with_metadata:
+        print(f"\n🔄 Processing: {playbook_path.name}")
+        
+        # Get template configuration
+        config = playbook_info.get('template_config', {})
+        
+        # Look up resource IDs based on configuration or defaults
+        inventory_name = config.get('semaphore_inventory', 'Default Inventory')
+        repository_name = config.get('semaphore_repository', 'PrivateBox')
+        environment_name = config.get('semaphore_environment')
+        
+        print(f"   Looking up resources...")
+        inventory_id = get_inventory_id(semaphore_url, api_token, project_id, inventory_name)
+        if not inventory_id:
+            print(f"   ✗ Skipping: Inventory '{inventory_name}' not found")
+            templates_failed += 1
+            continue
+        
+        repository_id = get_repository_id(semaphore_url, api_token, project_id, repository_name)
+        if not repository_id:
+            print(f"   ✗ Skipping: Repository '{repository_name}' not found")
+            templates_failed += 1
+            continue
+        
+        environment_id = get_environment_id(semaphore_url, api_token, project_id, environment_name) if environment_name else None
+        if environment_name and not environment_id:
+            print(f"   ⚠️  Warning: Environment '{environment_name}' not found, continuing without it")
+        
+        # Prepare resource IDs
+        resource_ids = {
+            'inventory_id': inventory_id,
+            'repository_id': repository_id,
+            'environment_id': environment_id,
+            'view_id': view_id
+        }
+        
+        # Create or update the template
+        if create_or_update_template(semaphore_url, api_token, project_id, playbook_path, playbook_info, resource_ids):
+            templates_processed += 1
+            # Note: The function prints whether it created or updated
+        else:
+            templates_failed += 1
+    
+    # Summary
+    print("\n=== Summary ===")
+    print(f"✓ Templates processed successfully: {templates_processed}")
+    if templates_failed > 0:
+        print(f"✗ Templates failed: {templates_failed}")
+    
+    print("\n✅ Template synchronization complete!")
 
 
 if __name__ == "__main__":
