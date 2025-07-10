@@ -721,6 +721,7 @@ Environment=SEMAPHORE_ADMIN=admin
 Environment=SEMAPHORE_ACCESS_KEY_ENCRYPTION="$SEMAPHORE_ACCESS_KEY_ENCRYPTION_KEY"
 Environment=SEMAPHORE_PLAYBOOK_PATH=/tmp/semaphore/
 Environment=TZ=UTC
+Environment=SEMAPHORE_APPS={"python":{"active":true,"priority":500}}
 Volume=/opt/semaphore/app/data:/etc/semaphore:Z
 Volume=/opt/semaphore/app/config:/var/lib/semaphore:Z
 Network=semaphore.network
