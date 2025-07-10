@@ -369,7 +369,7 @@ create_repository() {
             project_id: $pid,
             git_url: $url,
             git_branch: "main",
-            ssh_key_id: null
+            ssh_key_id: 1
         }')
     
     log_info "Repository payload: $(echo "$repo_payload" | jq -c .)"
