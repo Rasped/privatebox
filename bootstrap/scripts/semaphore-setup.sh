@@ -338,7 +338,7 @@ get_repository_id_by_name() {
                 log_info "Found repository '$repo_name' with ID: $repo_id"
                 echo "$repo_id"
             else
-                log_warning "Repository '$repo_name' not found in project"
+                log_info "WARNING: Repository '$repo_name' not found in project"
                 log_info "Available repositories: $(echo "$repos" | jq -r '.[].name' 2>/dev/null | tr '\n' ', ')"
             fi
         else
@@ -395,7 +395,7 @@ create_repository() {
             echo "$repo_id"
             return 0
         else
-            log_warning "Repository '$repo_name' created but couldn't extract ID from response"
+            log_info "WARNING: Repository '$repo_name' created but couldn't extract ID from response"
             log_info "Response body: $response_body"
             return 0
         fi
@@ -480,7 +480,7 @@ create_semaphore_api_environment() {
     local json_vars=$(jq -n \
         --arg url "http://localhost:3000" \
         --arg token "$api_token" \
-        '{SEMAPHORE_URL: $url, SEMAPHORE_API_TOKEN: $token}' | jq -Rs .)
+        '{SEMAPHORE_URL: $url, SEMAPHORE_API_TOKEN: $token}')
     
     local env_payload=$(jq -n \
         --arg name "SemaphoreAPI" \
@@ -515,7 +515,7 @@ create_semaphore_api_environment() {
             echo "$env_id"
             return 0
         else
-            log_warning "Environment created but couldn't extract ID"
+            log_info "WARNING: Environment created but couldn't extract ID"
             log_info "Response body: $response_body"
             # Check if environment already exists
             local existing_env=$(make_api_request "GET" \
@@ -672,7 +672,7 @@ run_semaphore_task() {
         log_info "Task still running... ($waited/$max_wait seconds)"
     done
     
-    log_warning "Task did not complete within timeout"
+    log_info "WARNING: Task did not complete within timeout"
     return 1
 }
 
@@ -740,7 +740,7 @@ setup_template_synchronization() {
     if run_semaphore_task "$template_id" "$admin_session"; then
         log_info "✓ Initial template synchronization completed successfully!"
     else
-        log_warning "⚠️  Initial template sync failed, but can be run manually later"
+        log_info "WARNING: ⚠️  Initial template sync failed, but can be run manually later"
     fi
     
     log_info "========================================"
