@@ -90,31 +90,17 @@ def main():
     print(f"Python version: {sys.version.split()[0]}")
     print(f"Current working directory: {os.getcwd()}")
     
-    # Debug: Show command line arguments
-    print(f"\n=== Command Line Arguments ===")
-    print(f"  sys.argv: {sys.argv}")
+    # Parse command line arguments for Semaphore variables
+    # Semaphore passes variables as KEY=VALUE arguments
+    variables = {}
+    for arg in sys.argv[1:]:
+        if '=' in arg:
+            key, value = arg.split('=', 1)
+            variables[key] = value
     
-    # Debug: Show all environment variables
-    print("\n=== All Environment Variables ===")
-    for key, value in sorted(os.environ.items()):
-        # Hide sensitive values
-        if 'TOKEN' in key or 'PASSWORD' in key:
-            print(f"  {key}: {'*' * 10}")
-        else:
-            print(f"  {key}: {value}")
-    
-    # Debug: Check for JSON files in working directory
-    print("\n=== Files in Current Directory ===")
-    try:
-        files = os.listdir('.')
-        for f in sorted(files):
-            print(f"  {f}")
-    except Exception as e:
-        print(f"  Error listing files: {e}")
-    
-    # Check for required environment variables
-    semaphore_url = os.environ.get('SEMAPHORE_URL')
-    api_token = os.environ.get('SEMAPHORE_API_TOKEN')
+    # Get required variables from parsed arguments
+    semaphore_url = variables.get('SEMAPHORE_URL')
+    api_token = variables.get('SEMAPHORE_API_TOKEN')
     
     print("\n=== Environment Check ===")
     if not semaphore_url:
