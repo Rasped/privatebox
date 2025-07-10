@@ -323,12 +323,29 @@ get_repository_id_by_name() {
     local project_id="$3"
     local repo_name="$4"
     
+    log_info "Looking up repository '$repo_name' in project $project_id..."
+    
     local api_result=$(make_api_request "GET" \
         "$base_url/api/project/$project_id/repositories" "" "$session" "Getting repositories")
     
     if [ $? -eq 0 ]; then
+        local status_code=$(echo "$api_result" | cut -d'|' -f1)
         local repos=$(echo "$api_result" | cut -d'|' -f2-)
-        echo "$repos" | jq -r ".[] | select(.name==\"$repo_name\") | .id" 2>/dev/null
+        
+        if [ "$status_code" -eq 200 ]; then
+            local repo_id=$(echo "$repos" | jq -r ".[] | select(.name==\"$repo_name\") | .id" 2>/dev/null)
+            if [ -n "$repo_id" ] && [ "$repo_id" != "null" ]; then
+                log_info "Found repository '$repo_name' with ID: $repo_id"
+                echo "$repo_id"
+            else
+                log_warning "Repository '$repo_name' not found in project"
+                log_info "Available repositories: $(echo "$repos" | jq -r '.[].name' 2>/dev/null | tr '\n' ', ')"
+            fi
+        else
+            log_error "Failed to list repositories. Status: $status_code"
+        fi
+    else
+        log_error "Failed to get repositories list"
     fi
 }
 
@@ -340,6 +357,7 @@ create_repository() {
     local admin_session="$4"
     
     log_info "Creating repository '$repo_name' in project $project_id..."
+    log_info "Repository URL: $git_url"
     
     # Create repository payload
     local repo_payload=$(jq -n \
@@ -354,25 +372,31 @@ create_repository() {
             ssh_key_id: null
         }')
     
+    log_info "Repository payload: $(echo "$repo_payload" | jq -c .)"
+    
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/repositories" \
         "$repo_payload" "$admin_session" "Creating repository $repo_name")
     
     if [ $? -ne 0 ]; then
+        log_error "API request failed for repository creation"
         return 1
     fi
     
     local status_code=$(echo "$api_result" | cut -d'|' -f1)
     local response_body=$(echo "$api_result" | cut -d'|' -f2-)
     
+    log_info "Repository creation response - Status: $status_code"
+    
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local repo_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$repo_id" ] && [ "$repo_id" != "null" ]; then
-            log_info "Repository '$repo_name' created with ID: $repo_id"
+            log_info "✓ Repository '$repo_name' created successfully with ID: $repo_id"
             echo "$repo_id"
             return 0
         else
-            log_info "Repository '$repo_name' created but couldn't extract ID"
+            log_warning "Repository '$repo_name' created but couldn't extract ID from response"
+            log_info "Response body: $response_body"
             return 0
         fi
     elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
@@ -381,18 +405,18 @@ create_repository() {
         # Get the existing repository ID
         local existing_id=$(get_repository_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "$repo_name")
         if [ -n "$existing_id" ] && [ "$existing_id" != "null" ]; then
-            log_info "Using existing repository with ID: $existing_id"
+            log_info "✓ Using existing repository with ID: $existing_id"
             echo "$existing_id"
             return 0
+        else
+            log_error "Repository exists but couldn't find its ID"
+            return 1
         fi
     else
         log_error "Failed to create repository. Status: $status_code"
-        if [ -n "$response_body" ]; then
-            log_error "Response: $response_body"
-        fi
+        log_error "Full response: $response_body"
+        return 1
     fi
-    
-    return 1
 }
 
 # Get inventory ID by name
@@ -448,7 +472,8 @@ create_semaphore_api_environment() {
     local api_token="$2"
     local admin_session="$3"
     
-    log_info "Creating SemaphoreAPI environment..."
+    log_info "Creating SemaphoreAPI environment for project $project_id..."
+    log_info "API Token (first 10 chars): ${api_token:0:10}..."
     
     # Create environment payload - Semaphore stores variables as a JSON object
     # Both regular variables and secrets go in the json field
@@ -465,25 +490,31 @@ create_semaphore_api_environment() {
             }
         }')
     
+    log_info "Environment payload: $(echo "$env_payload" | jq -c '{name, project_id, json: {SEMAPHORE_URL: .json.SEMAPHORE_URL, SEMAPHORE_API_TOKEN: "***"}}')"
+    
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/environment" \
         "$env_payload" "$admin_session" "Creating SemaphoreAPI environment")
     
     if [ $? -ne 0 ]; then
+        log_error "API request failed for environment creation"
         return 1
     fi
     
     local status_code=$(echo "$api_result" | cut -d'|' -f1)
     local response_body=$(echo "$api_result" | cut -d'|' -f2-)
     
+    log_info "Environment creation response - Status: $status_code"
+    
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
-            log_info "SemaphoreAPI environment created with ID: $env_id"
+            log_info "✓ SemaphoreAPI environment created successfully with ID: $env_id"
             echo "$env_id"
             return 0
         else
             log_warning "Environment created but couldn't extract ID"
+            log_info "Response body: $response_body"
             # Check if environment already exists
             local existing_env=$(make_api_request "GET" \
                 "http://localhost:3000/api/project/$project_id/environment" \
@@ -516,12 +547,9 @@ create_semaphore_api_environment() {
         fi
     else
         log_error "Failed to create environment. Status: $status_code"
-        if [ -n "$response_body" ]; then
-            log_error "Response: $response_body"
-        fi
+        log_error "Full response: $response_body"
+        return 1
     fi
-    
-    return 1
 }
 
 # Create Generate Templates task
@@ -533,6 +561,7 @@ create_template_generator_task() {
     local admin_session="$5"
     
     log_info "Creating Generate Templates task..."
+    log_info "Project ID: $project_id, Repository ID: $repository_id, Inventory ID: $inventory_id, Environment ID: $environment_id"
     
     local template_payload=$(jq -n \
         --arg name "Generate Templates" \
@@ -554,23 +583,38 @@ create_template_generator_task() {
             type: ""
         }')
     
+    log_info "Template payload: $(echo "$template_payload" | jq -c .)"
+    
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/templates" \
         "$template_payload" "$admin_session" "Creating template generator task")
     
     if [ $? -ne 0 ]; then
+        log_error "API request failed for template creation"
         return 1
     fi
     
     local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
-        local template_id=$(echo "$api_result" | cut -d'|' -f2- | jq -r '.id')
-        log_info "Generate Templates task created with ID: $template_id"
-        echo "$template_id"
-        return 0
-    fi
+    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
     
-    return 1
+    log_info "Template creation response - Status: $status_code"
+    
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local template_id=$(echo "$response_body" | jq -r '.id')
+        if [ -n "$template_id" ] && [ "$template_id" != "null" ]; then
+            log_info "✓ Generate Templates task created successfully with ID: $template_id"
+            echo "$template_id"
+            return 0
+        else
+            log_error "Template created but couldn't extract ID"
+            log_error "Response body: $response_body"
+            return 1
+        fi
+    else
+        log_error "Failed to create template. Status: $status_code"
+        log_error "Full response: $response_body"
+        return 1
+    fi
 }
 
 # Run a Semaphore task and wait for completion
@@ -635,47 +679,76 @@ setup_template_synchronization() {
     local project_id="$1"
     local admin_session="$2"
     
+    log_info "========================================"
     log_info "Setting up template synchronization infrastructure..."
+    log_info "========================================"
     
     # Create API token
+    log_info "Step 1/5: Creating API token..."
     local api_token=$(create_api_token "$admin_session")
     if [ -z "$api_token" ]; then
-        log_warning "Failed to create API token for template sync"
+        log_error "❌ Failed to create API token for template sync"
+        log_info "Template sync setup FAILED at step 1"
         return 1
     fi
+    log_info "✓ API token created"
     
     # Save token to credentials file
     echo "Template Generator API Token: $api_token" >> /root/.credentials/semaphore_credentials.txt
     
     # Create SemaphoreAPI environment
+    log_info "Step 2/5: Creating SemaphoreAPI environment..."
     local env_id=$(create_semaphore_api_environment "$project_id" "$api_token" "$admin_session")
     if [ -z "$env_id" ]; then
-        log_warning "Failed to create SemaphoreAPI environment"
+        log_error "❌ Failed to create SemaphoreAPI environment"
+        log_info "Template sync setup FAILED at step 2"
         return 1
     fi
+    log_info "✓ Environment created with ID: $env_id"
     
     # Get resource IDs
+    log_info "Step 3/5: Looking up resource IDs..."
     local repo_id=$(get_repository_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "PrivateBox")
     local inv_id=$(get_inventory_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "Default Inventory")
     
-    if [ -z "$repo_id" ] || [ -z "$inv_id" ]; then
-        log_warning "Failed to get required resource IDs"
+    if [ -z "$repo_id" ]; then
+        log_error "❌ Failed to find PrivateBox repository"
+        log_info "Template sync setup FAILED at step 3 - repository not found"
         return 1
     fi
+    if [ -z "$inv_id" ]; then
+        log_error "❌ Failed to find Default Inventory"
+        log_info "Template sync setup FAILED at step 3 - inventory not found"
+        return 1
+    fi
+    log_info "✓ Found repository (ID: $repo_id) and inventory (ID: $inv_id)"
     
     # Create Generate Templates task
+    log_info "Step 4/5: Creating Generate Templates task..."
     local template_id=$(create_template_generator_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$template_id" ]; then
-        log_warning "Failed to create template generator task"
+        log_error "❌ Failed to create template generator task"
+        log_info "Template sync setup FAILED at step 4"
         return 1
     fi
+    log_info "✓ Task created with ID: $template_id"
     
     # Run initial template generation
+    log_info "Step 5/5: Running initial template generation..."
     if run_semaphore_task "$template_id" "$admin_session"; then
         log_info "✓ Initial template synchronization completed successfully!"
     else
-        log_warning "Initial template sync failed, but can be run manually later"
+        log_warning "⚠️  Initial template sync failed, but can be run manually later"
     fi
+    
+    log_info "========================================"
+    log_info "Template synchronization setup COMPLETED"
+    log_info "Summary:"
+    log_info "  - API Token: Created and saved"
+    log_info "  - Environment: SemaphoreAPI (ID: $env_id)"
+    log_info "  - Repository: PrivateBox (ID: $repo_id)"
+    log_info "  - Task: Generate Templates (ID: $template_id)"
+    log_info "========================================"
     
     return 0
 }
@@ -1765,7 +1838,10 @@ create_infrastructure_project_with_ssh_key() {
             create_default_inventory "$project_name" "$project_id" "$admin_session"
             
             # Create repository for the project
-            create_repository "$project_id" "PrivateBox" "$PRIVATEBOX_GIT_URL" "$admin_session"
+            if ! create_repository "$project_id" "PrivateBox" "$PRIVATEBOX_GIT_URL" "$admin_session"; then
+                log_error "Failed to create PrivateBox repository - template sync will not work"
+                # Continue anyway to set up other components
+            fi
             
             # Create SSH key for this project
             create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session"
