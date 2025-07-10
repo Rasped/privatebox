@@ -64,25 +64,26 @@ This process is:
 
 This plan ensures a 100% hands-off solution where bootstrap automatically creates and configures everything needed for template synchronization.
 
-### Phase 1: Basic Infrastructure
-- Create minimal Python script (`tools/generate-templates.py`) that prints "Hello from template generator"
-- Create ansible playbook (`ansible/playbooks/maintenance/generate-templates.yml`) that runs the Python script
-- **[MANUAL]** Create Semaphore job template to test the playbook
-- **[MANUAL]** Run the job to verify execution works
-- **[CHECK]** Verify working directory when script runs
-- **[CHECK]** Confirm environment variables are passed through
+### Phase 1: Basic Infrastructure ✅ COMPLETE (2025-07-10)
+- ✅ Create minimal Python script (`tools/generate-templates.py`) that prints "Hello from template generator"
+- ✅ **[AUTOMATED]** Enable Python application in Semaphore UI via SEMAPHORE_APPS environment variable
+- ✅ **[MANUAL]** Create Python task template to test the script
+- ✅ **[MANUAL]** Run the job to verify execution works
+- ✅ **[CHECK]** Verify working directory when script runs - `/tmp/semaphore/project_1/repository_1_template_1`
+- ✅ **[CHECK]** Confirm environment variables are passed through - Only PATH and PWD, no SEMAPHORE_* vars
 
-### Phase 2: API Setup
-- **[MANUAL]** Generate API token in Semaphore UI
-- **[MANUAL]** Create SemaphoreAPI environment with token
-- Update Python script to test API connection (just ping)
-- **[MANUAL]** Run job to verify API access works
-- **[CHECK]** Test if API token works directly or needs session cookie
+### Phase 2: API Setup ✅ COMPLETE (2025-07-10)
+- ✅ **[MANUAL]** Generate API token in Semaphore UI
+- ✅ **[MANUAL]** Create SemaphoreAPI environment with token - Created as Variable and Secret
+- ✅ Update Python script to test API connection (just ping)
+- ✅ **[MANUAL]** Run job to verify API access works
+- ✅ **[CHECK]** Test if API token works directly or needs session cookie - Bearer token works directly
+- ✅ **[DISCOVERED]** Semaphore passes variables as command line arguments, not environment variables
 
-### Phase 3: Repository Setup
-- **[MANUAL]** Add PrivateBox repository to Semaphore
-- **[MANUAL]** Update Semaphore job to use the repository
-- **[MANUAL]** Test that script can read files from repo
+### Phase 3: Repository Setup ✅ COMPLETE (2025-07-10)
+- ✅ **[MANUAL]** Add PrivateBox repository to Semaphore
+- ✅ **[MANUAL]** Update Semaphore job to use the repository
+- ✅ **[MANUAL]** Test that script can read files from repo - Repository root check: True
 
 ### Phase 4: Basic Sync Logic
 - Update Python script to list playbook files
@@ -101,8 +102,9 @@ Update `semaphore-setup.sh` to:
 - **[AUTOMATES]** Generate API token programmatically
 - **[AUTOMATES]** Create SemaphoreAPI environment
 - **[AUTOMATES]** Create PrivateBox repository
-- **[AUTOMATES]** Create "Generate Templates" job template
-- **[AUTOMATES]** Run the sync job automatically
+- **[AUTOMATES]** Enable Python application in Semaphore
+- **[AUTOMATES]** Create "Generate Templates" Python task template
+- **[AUTOMATES]** Run the template generation job automatically
 
 Test fresh bootstrap creates everything AND syncs templates.
 
@@ -113,8 +115,8 @@ Test fresh bootstrap creates everything AND syncs templates.
 - Verify all templates are created automatically
 
 ### Final State
-- **Fresh install**: 100% automated - bootstrap creates infrastructure and runs initial sync
-- **Existing install**: One manual run of updated bootstrap script
+- **Fresh install**: 100% automated - bootstrap enables Python, creates infrastructure and runs initial template generation
+- **Existing install**: One manual run of updated bootstrap script (or manually enable Python in UI)
 - **Ongoing use**: Click "Generate Templates" in UI or schedule it
 
 ## Design Decisions
@@ -130,6 +132,19 @@ Test fresh bootstrap creates everything AND syncs templates.
   - Provides proper YAML parsing with PyYAML
   - Good error handling and debugging capabilities
   - No compilation or deployment of binaries needed
+
+### Why Python Tasks Instead of Ansible Wrapper?
+- **Chosen**: Use native Python task type in Semaphore
+- **Alternatives considered**:
+  - Ansible playbook wrapper: Extra layer of complexity, indirect execution
+  - Shell/Bash task: Would work but less semantic clarity
+  - Custom integration: Overkill for this use case
+- **Rationale**: 
+  - Direct execution of Python scripts
+  - No intermediate wrapper needed
+  - Clear intent - Python scripts run as Python tasks
+  - Semaphore supports Python as a first-class application type
+  - Simpler debugging and output handling
 
 ### Why Run in Container Instead of VM?
 - **Chosen**: Script executes directly in Semaphore container
@@ -190,12 +205,16 @@ During initial bootstrap, `semaphore-setup.sh` must:
    }
    ```
 
-4. **Create Initial Sync Template**
+4. **Enable Python Application**
+   - Check if Python is already enabled via API
+   - If not, enable Python app (method TBD based on API investigation)
+
+5. **Create Initial Template Generation Task**
    This is a one-time creation during bootstrap. The script will need to:
    - Look up the inventory ID for "Default Inventory"
    - Look up the repository ID for "PrivateBox"
    - Look up the environment ID for "SemaphoreAPI"
-   - Create the template:
+   - Create the Python task template:
    ```json
    {
      "name": "Generate Templates",
@@ -203,7 +222,8 @@ During initial bootstrap, `semaphore-setup.sh` must:
      "inventory_id": <looked-up-id>,
      "repository_id": <looked-up-id>,
      "environment_id": <looked-up-id>,
-     "playbook": "ansible/playbooks/maintenance/generate-templates.yml",
+     "app": "python",
+     "playbook": "tools/generate-templates.py",
      "arguments": null,
      "override_args": false
    }
@@ -211,27 +231,8 @@ During initial bootstrap, `semaphore-setup.sh` must:
 
 ### Phase 2: Runtime Operation (Ongoing)
 
-#### The Sync Playbook
-`ansible/playbooks/maintenance/generate-templates.yml`:
-```yaml
----
-- name: Synchronize Semaphore Templates
-  hosts: localhost
-  connection: local
-  gather_facts: no
-  
-  tasks:
-    - name: Run template sync script
-      command: python3 tools/generate-templates.py
-      environment:
-        SEMAPHORE_URL: "{{ lookup('env', 'SEMAPHORE_URL') }}"
-        SEMAPHORE_API_TOKEN: "{{ lookup('env', 'SEMAPHORE_API_TOKEN') }}"
-      register: sync_result
-      
-    - name: Display sync results
-      debug:
-        var: sync_result.stdout_lines
-```
+#### Direct Python Script Execution
+With Python enabled as an application in Semaphore, the Python script runs directly without needing an Ansible wrapper. The environment variables (SEMAPHORE_URL and SEMAPHORE_API_TOKEN) are automatically passed from the Semaphore environment configuration.
 
 #### Python Dependencies
 The script requires:
