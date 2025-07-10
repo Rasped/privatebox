@@ -97,6 +97,11 @@ This plan ensures a 100% hands-off solution where bootstrap automatically create
 - ✅ Add update logic - Handles both create and update cases
 - ✅ **[MANUAL]** Test updating works - Updated template ID 2 with survey vars
 - ✅ **[BONUS]** Added flexible resource lookups for inventory/repo/environment
+- ✅ **[DISCOVERED]** Must include template ID in body for updates
+- ✅ **[DISCOVERED]** Use task type ("") instead of deploy to avoid build template requirement
+- ✅ **[DISCOVERED]** Default to "Empty" environment/variable group
+- ✅ **[DISCOVERED]** Survey vars don't support default values - show in description instead
+- ✅ **[DISCOVERED]** Boolean type best handled as enum with True/False options
 
 ### Phase 6: Bootstrap Automation
 Update `semaphore-setup.sh` to:
