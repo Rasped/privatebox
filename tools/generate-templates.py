@@ -345,6 +345,8 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
             if existing_template:
                 # Update existing template
                 template_id = existing_template['id']
+                # Add the ID to the template data for update
+                template_data['id'] = template_id
                 response = requests.put(
                     f"{base_url}/api/project/{project_id}/templates/{template_id}",
                     json=template_data,
