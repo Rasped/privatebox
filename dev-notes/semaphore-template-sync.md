@@ -29,8 +29,8 @@ This process is:
 │    semaphore_*      │
 │    annotations      │
 │  - tools/           │
-│    semaphore-       │
-│    sync.py          │
+│    generate-        │
+│    templates.py     │
 └──────────┬──────────┘
            │ Semaphore clones repo
            ▼
@@ -44,7 +44,8 @@ This process is:
 │                     │
 │ Task Execution:     │
 │ 1. Run playbook     │
-│ 2. Execute sync.py  │
+│ 2. Execute generate-│
+│    templates.py     │
 │ 3. API localhost    │
 └─────────────────────┘
            │
@@ -64,8 +65,8 @@ This process is:
 This plan ensures a 100% hands-off solution where bootstrap automatically creates and configures everything needed for template synchronization.
 
 ### Phase 1: Basic Infrastructure
-- Create minimal Python script (`tools/semaphore-sync.py`) that prints "Hello from sync script"
-- Create ansible playbook (`ansible/playbooks/maintenance/sync-templates.yml`) that runs the Python script
+- Create minimal Python script (`tools/generate-templates.py`) that prints "Hello from template generator"
+- Create ansible playbook (`ansible/playbooks/maintenance/generate-templates.yml`) that runs the Python script
 - **[MANUAL]** Create Semaphore job template to test the playbook
 - **[MANUAL]** Run the job to verify execution works
 - **[CHECK]** Verify working directory when script runs
@@ -100,7 +101,7 @@ Update `semaphore-setup.sh` to:
 - **[AUTOMATES]** Generate API token programmatically
 - **[AUTOMATES]** Create SemaphoreAPI environment
 - **[AUTOMATES]** Create PrivateBox repository
-- **[AUTOMATES]** Create "Sync Templates" job template
+- **[AUTOMATES]** Create "Generate Templates" job template
 - **[AUTOMATES]** Run the sync job automatically
 
 Test fresh bootstrap creates everything AND syncs templates.
@@ -114,7 +115,7 @@ Test fresh bootstrap creates everything AND syncs templates.
 ### Final State
 - **Fresh install**: 100% automated - bootstrap creates infrastructure and runs initial sync
 - **Existing install**: One manual run of updated bootstrap script
-- **Ongoing use**: Click "Sync Templates" in UI or schedule it
+- **Ongoing use**: Click "Generate Templates" in UI or schedule it
 
 ## Design Decisions
 
@@ -197,12 +198,12 @@ During initial bootstrap, `semaphore-setup.sh` must:
    - Create the template:
    ```json
    {
-     "name": "Sync Templates",
+     "name": "Generate Templates",
      "project_id": 1,
      "inventory_id": <looked-up-id>,
      "repository_id": <looked-up-id>,
      "environment_id": <looked-up-id>,
-     "playbook": "ansible/playbooks/maintenance/sync-templates.yml",
+     "playbook": "ansible/playbooks/maintenance/generate-templates.yml",
      "arguments": null,
      "override_args": false
    }
@@ -211,7 +212,7 @@ During initial bootstrap, `semaphore-setup.sh` must:
 ### Phase 2: Runtime Operation (Ongoing)
 
 #### The Sync Playbook
-`ansible/playbooks/maintenance/sync-templates.yml`:
+`ansible/playbooks/maintenance/generate-templates.yml`:
 ```yaml
 ---
 - name: Synchronize Semaphore Templates
@@ -221,7 +222,7 @@ During initial bootstrap, `semaphore-setup.sh` must:
   
   tasks:
     - name: Run template sync script
-      command: python3 tools/semaphore-sync.py
+      command: python3 tools/generate-templates.py
       environment:
         SEMAPHORE_URL: "{{ lookup('env', 'SEMAPHORE_URL') }}"
         SEMAPHORE_API_TOKEN: "{{ lookup('env', 'SEMAPHORE_API_TOKEN') }}"
@@ -241,7 +242,7 @@ The script requires:
 
 The script will handle missing dependencies automatically:
 ```python
-# At the top of semaphore-sync.py
+# At the top of generate-templates.py
 try:
     import requests
 except ImportError:
@@ -259,7 +260,7 @@ This approach was chosen because:
 - Transparent - dependency management is visible in the code
 
 #### The Python Script
-`tools/semaphore-sync.py` will:
+`tools/generate-templates.py` will:
 
 1. **Discover Playbooks**
    ```python
@@ -449,7 +450,7 @@ Add `semaphore_*` fields to vars_prompt in your playbook:
 
 1. **From Semaphore UI**:
    - Navigate to Task Templates
-   - Click "Run" on "Sync Templates"
+   - Click "Run" on "Generate Templates"
    - View output for results
 
 2. **What Happens**:
