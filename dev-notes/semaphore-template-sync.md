@@ -103,14 +103,24 @@ This plan ensures a 100% hands-off solution where bootstrap automatically create
 - ✅ **[DISCOVERED]** Survey vars don't support default values - show in description instead
 - ✅ **[DISCOVERED]** Boolean type best handled as enum with True/False options
 
-### Phase 6: Bootstrap Automation
+### Phase 6: Bootstrap Automation ✅ COMPLETE (2025-07-10)
 Update `semaphore-setup.sh` to:
-- **[AUTOMATES]** Generate API token programmatically
-- **[AUTOMATES]** Create SemaphoreAPI environment
-- **[AUTOMATES]** Create PrivateBox repository
-- **[AUTOMATES]** Enable Python application in Semaphore
-- **[AUTOMATES]** Create "Generate Templates" Python task template
-- **[AUTOMATES]** Run the template generation job automatically
+- ✅ **[AUTOMATES]** Generate API token programmatically
+- ✅ **[AUTOMATES]** Create SemaphoreAPI environment
+- ✅ **[EXISTING]** Create PrivateBox repository (already done in Phase 5)
+- ✅ **[EXISTING]** Enable Python application in Semaphore (already in Quadlet)
+- ✅ **[AUTOMATES]** Create "Generate Templates" Python task template
+- ✅ **[AUTOMATES]** Run the template generation job automatically
+
+Implementation details:
+- ✅ Added `create_api_token()` function to generate API tokens via `/api/user/tokens`
+- ✅ Added `create_semaphore_api_environment()` to create environment with token
+- ✅ Added `create_template_generator_task()` to create Python task template
+- ✅ Added `run_semaphore_task()` to execute tasks and wait for completion
+- ✅ Added `setup_template_synchronization()` to orchestrate the setup
+- ✅ Integrated into `create_infrastructure_project_with_ssh_key()`
+- ✅ Added helper functions for resource lookups by name
+- ✅ Python app enabled via `SEMAPHORE_APPS` environment variable in Quadlet file
 
 Test fresh bootstrap creates everything AND syncs templates.
 
