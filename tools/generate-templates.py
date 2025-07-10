@@ -286,6 +286,16 @@ def convert_to_survey_vars(vars_list):
             'required': var.get('semaphore_required', not var.get('private', True))
         }
         
+        # Add default value for boolean types (as string since it's a text field)
+        if var_type == 'boolean':
+            # Use the default from the playbook, or 'false' if not specified
+            default_value = var.get('default', 'no')
+            # Convert common boolean values to 'true'/'false' strings
+            if default_value in ['yes', 'Yes', 'YES', 'true', 'True', 'TRUE', '1']:
+                survey_var['default'] = 'true'
+            else:
+                survey_var['default'] = 'false'
+        
         # Add integer constraints if present
         if var_type == 'integer':
             if 'semaphore_min' in var:
