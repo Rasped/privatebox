@@ -278,17 +278,20 @@ def convert_to_survey_vars(vars_list):
         else:
             survey_type = ''  # Default to text (empty string)
         
+        # Build description, optionally adding default value
+        description = var.get('semaphore_description', var.get('prompt', ''))
+        if 'default' in var and description:
+            description = f"{description} (default: {var['default']})"
+        elif 'default' in var:
+            description = f"Default: {var['default']}"
+        
         survey_var = {
             'name': var.get('name'),
             'title': var.get('name', 'Unnamed variable'),
-            'description': var.get('semaphore_description', var.get('prompt', '')),
+            'description': description,
             'type': survey_type,
             'required': var.get('semaphore_required', not var.get('private', True))
         }
-        
-        # Add default value if present in playbook
-        if 'default' in var:
-            survey_var['default'] = str(var['default'])
         
         # Add enum values for boolean types
         if var_type == 'boolean':
