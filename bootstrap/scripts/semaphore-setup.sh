@@ -316,6 +316,307 @@ wait_for_services_ready() {
     return 0
 }
 
+# Get repository ID by name
+get_repository_id_by_name() {
+    local base_url="$1"
+    local session="$2"
+    local project_id="$3"
+    local repo_name="$4"
+    
+    local api_result=$(make_api_request "GET" \
+        "$base_url/api/project/$project_id/repositories" "" "$session" "Getting repositories")
+    
+    if [ $? -eq 0 ]; then
+        local repos=$(echo "$api_result" | cut -d'|' -f2-)
+        echo "$repos" | jq -r ".[] | select(.name==\"$repo_name\") | .id" 2>/dev/null
+    fi
+}
+
+# Get inventory ID by name
+get_inventory_id_by_name() {
+    local base_url="$1"
+    local session="$2"
+    local project_id="$3"
+    local inv_name="$4"
+    
+    local api_result=$(make_api_request "GET" \
+        "$base_url/api/project/$project_id/inventory" "" "$session" "Getting inventories")
+    
+    if [ $? -eq 0 ]; then
+        local invs=$(echo "$api_result" | cut -d'|' -f2-)
+        echo "$invs" | jq -r ".[] | select(.name==\"$inv_name\") | .id" 2>/dev/null
+    fi
+}
+
+# Function to create API token for template generator
+create_api_token() {
+    local admin_session="$1"
+    local token_name="template-generator"
+    
+    log_info "Creating API token for template generator..."
+    
+    # Create token via API
+    local api_result=$(make_api_request "POST" "http://localhost:3000/api/user/tokens" \
+        "{\"name\": \"$token_name\"}" "$admin_session" "Creating API token")
+    
+    if [ $? -ne 0 ]; then
+        log_error "Failed to create API token"
+        return 1
+    fi
+    
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local token=$(echo "$response_body" | jq -r '.id // .token' 2>/dev/null)
+        if [ -n "$token" ] && [ "$token" != "null" ]; then
+            echo "$token"
+            return 0
+        fi
+    fi
+    
+    log_error "Failed to extract token from response"
+    return 1
+}
+
+# Create SemaphoreAPI environment with token
+create_semaphore_api_environment() {
+    local project_id="$1"
+    local api_token="$2"
+    local admin_session="$3"
+    
+    log_info "Creating SemaphoreAPI environment..."
+    
+    # Create environment payload - Semaphore stores variables as a JSON object
+    # Both regular variables and secrets go in the json field
+    local env_payload=$(jq -n \
+        --arg name "SemaphoreAPI" \
+        --argjson pid "$project_id" \
+        --arg token "$api_token" \
+        '{
+            name: $name,
+            project_id: $pid,
+            json: {
+                SEMAPHORE_URL: "http://localhost:3000",
+                SEMAPHORE_API_TOKEN: $token
+            }
+        }')
+    
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/environment" \
+        "$env_payload" "$admin_session" "Creating SemaphoreAPI environment")
+    
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
+        if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
+            log_info "SemaphoreAPI environment created with ID: $env_id"
+            echo "$env_id"
+            return 0
+        else
+            log_warning "Environment created but couldn't extract ID"
+            # Check if environment already exists
+            local existing_env=$(make_api_request "GET" \
+                "http://localhost:3000/api/project/$project_id/environment" \
+                "" "$admin_session" "Checking existing environments")
+            if [ $? -eq 0 ]; then
+                local envs=$(echo "$existing_env" | cut -d'|' -f2-)
+                local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="SemaphoreAPI") | .id' 2>/dev/null)
+                if [ -n "$found_id" ] && [ "$found_id" != "null" ]; then
+                    log_info "Found existing SemaphoreAPI environment with ID: $found_id"
+                    echo "$found_id"
+                    return 0
+                fi
+            fi
+        fi
+    elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
+         echo "$response_body" | jq -e '.message' 2>/dev/null | grep -q "already exists"); then
+        log_info "SemaphoreAPI environment already exists, looking up ID..."
+        # Get the existing environment ID
+        local existing_env=$(make_api_request "GET" \
+            "http://localhost:3000/api/project/$project_id/environment" \
+            "" "$admin_session" "Getting existing environments")
+        if [ $? -eq 0 ]; then
+            local envs=$(echo "$existing_env" | cut -d'|' -f2-)
+            local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="SemaphoreAPI") | .id' 2>/dev/null)
+            if [ -n "$found_id" ] && [ "$found_id" != "null" ]; then
+                log_info "Using existing SemaphoreAPI environment with ID: $found_id"
+                echo "$found_id"
+                return 0
+            fi
+        fi
+    else
+        log_error "Failed to create environment. Status: $status_code"
+        if [ -n "$response_body" ]; then
+            log_error "Response: $response_body"
+        fi
+    fi
+    
+    return 1
+}
+
+# Create Generate Templates task
+create_template_generator_task() {
+    local project_id="$1"
+    local repository_id="$2"
+    local inventory_id="$3"
+    local environment_id="$4"
+    local admin_session="$5"
+    
+    log_info "Creating Generate Templates task..."
+    
+    local template_payload=$(jq -n \
+        --arg name "Generate Templates" \
+        --argjson pid "$project_id" \
+        --argjson inv_id "$inventory_id" \
+        --argjson repo_id "$repository_id" \
+        --argjson env_id "$environment_id" \
+        '{
+            name: $name,
+            project_id: $pid,
+            inventory_id: $inv_id,
+            repository_id: $repo_id,
+            environment_id: $env_id,
+            app: "python",
+            playbook: "tools/generate-templates.py",
+            description: "Automatically generate Semaphore templates from playbooks",
+            arguments: "",
+            allow_override_args_in_task: false,
+            type: ""
+        }')
+    
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/templates" \
+        "$template_payload" "$admin_session" "Creating template generator task")
+    
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local template_id=$(echo "$api_result" | cut -d'|' -f2- | jq -r '.id')
+        log_info "Generate Templates task created with ID: $template_id"
+        echo "$template_id"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Run a Semaphore task and wait for completion
+run_semaphore_task() {
+    local template_id="$1"
+    local admin_session="$2"
+    
+    log_info "Running template generation task..."
+    
+    # Start the task
+    local task_payload="{\"template_id\": $template_id}"
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/1/tasks" \
+        "$task_payload" "$admin_session" "Starting template generation")
+    
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    local task_id=$(echo "$api_result" | cut -d'|' -f2- | jq -r '.id' 2>/dev/null)
+    
+    if [ "$status_code" -ne 201 ] && [ "$status_code" -ne 200 ]; then
+        log_error "Failed to start task"
+        return 1
+    fi
+    
+    log_info "Task started with ID: $task_id"
+    
+    # Wait for task completion
+    local max_wait=60  # 60 seconds
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        sleep 5
+        waited=$((waited + 5))
+        
+        # Check task status
+        local status_result=$(make_api_request "GET" \
+            "http://localhost:3000/api/project/1/tasks/$task_id" \
+            "" "$admin_session" "Checking task status")
+        
+        if [ $? -eq 0 ]; then
+            local task_status=$(echo "$status_result" | cut -d'|' -f2- | jq -r '.status' 2>/dev/null)
+            if [ "$task_status" = "success" ]; then
+                log_info "Template generation completed successfully!"
+                return 0
+            elif [ "$task_status" = "error" ] || [ "$task_status" = "failed" ]; then
+                log_error "Template generation failed"
+                return 1
+            fi
+        fi
+        
+        log_info "Task still running... ($waited/$max_wait seconds)"
+    done
+    
+    log_warning "Task did not complete within timeout"
+    return 1
+}
+
+# Setup template synchronization infrastructure
+setup_template_synchronization() {
+    local project_id="$1"
+    local admin_session="$2"
+    
+    log_info "Setting up template synchronization infrastructure..."
+    
+    # Create API token
+    local api_token=$(create_api_token "$admin_session")
+    if [ -z "$api_token" ]; then
+        log_warning "Failed to create API token for template sync"
+        return 1
+    fi
+    
+    # Save token to credentials file
+    echo "Template Generator API Token: $api_token" >> /root/.credentials/semaphore_credentials.txt
+    
+    # Create SemaphoreAPI environment
+    local env_id=$(create_semaphore_api_environment "$project_id" "$api_token" "$admin_session")
+    if [ -z "$env_id" ]; then
+        log_warning "Failed to create SemaphoreAPI environment"
+        return 1
+    fi
+    
+    # Get resource IDs
+    local repo_id=$(get_repository_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "PrivateBox")
+    local inv_id=$(get_inventory_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "Default Inventory")
+    
+    if [ -z "$repo_id" ] || [ -z "$inv_id" ]; then
+        log_warning "Failed to get required resource IDs"
+        return 1
+    fi
+    
+    # Create Generate Templates task
+    local template_id=$(create_template_generator_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
+    if [ -z "$template_id" ]; then
+        log_warning "Failed to create template generator task"
+        return 1
+    fi
+    
+    # Run initial template generation
+    if run_semaphore_task "$template_id" "$admin_session"; then
+        log_info "✓ Initial template synchronization completed successfully!"
+    else
+        log_warning "Initial template sync failed, but can be run manually later"
+    fi
+    
+    return 0
+}
+
 # Note: The following functions are no longer used with systemd/quadlet approach
 # but are kept for reference
 
@@ -620,6 +921,10 @@ display_setup_completion_message() {
     log_info ""
     log_info "📝 All credentials saved to: /root/.credentials/semaphore_credentials.txt"
     log_info "   - File permission: 600 (readable only by root)"
+    log_info ""
+    log_info "🔄 Template Synchronization: Enabled"
+    log_info "   - Run 'Generate Templates' task to sync playbooks with Semaphore"
+    log_info "   - Templates are automatically created from annotated playbooks"
     log_info ""
     log_info "⚠️  SECURITY REMINDERS ⚠️"
     log_info "- Keep all passwords secure and don't share them"
@@ -1401,6 +1706,9 @@ create_infrastructure_project_with_ssh_key() {
             
             # Create SSH key for VM self-management
             create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key"
+            
+            # Setup template synchronization
+            setup_template_synchronization "$project_id" "$admin_session"
             
             return 0
         else
