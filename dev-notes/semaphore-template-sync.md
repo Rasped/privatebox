@@ -91,11 +91,12 @@ This plan ensures a 100% hands-off solution where bootstrap automatically create
 - ✅ Add one test playbook with semaphore_* metadata - test-semaphore-sync.yml
 - ✅ **[MANUAL]** Test parsing works correctly - Successfully parsed 3 variables
 
-### Phase 5: Template Creation
-- Add template creation logic to Python script
-- **[MANUAL]** Test creating one template
-- Add update logic
-- **[MANUAL]** Test updating works
+### Phase 5: Template Creation ✅ COMPLETE (2025-07-10)
+- ✅ Add template creation logic to Python script
+- ✅ **[MANUAL]** Test creating one template - Successfully created/updated
+- ✅ Add update logic - Handles both create and update cases
+- ✅ **[MANUAL]** Test updating works - Updated template ID 2 with survey vars
+- ✅ **[BONUS]** Added flexible resource lookups for inventory/repo/environment
 
 ### Phase 6: Bootstrap Automation
 Update `semaphore-setup.sh` to:
