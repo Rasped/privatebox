@@ -107,9 +107,42 @@ With Phase 6 complete, the remaining work is:
    - Add user guide for annotating playbooks
    - Document troubleshooting steps
 
+## Implementation Challenges and Solutions
+
+### Issues Encountered and Fixed
+
+1. **API Token Capture** (Fixed in commit 23985bb)
+   - **Problem**: Log messages were captured with the API token
+   - **Solution**: Redirected log outputs to stderr in `create_api_token()`
+
+2. **Environment JSON Format** (Fixed in commit 23985bb)
+   - **Problem**: Environment creation failed with "Extra variables must be valid JSON"
+   - **Solution**: Removed `| jq -Rs .` stringification from json_vars creation
+
+3. **Repository Creation 404 Error** (Fixed in commit 55b43fa)
+   - **Problem**: Repository endpoint returned 404 when ssh_key_id was null
+   - **Solution**: Changed ssh_key_id from null to 1 (the default "None" key)
+
+4. **Log Output Contamination** (Fixed in commits b26064f and d86b12b)
+   - **Problem**: Log messages were captured in command substitution, causing "invalid JSON text passed to --argjson"
+   - **Solution**: Redirected all log_info calls to stderr in functions that return IDs
+
+5. **Template Arguments Format** (Fixed in commit 6107f03)
+   - **Problem**: Template creation failed with "template arguments must be valid JSON"
+   - **Solution**: Changed arguments from empty string "" to empty JSON object "{}"
+
+### Final Test Results
+
+Successfully tested on 2025-07-10 with all fixes applied:
+- ✅ API Token: Created and saved
+- ✅ Environment: SemaphoreAPI (ID: 2) created with proper JSON format
+- ✅ Repository: PrivateBox (ID: 1) created with ssh_key_id: 1
+- ✅ Template: Generate Templates (ID: 1) created with Status: 201
+- ✅ Initial sync: Task started successfully
+
 ## Conclusion
 
-Phase 6 has successfully automated the entire template synchronization setup during bootstrap. The implementation is complete, tested, and ready for production use. Users can now enjoy a fully automated experience where:
+Phase 6 has successfully automated the entire template synchronization setup during bootstrap. After resolving several API compatibility issues with Semaphore v2.15.0, the implementation is complete, tested, and ready for production use. Users can now enjoy a fully automated experience where:
 
 1. Bootstrap enables Python application support
 2. Creates all necessary infrastructure (token, environment, task)
