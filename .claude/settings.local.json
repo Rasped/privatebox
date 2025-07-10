@@ -11,7 +11,10 @@
       "Bash(/mnt/c/Program Files/Git/cmd/git.exe diff dev-notes/semaphore-template-sync.md)",
       "Bash(/mnt/c/Program Files/Git/cmd/git.exe log --oneline -10)",
       "Bash(/mnt/c/Program Files/Git/cmd/git.exe add dev-notes/semaphore-template-sync.md)",
-      "Bash(/mnt/c/Program Files/Git/cmd/git.exe add .claude/)"
+      "Bash(/mnt/c/Program Files/Git/cmd/git.exe add .claude/)",
+      "WebFetch(domain:semaphoreui.com)",
+      "Bash(mcp__context7__resolve-library-id:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

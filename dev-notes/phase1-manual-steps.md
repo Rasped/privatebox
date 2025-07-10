@@ -19,19 +19,24 @@
    - Branch: `main`
    - Authentication: None (public repo)
 
-3. **Create Test Template**
+3. **Enable Python Application**
+   - Navigate to bottom of the left menu
+   - Click "Applications"
+   - Find Python in the list and click "Enable"
+   - Verify Python now appears in the applications list
+
+4. **Create Test Template**
    - Navigate to "Task Templates"
    - Click "New Template"
+   - Select "Python" as the template type
    - Fill in:
      - **Name**: `Test Template Generator`
-     - **Playbook**: `ansible/playbooks/maintenance/generate-templates.yml`
-     - **Inventory**: `Default Inventory`
+     - **Script**: `tools/generate-templates.py`
      - **Repository**: `PrivateBox`
      - **Environment**: (leave empty)
-     - **Vault Pass**: (leave empty)
    - Click "Create"
 
-4. **Run the Test**
+5. **Run the Test**
    - Find "Test Template Generator" in the template list
    - Click "Run" button
    - Watch the task output
