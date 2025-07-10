@@ -3,6 +3,11 @@
   hosts: privatebox
   gather_facts: no
   
+  vars:
+    # Regular variable (not a survey field)
+    log_level: debug
+    container_name: test-service
+    
   vars_prompt:
     - name: service_enabled
       prompt: "Enable the test service?"
