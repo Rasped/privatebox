@@ -476,20 +476,16 @@ create_semaphore_api_environment() {
     log_info "API Token (first 10 chars): ${api_token:0:10}..." >&2
     
     # Create environment payload - Semaphore stores variables and secrets separately
-    # Regular variables go in json field, secrets go in secrets array
-    local json_vars=$(jq -n \
-        --arg url "http://localhost:3000" \
-        '{SEMAPHORE_URL: $url}')
-    
+    # The json field expects a JSON string, not an object
     local env_payload=$(jq -n \
         --arg name "SemaphoreAPI" \
         --argjson pid "$project_id" \
-        --arg json "$json_vars" \
+        --arg url "http://localhost:3000" \
         --arg token "$api_token" \
         '{
             name: $name,
             project_id: $pid,
-            json: $json,
+            json: ({SEMAPHORE_URL: $url} | tostring),
             env: "{}",
             secrets: [{
                 type: "var",
@@ -499,7 +495,8 @@ create_semaphore_api_environment() {
             }]
         }')
     
-    log_info "Environment payload: $(echo "$env_payload" | jq -c '{name, project_id, json: .json, secrets: [{name: .secrets[0].name, secret: "***"}]}')" >&2
+    # Log the actual payload with secret redacted
+    log_info "Environment payload: $(echo "$env_payload" | jq -c '.secrets[0].secret = "***"')" >&2
     
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/environment" \
