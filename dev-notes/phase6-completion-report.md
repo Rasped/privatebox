@@ -115,9 +115,9 @@ With Phase 6 complete, the remaining work is:
    - **Problem**: Log messages were captured with the API token
    - **Solution**: Redirected log outputs to stderr in `create_api_token()`
 
-2. **Environment JSON Format** (Fixed in commit 23985bb)
+2. **Environment JSON Format** (Fixed in commit b2d9018)
    - **Problem**: Environment creation failed with "Extra variables must be valid JSON"
-   - **Solution**: Removed `| jq -Rs .` stringification from json_vars creation
+   - **Solution**: Removed `| jq -Rs .` stringification from json_vars creation that was incorrectly added in commit 23985bb
 
 3. **Repository Creation 404 Error** (Fixed in commit 55b43fa)
    - **Problem**: Repository endpoint returned 404 when ssh_key_id was null
