@@ -588,7 +588,7 @@ create_template_generator_task() {
             app: "python",
             playbook: "tools/generate-templates.py",
             description: "Automatically generate Semaphore templates from playbooks",
-            arguments: "{}",
+            arguments: "",
             allow_override_args_in_task: false,
             type: ""
         }')
