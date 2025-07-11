@@ -490,9 +490,12 @@ create_semaphore_api_environment() {
             name: $name,
             project_id: $pid,
             json: $json,
+            env: "{}",
             secrets: [{
+                type: "var",
                 name: "SEMAPHORE_API_TOKEN",
-                secret: $token
+                secret: $token,
+                operation: ""
             }]
         }')
     
