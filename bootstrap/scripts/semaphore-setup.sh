@@ -454,9 +454,13 @@ create_api_token() {
     local status_code=$(echo "$api_result" | cut -d'|' -f1)
     local response_body=$(echo "$api_result" | cut -d'|' -f2-)
     
+    log_info "API token creation response - Status: $status_code" >&2
+    log_info "API token creation response body: $response_body" >&2
+    
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local token=$(echo "$response_body" | jq -r '.id // .token' 2>/dev/null)
         if [ -n "$token" ] && [ "$token" != "null" ]; then
+            log_info "Extracted API token: $token" >&2
             echo "$token"
             return 0
         fi
@@ -473,7 +477,7 @@ create_semaphore_api_environment() {
     local admin_session="$3"
     
     log_info "Creating SemaphoreAPI environment for project $project_id..." >&2
-    log_info "API Token (first 10 chars): ${api_token:0:10}..." >&2
+    log_info "API Token (FULL): $api_token" >&2
     
     # Create environment payload - Semaphore stores variables and secrets separately
     # The json field expects a JSON string, not an object
@@ -495,8 +499,8 @@ create_semaphore_api_environment() {
             }]
         }')
     
-    # Log the actual payload with secret redacted
-    log_info "Environment payload: $(echo "$env_payload" | jq -c '.secrets[0].secret = "***"')" >&2
+    # Log the actual payload - full details for debugging
+    log_info "Environment payload (FULL): $(echo "$env_payload" | jq -c '.')" >&2
     
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/environment" \
