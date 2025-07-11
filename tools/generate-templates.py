@@ -221,41 +221,75 @@ def parse_playbook(playbook_path):
         if not isinstance(play, dict):
             return None
         
+        # Check for new metadata structure in vars
+        vars_section = play.get('vars', {})
+        metadata = vars_section.get('_semaphore_vars_prompt', {})
+        
+        # Also get vars_prompt to match variable names
         vars_prompt = play.get('vars_prompt', [])
-        if not vars_prompt:
-            return None
         
-        # Extract template configuration and variables
-        template_config = {}
-        semaphore_vars = []
-        
-        for var in vars_prompt:
-            # Check for template configuration
-            if var.get('name') == 'semaphore_template_config' or 'semaphore_template_config' in var:
-                # Extract template-level configuration
-                config = var.get('semaphore_template_config', {})
-                template_config.update(config)
-                continue
+        if metadata:
+            # New structure: metadata in vars._semaphore_vars_prompt
+            semaphore_vars = []
             
-            # Check if this variable has any semaphore_* fields
-            has_semaphore_metadata = any(key.startswith('semaphore_') for key in var.keys())
-            if has_semaphore_metadata:
-                semaphore_vars.append(var)
+            # Build vars list from vars_prompt, enriched with metadata
+            for var_prompt in vars_prompt:
+                var_name = var_prompt.get('name')
+                if var_name and var_name in metadata:
+                    # Merge prompt info with metadata
+                    var_info = var_prompt.copy()
+                    var_metadata = metadata[var_name]
+                    # Add semaphore fields with prefix for compatibility
+                    var_info['semaphore_type'] = var_metadata.get('type', 'text')
+                    var_info['semaphore_description'] = var_metadata.get('description', var_prompt.get('prompt', ''))
+                    var_info['semaphore_required'] = var_metadata.get('required', True)
+                    if 'min' in var_metadata:
+                        var_info['semaphore_min'] = var_metadata['min']
+                    if 'max' in var_metadata:
+                        var_info['semaphore_max'] = var_metadata['max']
+                    semaphore_vars.append(var_info)
+            
+            if semaphore_vars:
+                return {
+                    'name': play.get('name', 'Unnamed playbook'),
+                    'vars': semaphore_vars,
+                    'template_config': {}
+                }
         
-        if not semaphore_vars and not template_config:
-            return None
+        else:
+            # Fall back to old structure: inline metadata in vars_prompt
+            template_config = {}
+            semaphore_vars = []
+            
+            for var in vars_prompt:
+                # Check for template configuration
+                if var.get('name') == 'semaphore_template_config' or 'semaphore_template_config' in var:
+                    # Extract template-level configuration
+                    config = var.get('semaphore_template_config', {})
+                    template_config.update(config)
+                    continue
+                
+                # Check if this variable has any semaphore_* fields
+                has_semaphore_metadata = any(key.startswith('semaphore_') for key in var.keys())
+                if has_semaphore_metadata:
+                    semaphore_vars.append(var)
+            
+            if not semaphore_vars and not template_config:
+                return None
+            
+            result = {
+                'name': play.get('name', 'Unnamed playbook'),
+                'vars': semaphore_vars,
+                'template_config': template_config
+            }
+            
+            # Allow template name override from config
+            if 'semaphore_template_name' in template_config:
+                result['template_name'] = template_config['semaphore_template_name']
+            
+            return result
         
-        result = {
-            'name': play.get('name', 'Unnamed playbook'),
-            'vars': semaphore_vars,
-            'template_config': template_config
-        }
-        
-        # Allow template name override from config
-        if 'semaphore_template_name' in template_config:
-            result['template_name'] = template_config['semaphore_template_name']
-        
-        return result
+        return None
     
     except Exception as e:
         print(f"✗ Error parsing {playbook_path}: {e}")
@@ -406,6 +440,7 @@ def display_playbook_info(playbook_path, info):
     """Display parsed playbook information."""
     print(f"\n📄 {playbook_path.name}")
     print(f"   Name: {info['name']}")
+    print(f"   Metadata location: {'vars._semaphore_vars_prompt' if not info.get('template_config') else 'inline (legacy)'}")
     
     # Display template configuration if present
     if info.get('template_config'):
