@@ -9,27 +9,31 @@
     service_description: "Network-wide ads & trackers blocking DNS server"
     service_tag: "adguard"
     
+    # Semaphore template metadata - used by generate-templates.py
+    _semaphore_vars_prompt:
+      confirm_deploy:
+        type: boolean
+        description: "Confirm deployment of AdGuard Home DNS filter"
+        required: true
+        
+      custom_web_port:
+        type: integer
+        description: "Port for AdGuard web interface (recommended: 8080)"
+        min: 1024
+        max: 65535
+        required: false
+    
   # Allow override from SemaphoreUI survey
   vars_prompt:
     - name: confirm_deploy
       prompt: "Deploy {{ service_name }}? (yes/no)"
       default: "yes"
       private: no
-      # Semaphore template metadata
-      semaphore_type: boolean
-      semaphore_description: "Confirm deployment of AdGuard Home DNS filter"
-      semaphore_required: true
       
     - name: custom_web_port
       prompt: "Web UI port (default: {{ adguard_web_port }})"
       default: "{{ adguard_web_port }}"
       private: no
-      # Semaphore template metadata
-      semaphore_type: integer
-      semaphore_description: "Port for AdGuard web interface (recommended: 8080)"
-      semaphore_min: 1024
-      semaphore_max: 65535
-      semaphore_required: false
 
   tasks:
     # Pre-deployment validation
