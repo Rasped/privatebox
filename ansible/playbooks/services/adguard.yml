@@ -1,6 +1,7 @@
 ---
 - name: Deploy AdGuard Home DNS Filter
-  hosts: privatebox
+  hosts: localhost
+  connection: local
   become: true
   gather_facts: true
   
