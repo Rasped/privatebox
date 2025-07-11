@@ -103,12 +103,13 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 - **Automated VM Provisioning**: One-command setup on Proxmox hosts
 - **Network Auto-Discovery**: Automatic detection of network configuration
 - **Unattended Installation**: Complete hands-off provisioning
+- **Automatic Template Synchronization**: Creates Semaphore job templates from Ansible playbooks with metadata annotations
 - **Privacy-Focused Services** (via Ansible):
   - OPNSense firewall and router (dedicated VM)
   - AdGuard Home for ad-blocking (containerized)
   - Unbound DNS for enhanced DNS privacy
   - Additional privacy features
-- **Management Integration**: Pre-configured Portainer and Semaphore
+- **Management Integration**: Pre-configured Portainer and Semaphore with automatic template generation
 - **Modular Design**: Reusable Ansible roles for service deployment
 
 ## Target Hardware
@@ -210,7 +211,58 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 - Password: Auto-generated during setup (displayed after installation)
 - To retrieve manually: `ssh ubuntuadmin@<VM-IP>` then `sudo cat /root/.credentials/semaphore_credentials.txt`
 
+**Semaphore Template Synchronization:**
+- Bootstrap automatically creates a "Generate Templates" task in Semaphore
+- Ansible playbooks with `semaphore_*` metadata in `vars_prompt` are automatically synced to Semaphore job templates  
+- Run "Generate Templates" from Semaphore UI to sync new or updated playbooks
+- Initial sync runs automatically during bootstrap setup
+
 **Note:** The VM credentials above are for logging into the Ubuntu VM, not for Proxmox.
+
+## Template Synchronization
+
+PrivateBox includes automatic template synchronization that eliminates manual template creation in Semaphore:
+
+### How It Works
+
+1. **Annotate Playbooks**: Add `semaphore_*` fields to `vars_prompt` in your Ansible playbooks
+2. **Automatic Setup**: Bootstrap creates all necessary infrastructure:
+   - Generates API token for template operations
+   - Creates SemaphoreAPI environment with credentials
+   - Sets up PrivateBox repository in Semaphore
+   - Creates "Generate Templates" Python task
+   - Runs initial synchronization automatically
+3. **Sync Process**: The Python script (`tools/generate-templates.py`):
+   - Scans `ansible/playbooks/services/*.yml` for playbooks with metadata
+   - Creates or updates Semaphore templates based on the metadata
+   - Converts variable types appropriately (boolean → enum, integer → int)
+   - Shows default values in description fields
+
+### Example Annotated Playbook
+
+```yaml
+vars_prompt:
+  - name: service_enabled
+    prompt: "Enable the service?"
+    default: "yes"
+    private: no
+    # Semaphore template metadata
+    semaphore_type: boolean
+    semaphore_description: "Enable or disable the service"
+    
+  - name: port_number
+    prompt: "Service port"
+    default: "8080"
+    semaphore_type: integer
+    semaphore_min: 1024
+    semaphore_max: 65535
+```
+
+### Running Template Sync
+
+- **Initial Sync**: Runs automatically during bootstrap
+- **Manual Sync**: Click "Run" on "Generate Templates" task in Semaphore UI
+- **What Happens**: Templates are created/updated for all annotated playbooks
 
 ## Security Considerations
 
@@ -225,6 +277,7 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 - ✅ **Bootstrap Infrastructure**: Fully automated VM creation and service deployment
 - ✅ **Network Auto-Discovery**: Automatic detection of network configuration
 - ✅ **Management Tools**: Portainer and Semaphore pre-installed and configured
+- ✅ **Template Synchronization**: Automatic generation of Semaphore job templates from Ansible playbooks
 - ✅ **Quick Start Script**: One-line installation for easy deployment
 - 📋 **Ansible Automation**: To be rebuilt from scratch with simpler approach
 - 📋 **Privacy Services**: Planned deployment via Ansible (OPNSense, AdGuard, etc.)

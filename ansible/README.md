@@ -46,8 +46,71 @@ ansible-playbook -i inventories/development/hosts.yml playbooks/services/adguard
 # Or configure in SemaphoreUI as a job template
 ```
 
+## Automatic Template Synchronization
+
+PrivateBox includes automatic template synchronization that creates Semaphore job templates from your Ansible playbooks. This eliminates the need to manually create templates in the Semaphore UI.
+
+### How It Works
+
+1. **Annotate Your Playbooks**: Add `semaphore_*` metadata to `vars_prompt` in your playbooks
+2. **Run Template Sync**: Use the "Generate Templates" task in Semaphore (created during bootstrap)
+   - Initial sync runs automatically during bootstrap setup
+   - Run manually for new or updated playbooks
+3. **Templates Are Created**: Semaphore automatically creates or updates job templates with proper survey variables
+
+### Example Annotated Playbook
+
+```yaml
+vars_prompt:
+  - name: confirm_deploy
+    prompt: "Deploy AdGuard Home? (yes/no)"
+    default: "yes"
+    private: no
+    # Semaphore metadata
+    semaphore_type: boolean
+    semaphore_description: "Confirm deployment of AdGuard Home"
+    
+  - name: custom_web_port
+    prompt: "Web UI port"
+    default: "8080"
+    private: no
+    semaphore_type: integer
+    semaphore_description: "Port for AdGuard web interface"
+    semaphore_min: 1024
+    semaphore_max: 65535
+    semaphore_required: false
+```
+
+### Supported Metadata Fields
+
+- `semaphore_type`: Variable type (text, integer, boolean)
+- `semaphore_description`: Help text shown in UI
+- `semaphore_required`: Is field required? (default: true)
+- `semaphore_min`: Minimum value (integer only)
+- `semaphore_max`: Maximum value (integer only)
+
+### Running Template Sync
+
+1. Navigate to Task Templates in Semaphore UI
+2. Click "Run" on "Generate Templates"
+3. View the output to see which templates were created/updated
+
+For a complete example, see `playbooks/services/test-semaphore-sync.yml`.
+
 ### Deploy via SemaphoreUI
 
+You have two options:
+
+#### Option 1: Use Automatically Generated Templates (Recommended)
+
+If your playbook has `semaphore_*` metadata in `vars_prompt`:
+1. Run the "Generate Templates" task to sync your playbooks
+2. Find your automatically created template (e.g., "Deploy: adguard")
+3. Click "Run" and fill in the survey variables
+
+#### Option 2: Create Templates Manually
+
+For playbooks without metadata or custom configurations:
 1. Create a new job template in SemaphoreUI:
    - **Name**: "Deploy AdGuard Home"
    - **Playbook**: `playbooks/services/adguard.yml`
@@ -125,10 +188,24 @@ adguard_memory_limit: "512M"
 
 4. **Edit the playbook** and template with service-specific details
 
-5. **Test deployment**:
+5. **Add Semaphore metadata** to `vars_prompt` for automatic template generation:
+   ```yaml
+   vars_prompt:
+     - name: confirm_deploy
+       prompt: "Deploy New Service?"
+       default: "yes"
+       private: no
+       # Add these for automatic template sync
+       semaphore_type: boolean
+       semaphore_description: "Confirm deployment of New Service"
+   ```
+
+6. **Test deployment**:
    ```bash
    ansible-playbook -i inventories/development/hosts.yml playbooks/services/newservice.yml
    ```
+
+7. **Sync to Semaphore**: Run "Generate Templates" to create the job template automatically
 
 ## Podman Quadlet
 
