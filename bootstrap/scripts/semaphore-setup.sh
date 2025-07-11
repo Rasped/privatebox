@@ -570,8 +570,8 @@ create_template_generator_task() {
     local environment_id="$4"
     local admin_session="$5"
     
-    log_info "Creating Generate Templates task..."
-    log_info "Project ID: $project_id, Repository ID: $repository_id, Inventory ID: $inventory_id, Environment ID: $environment_id"
+    log_info "Creating Generate Templates task..." >&2
+    log_info "Project ID: $project_id, Repository ID: $repository_id, Inventory ID: $inventory_id, Environment ID: $environment_id" >&2
     
     local template_payload=$(jq -n \
         --arg name "Generate Templates" \
@@ -593,7 +593,7 @@ create_template_generator_task() {
             type: ""
         }')
     
-    log_info "Template payload: $(echo "$template_payload" | jq -c .)"
+    log_info "Template payload: $(echo "$template_payload" | jq -c .)" >&2
     
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/templates" \
@@ -607,7 +607,7 @@ create_template_generator_task() {
     local status_code=$(echo "$api_result" | cut -d'|' -f1)
     local response_body=$(echo "$api_result" | cut -d'|' -f2-)
     
-    log_info "Template creation response - Status: $status_code"
+    log_info "Template creation response - Status: $status_code" >&2
     
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local template_id=$(echo "$response_body" | jq -r '.id')
