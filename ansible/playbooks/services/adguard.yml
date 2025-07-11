@@ -15,11 +15,21 @@
       prompt: "Deploy {{ service_name }}? (yes/no)"
       default: "yes"
       private: no
+      # Semaphore template metadata
+      semaphore_type: boolean
+      semaphore_description: "Confirm deployment of AdGuard Home DNS filter"
+      semaphore_required: true
       
     - name: custom_web_port
       prompt: "Web UI port (default: {{ adguard_web_port }})"
       default: "{{ adguard_web_port }}"
       private: no
+      # Semaphore template metadata
+      semaphore_type: integer
+      semaphore_description: "Port for AdGuard web interface (recommended: 8080)"
+      semaphore_min: 1024
+      semaphore_max: 65535
+      semaphore_required: false
 
   tasks:
     # Pre-deployment validation
@@ -64,6 +74,48 @@
         - name: Display Podman version
           debug:
             msg: "Podman version: {{ podman_version.stdout }}"
+            
+        - name: Handle systemd-resolved DNS conflict
+          block:
+            - name: Check if systemd-resolved is using port 53
+              shell: ss -tlnp | grep ':53 ' | grep systemd-resolve || true
+              register: resolved_check
+              changed_when: false
+              
+            - name: Display systemd-resolved status
+              debug:
+                msg: "systemd-resolved is {{ 'using port 53' if resolved_check.stdout else 'not using port 53' }}"
+                
+            - name: Disable systemd-resolved if using port 53
+              when: resolved_check.stdout != ""
+              block:
+                - name: Stop and disable systemd-resolved
+                  systemd:
+                    name: systemd-resolved
+                    state: stopped
+                    enabled: no
+                    
+                - name: Remove existing resolv.conf symlink
+                  file:
+                    path: /etc/resolv.conf
+                    state: absent
+                  when: ansible_os_family == "Debian"
+                    
+                - name: Create temporary static resolv.conf
+                  copy:
+                    content: |
+                      # Temporary DNS servers until AdGuard is running
+                      # These will be replaced after AdGuard deployment
+                      nameserver 1.1.1.1
+                      nameserver 8.8.8.8
+                      nameserver 9.9.9.9
+                    dest: /etc/resolv.conf
+                    mode: '0644'
+                    backup: yes
+                    
+                - name: Note DNS changes for user
+                  debug:
+                    msg: "systemd-resolved disabled. Temporary DNS servers configured. Will update to use AdGuard after deployment."
             
         - name: Check for port conflicts
           wait_for:
@@ -143,6 +195,54 @@
             timeout: 60
           when: service_start.changed
 
+        - name: Configure firewall for AdGuard
+          block:
+            - name: Check if ufw is installed
+              command: which ufw
+              register: ufw_check
+              changed_when: false
+              failed_when: false
+              
+            - name: Configure ufw firewall rules
+              when: ufw_check.rc == 0
+              block:
+                - name: Allow AdGuard web interface
+                  ufw:
+                    rule: allow
+                    port: "{{ custom_web_port }}"
+                    proto: tcp
+                    comment: "AdGuard Home Web UI"
+                    
+                - name: Allow DNS TCP
+                  ufw:
+                    rule: allow
+                    port: "{{ adguard_dns_port }}"
+                    proto: tcp
+                    comment: "AdGuard DNS TCP"
+                    
+                - name: Allow DNS UDP
+                  ufw:
+                    rule: allow
+                    port: "{{ adguard_dns_port_udp }}"
+                    proto: udp
+                    comment: "AdGuard DNS UDP"
+                    
+                - name: Allow DNS-over-TLS if configured
+                  ufw:
+                    rule: allow
+                    port: "{{ adguard_dns_over_tls }}"
+                    proto: tcp
+                    comment: "AdGuard DNS-over-TLS"
+                  when: adguard_dns_over_tls is defined
+                  
+                - name: Note firewall configuration
+                  debug:
+                    msg: "Firewall rules configured for AdGuard Home services"
+              rescue:
+                - name: Note firewall configuration failure
+                  debug:
+                    msg: "Warning: Failed to configure firewall rules. Please configure manually if needed."
+
     # Post-deployment validation
     - name: "{{ service_name }} - Post-deployment validation"
       when: confirm_deploy | bool
@@ -179,16 +279,66 @@
           when: container_info is defined
           
         - name: Test DNS resolution through AdGuard
-          command: >
-            dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
-            +short google.com
-          register: dns_test
-          changed_when: false
-          failed_when: false
-          
-        - name: Check DNS test result
-          debug:
-            msg: "DNS resolution test: {{ 'PASSED' if dns_test.rc == 0 else 'FAILED - DNS not yet configured' }}"
+          block:
+            - name: Wait for DNS service to stabilize
+              wait_for:
+                port: "{{ adguard_dns_port }}"
+                host: "{{ ansible_default_ipv4.address }}"
+                delay: 5
+                timeout: 30
+                
+            - name: Test DNS resolution - attempt 1
+              command: >
+                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
+                +short +time=2 google.com
+              register: dns_test
+              changed_when: false
+              failed_when: false
+              
+            - name: Test DNS resolution - with retries
+              when: dns_test.rc != 0 or dns_test.stdout == ""
+              command: >
+                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
+                +short +time=2 cloudflare.com
+              register: dns_test_retry
+              until: dns_test_retry.rc == 0 and dns_test_retry.stdout != ""
+              retries: 5
+              delay: 10
+              failed_when: false
+              
+            - name: Set final DNS test result
+              set_fact:
+                dns_working: "{{ (dns_test.rc == 0 and dns_test.stdout != '') or (dns_test_retry.rc|default(1) == 0 and dns_test_retry.stdout|default('') != '') }}"
+                
+            - name: Check DNS test result
+              debug:
+                msg: "DNS resolution test: {{ 'PASSED' if dns_working else 'FAILED - DNS not yet configured' }}"
+                
+            - name: Update host DNS configuration to use AdGuard
+              when: dns_working
+              block:
+                - name: Create AdGuard-based resolv.conf
+                  copy:
+                    content: |
+                      # Managed by PrivateBox - Using AdGuard Home for DNS
+                      # Primary DNS: AdGuard Home
+                      nameserver {{ ansible_default_ipv4.address }}
+                      # Fallback DNS servers
+                      nameserver 1.1.1.1
+                      nameserver 9.9.9.9
+                    dest: /etc/resolv.conf
+                    mode: '0644'
+                    backup: yes
+                    
+                - name: Protect resolv.conf from being overwritten
+                  file:
+                    path: /etc/resolv.conf
+                    attributes: +i
+                  failed_when: false
+                  
+                - name: Note DNS configuration update
+                  debug:
+                    msg: "Host DNS configuration updated to use AdGuard Home with fallback servers"
             
     # Display access information
     - name: "{{ service_name }} - Access information"
@@ -203,6 +353,8 @@
               web_url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
               dns_server: "{{ ansible_default_ipv4.address }}"
               dns_port: "{{ adguard_dns_port }}"
+              dns_functional: "{{ dns_working | default(false) }}"
+              host_dns_updated: "{{ dns_working | default(false) }}"
               setup_required: true
               
         - name: Display access information
@@ -213,6 +365,8 @@
               - "=========================================="
               - ""
               - "Service Status: {{ service_info.status }}"
+              - "DNS Status: {{ 'Functional' if service_info.dns_functional else 'Not yet configured' }}"
+              - "Host DNS: {{ 'Updated to use AdGuard' if service_info.host_dns_updated else 'Using temporary DNS' }}"
               - ""
               - "Web Interface: {{ service_info.web_url }}"
               - "DNS Server: {{ service_info.dns_server }}:{{ service_info.dns_port }}"
@@ -226,6 +380,8 @@
               - "To use AdGuard as your DNS:"
               - "- Router: Set DNS to {{ service_info.dns_server }}"
               - "- Individual devices: Use {{ service_info.dns_server }}:{{ service_info.dns_port }}"
+              - ""
+              - "{% if not service_info.dns_functional %}NOTE: DNS is not yet functional. Complete web setup first.{% endif %}"
               - ""
               - "Service Management:"
               - "- Status: sudo systemctl status adguard-container"
