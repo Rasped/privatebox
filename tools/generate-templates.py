@@ -446,6 +446,13 @@ def main():
     print(f"Python version: {sys.version.split()[0]}")
     print(f"Current working directory: {os.getcwd()}")
     
+    # Debug: Print all command line arguments
+    print("\n=== Raw Arguments Debug ===")
+    print(f"Number of arguments: {len(sys.argv)}")
+    print(f"Script name (argv[0]): {sys.argv[0]}")
+    for i, arg in enumerate(sys.argv[1:], 1):
+        print(f"Argument {i}: '{arg}'")
+    
     # Parse command line arguments for Semaphore variables
     # Semaphore passes variables as KEY=VALUE arguments
     variables = {}
@@ -453,6 +460,10 @@ def main():
         if '=' in arg:
             key, value = arg.split('=', 1)
             variables[key] = value
+    
+    print("\n=== Parsed Variables ===")
+    for key, value in variables.items():
+        print(f"{key}: {value}")
     
     # Get required variables from parsed arguments
     semaphore_url = variables.get('SEMAPHORE_URL')
