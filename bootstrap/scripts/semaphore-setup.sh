@@ -495,7 +495,7 @@ create_semaphore_api_environment() {
                 type: "var",
                 name: "SEMAPHORE_API_TOKEN",
                 secret: $token,
-                operation: ""
+                operation: "create"
             }]
         }')
     
