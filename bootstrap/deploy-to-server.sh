@@ -260,7 +260,7 @@ run_integration_tests() {
     
     # Test SSH connectivity to VM
     log_info "Testing SSH connectivity to VM..."
-    if ssh "${USERNAME}@${SERVER}" "ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntuadmin@${vm_ip} 'echo VM is accessible' 2>/dev/null"; then
+    if ssh "${USERNAME}@${SERVER}" "ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no admin@${vm_ip} 'echo VM is accessible' 2>/dev/null"; then
         log_info "VM SSH access confirmed"
     else
         log_warn "VM SSH not yet available (cloud-init may still be running)"
@@ -268,7 +268,7 @@ run_integration_tests() {
     
     # Check for cloud-init completion
     log_info "Checking cloud-init status..."
-    if ssh "${USERNAME}@${SERVER}" "ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntuadmin@${vm_ip} 'test -f /etc/privatebox-cloud-init-complete' 2>/dev/null"; then
+    if ssh "${USERNAME}@${SERVER}" "ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no admin@${vm_ip} 'test -f /etc/privatebox-cloud-init-complete' 2>/dev/null"; then
         log_info "Cloud-init completed successfully"
         
         # Check services
@@ -288,7 +288,7 @@ run_integration_tests() {
     else
         log_warn "Cloud-init is still running. Services will be available once it completes."
         log_info "You can check the status with:"
-        log_info "  ssh ${USERNAME}@${SERVER} \"ssh ubuntuadmin@${vm_ip} 'sudo cloud-init status'\""
+        log_info "  ssh ${USERNAME}@${SERVER} \"ssh admin@${vm_ip} 'sudo cloud-init status'\""
     fi
     
     return ${EXIT_SUCCESS}

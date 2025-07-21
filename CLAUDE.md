@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PrivateBox is a privacy-focused router product built on Proxmox VE. The project provides automated bootstrap infrastructure for VM creation and service deployment, with planned Ansible automation for privacy-enhancing services including OPNSense firewall, AdGuard Home, and Unbound DNS.
+PrivateBox is a privacy-focused router product built on Proxmox VE. The project provides automated bootstrap infrastructure for VM creation and service deployment using a simple, service-oriented Ansible approach for deploying privacy-enhancing services including OPNSense firewall, AdGuard Home, and Unbound DNS.
 
 ## Repository Structure
 
@@ -29,13 +29,15 @@ bootstrap/                 # Bootstrap infrastructure (FULLY IMPLEMENTED)
 
 quickstart.sh             # One-line installer (downloads and runs bootstrap)
 
-ansible/                  # Ansible automation (PARTIALLY IMPLEMENTED)
+ansible/                  # Service-oriented Ansible automation
 ├── inventories/          # Environment-specific inventory configurations
 │   └── development/      # Development environment
-├── roles/                # Reusable Ansible roles (mostly unimplemented)
-│   └── common/          # Basic common role (partially implemented)
-└── playbooks/           # Orchestration playbooks
-    └── site.yml         # Main site playbook (basic framework only)
+├── group_vars/           # Global variables and container configurations
+│   └── all.yml          # Common settings for all hosts
+└── playbooks/           # Service deployment playbooks
+    └── services/        # Individual service playbooks
+        ├── deploy-adguard.yml   # AdGuard Home deployment (implemented)
+        └── ADGUARD_DEPLOYMENT_GUIDE.md  # Deployment documentation
 
 documentation/           # Comprehensive planning and technical documentation
 ```
@@ -48,10 +50,11 @@ documentation/           # Comprehensive planning and technical documentation
    - Cloud-init for unattended installation
    - Automatic network configuration detection
    - Pre-installed Portainer and Semaphore
-3. **Service Architecture** (Planned via Ansible): 
-   - OPNSense runs in dedicated VM for performance
-   - Other services containerized using Docker/Portainer
-   - Semaphore provides web UI for Ansible execution
+3. **Service Architecture**: 
+   - Service-oriented Ansible playbooks for each component
+   - OPNSense will run in dedicated VM (created via SSH to Proxmox)
+   - Other services containerized using Podman Quadlet (systemd integration)
+   - Semaphore provides web UI for Ansible execution with automatic template sync
 4. **Network Features**:
    - Automatic IP detection and assignment
    - Support for static IP configuration
@@ -94,14 +97,18 @@ sudo ./bootstrap/scripts/network-discovery.sh
 ssh privatebox@<VM-IP> 'sudo /opt/privatebox/scripts/health-check.sh'
 ```
 
-### Ansible Commands (Future)
+### Ansible Commands
 
 ```bash
-# Run playbooks (when implemented)
-ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/site.yml
+# Deploy a specific service (e.g., AdGuard Home)
+ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/services/deploy-adguard.yml
 
-# Run specific roles
-ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/site.yml --tags "role_name"
+# Run with specific variables
+ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/services/deploy-adguard.yml \
+  -e "adguard_data_path=/opt/adguard" -e "adguard_web_port=8080"
+
+# Using Semaphore UI (recommended)
+# Services are automatically available as job templates in Semaphore
 ```
 
 ## Implementation Status
@@ -115,31 +122,28 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 - ✅ **Remote Deployment**: Deploy to remote Proxmox servers
 - ✅ **Health Monitoring**: Service health check scripts
 
-### Ansible (IN PROGRESS)
-- ✅ **Documentation**: Complete and comprehensive
-- 🚧 **Infrastructure**: Basic directory structure only
-- 🚧 **Roles**: Only `common` role exists with minimal tasks
-- 🚧 **Inventory**: Basic development inventory with placeholder hosts
-- ❌ **Testing**: Not implemented
-- ❌ **CI/CD**: Not implemented
-- ❌ **Secrets Management**: Not implemented
+### Ansible (SERVICE-ORIENTED APPROACH)
+- ✅ **Service Playbooks**: Individual playbooks for each service
+- ✅ **AdGuard Deployment**: Fully implemented with Podman Quadlet
+- ✅ **Semaphore Integration**: Automatic template synchronization
+- ✅ **Inventory**: SSH-based access to management VM
+- 🚧 **Additional Services**: OPNSense, Unbound DNS planned
+- 🚧 **VM Creation**: Via SSH to Proxmox host (no API needed)
+- ❌ **Secrets Management**: Needs implementation
 
 ## Critical Implementation Notes
 
-1. **Planned Roles** (from documentation/ansible_playbook_organization_plan.md):
-   - proxmox: VM/container provisioning
-   - opnsense: Firewall configuration
-   - adguard_home: DNS filtering setup
-   - unbound_dns: Recursive DNS resolver
-   - portainer: Container management
-   - semaphore: Ansible UI
-   - security_hardening: System security
+1. **Service-Oriented Architecture**: 
+   - Each service has its own playbook in `ansible/playbooks/services/`
+   - No complex role hierarchy - simple, direct playbooks
+   - Services deployed as Podman containers with systemd integration
+   - VM creation handled via SSH commands to Proxmox host
 
-2. **Dynamic Inventory**: Plan to integrate with Proxmox API for automatic host discovery
+2. **Container Strategy**: Using Podman Quadlet for systemd-native container management
 
-3. **Secrets Management**: Needs implementation before any real deployment
+3. **Secrets Management**: Needs implementation before production deployment
 
-4. **Testing Strategy**: Molecule tests planned for each role
+4. **Bootstrap Philosophy**: Bash scripts create initial infrastructure (by design), then Ansible takes over for service deployment
 
 ## When Working on This Project
 
@@ -153,10 +157,11 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 
 ### Ansible Development
 
-1. **Follow Ansible Best Practices**: The project documentation emphasizes idempotency, proper variable scoping, and modular role design
-2. **Reference Documentation First**: The documentation/ directory contains extensive planning - check there before implementing new features
-3. **Maintain Role Independence**: Each role should be self-contained and reusable
-4. **Use Existing Patterns**: When implementing new roles, follow the structure established in the common role
+1. **Service-Oriented Approach**: Create individual playbooks for each service in `ansible/playbooks/services/`
+2. **Use Semaphore Metadata**: Add `semaphore_*` fields to `vars_prompt` for automatic UI template generation
+3. **Container Deployment**: Use Podman Quadlet for systemd integration (see AdGuard example)
+4. **VM Creation**: Use SSH commands to Proxmox host, not API calls
+5. **Keep It Simple**: Avoid complex role hierarchies - direct, readable playbooks are preferred
 
 ## Key Files to Reference
 
@@ -169,9 +174,9 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 - `bootstrap/README.md` - Bootstrap documentation
 
 ### Ansible Documentation
-- `documentation/ansible_technical_implementation_guide.md` - Code examples and patterns
-- `documentation/ansible_playbook_organization_plan.md` - Detailed role specifications
-- `documentation/planned_ansible_playbooks.md` - List of all playbooks to implement
+- `ansible/README.md` - Service-oriented architecture overview
+- `ansible/playbooks/services/ADGUARD_DEPLOYMENT_GUIDE.md` - Example service deployment
+- `ansible/group_vars/all.yml` - Common configuration and container settings
 - `README.md` - Project overview and quick start guide
 
 ## Context7 Documentation Loading
