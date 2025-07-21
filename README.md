@@ -197,8 +197,8 @@ Deploy to a remote Proxmox server:
 After installation completes (5-10 minutes), you can access your PrivateBox VM:
 
 **VM Login Credentials:**
-- SSH: `ssh operator@<VM-IP>`
-- Username: `operator`
+- SSH: `ssh ubuntuadmin@<VM-IP>`
+- Username: `ubuntuadmin`
 - Password: `Changeme123` (⚠️ change immediately after first login!)
 
 **Web Services** (available after VM login):
@@ -206,9 +206,9 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 - **Semaphore**: `http://<VM-IP>:3000` - Ansible automation UI
 
 **Semaphore Login:**
-- Username: `operator`
+- Username: `ubuntuadmin`
 - Password: Auto-generated during setup (displayed after installation)
-- To retrieve manually: `ssh operator@<VM-IP>` then `sudo cat /root/.credentials/semaphore_credentials.txt`
+- To retrieve manually: `ssh ubuntuadmin@<VM-IP>` then `sudo cat /root/.credentials/semaphore_credentials.txt`
 
 **Semaphore Template Synchronization:**
 - Bootstrap automatically creates a "Generate Templates" task in Semaphore
