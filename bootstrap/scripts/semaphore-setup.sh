@@ -1729,8 +1729,9 @@ create_default_inventory() {
     
     # Build the inventory payload
     local inventory_payload
-    if [ -n "$ssh_key_id" ]; then
-        # Include SSH key ID if provided
+    if [ -n "$ssh_key_id" ] && [[ "$ssh_key_id" =~ ^[0-9]+$ ]]; then
+        # Include SSH key ID if provided and valid
+        log_info "Creating inventory payload with SSH key ID: $ssh_key_id" >&2
         inventory_payload=$(jq -n \
             --arg name "Default Inventory" \
             --arg type "static" \
@@ -1740,6 +1741,11 @@ create_default_inventory() {
             '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $ssh_key_id}')
     else
         # Create without SSH key ID
+        if [ -n "$ssh_key_id" ]; then
+            log_info "WARNING: SSH key ID '$ssh_key_id' is not numeric, creating inventory without SSH key" >&2
+        else
+            log_info "Creating inventory without SSH key ID" >&2
+        fi
         inventory_payload=$(jq -n \
             --arg name "Default Inventory" \
             --arg type "static" \
@@ -1784,7 +1790,7 @@ create_semaphore_ssh_key() {
     local key_path="${5:-$SSH_PRIVATE_KEY_PATH}"  # Use provided path or default
     local ssh_login="${6:-root}"  # SSH login user (default: root)
     
-    log_info "Creating SSH key '$key_name' for project ID $project_id (login: $ssh_login)..."
+    log_info "Creating SSH key '$key_name' for project ID $project_id (login: $ssh_login)..." >&2
     
     # If admin session not provided, get it
     if [ -z "$admin_session" ]; then
@@ -1801,13 +1807,13 @@ create_semaphore_ssh_key() {
     local private_key_content
     
     if [ ! -f "$key_path" ]; then
-        log_info "ERROR: SSH private key not found at $key_path"
+        log_info "ERROR: SSH private key not found at $key_path" >&2
         return 1
     fi
     
     private_key_content=$(cat "$key_path")
     if [ -z "$private_key_content" ]; then
-        log_info "ERROR: Failed to read SSH private key content"
+        log_info "ERROR: Failed to read SSH private key content" >&2
         return 1
     fi
     
@@ -1823,12 +1829,12 @@ create_semaphore_ssh_key() {
         '{name: $name, type: $type, project_id: $pid, ssh: {login: $login, passphrase: "", private_key: $private_key}}')
     
     # Debug logging
-    log_info "DEBUG: SSH private key path: $key_path"
-    log_info "DEBUG: Private key content length: ${#private_key_content}"
-    log_info "DEBUG: First 50 chars of key: ${private_key_content:0:50}..."
-    log_info "DEBUG: Payload preview: $(echo "$ssh_key_payload" | jq -c '{name, type, project_id, ssh: {login: .ssh.login, passphrase: .ssh.passphrase, private_key: (.ssh.private_key | .[0:50] + "...")}}')"
+    log_info "DEBUG: SSH private key path: $key_path" >&2
+    log_info "DEBUG: Private key content length: ${#private_key_content}" >&2
+    log_info "DEBUG: First 50 chars of key: ${private_key_content:0:50}..." >&2
+    log_info "DEBUG: Payload preview: $(echo "$ssh_key_payload" | jq -c '{name, type, project_id, ssh: {login: .ssh.login, passphrase: .ssh.passphrase, private_key: (.ssh.private_key | .[0:50] + "...")}}')" >&2
     
-    log_info "Sending SSH key to Semaphore API..."
+    log_info "Sending SSH key to Semaphore API..." >&2
     local api_result=$(make_api_request "POST" "http://localhost:3000/api/project/$project_id/keys" "$ssh_key_payload" "$admin_session" "Creating SSH key $key_name")
     if [ $? -ne 0 ]; then
         return 1
@@ -1840,18 +1846,18 @@ create_semaphore_ssh_key() {
     if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
         local key_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$key_id" ] && [ "$key_id" != "null" ]; then
-            log_info "SSH key '$key_name' created successfully with ID: $key_id"
+            log_info "SSH key '$key_name' created successfully with ID: $key_id" >&2
             # Store the key ID for potential later use
             echo "SSH Key ID: $key_id" >> /root/.credentials/semaphore_credentials.txt
             # Return the key ID
             echo "$key_id"
         else
-            log_info "SSH key '$key_name' created successfully"
+            log_info "SSH key '$key_name' created successfully" >&2
         fi
         return 0
     elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
          echo "$response_body" | jq -e '.message' 2>/dev/null | grep -q "already exists"); then
-        log_info "SSH key '$key_name' already exists. Looking up ID..."
+        log_info "SSH key '$key_name' already exists. Looking up ID..." >&2
         # Get the existing key ID
         local existing_id=$(get_ssh_key_id_by_name "$project_id" "$key_name" "$admin_session")
         if [ -n "$existing_id" ]; then
@@ -1859,12 +1865,12 @@ create_semaphore_ssh_key() {
         fi
         return 0
     else
-        log_info "ERROR: Failed to create SSH key '$key_name'. Status: $status_code"
+        log_info "ERROR: Failed to create SSH key '$key_name'. Status: $status_code" >&2
         if [ -n "$response_body" ]; then
-            log_info "Response body: $response_body"
+            log_info "Response body: $response_body" >&2
             local error_message=$(echo "$response_body" | jq -r '.error // .message // "Unknown error"' 2>/dev/null)
             if [ "$error_message" != "null" ] && [ -n "$error_message" ]; then
-                log_info "Error details: $error_message"
+                log_info "Error details: $error_message" >&2
             fi
         fi
         return 1
@@ -1919,11 +1925,15 @@ create_infrastructure_project_with_ssh_key() {
             # Create SSH key for VM self-management (with ubuntuadmin as the SSH user)
             local vm_key_id=$(create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "ubuntuadmin")
             
+            # Debug: Log the captured key ID
+            log_info "DEBUG: Captured VM SSH key ID: '$vm_key_id'" >&2
+            
             # Create default inventory with the VM SSH key
-            if [ -n "$vm_key_id" ]; then
+            if [ -n "$vm_key_id" ] && [[ "$vm_key_id" =~ ^[0-9]+$ ]]; then
+                log_info "Creating inventory with SSH key ID: $vm_key_id" >&2
                 create_default_inventory "$project_name" "$project_id" "$admin_session" "$vm_key_id"
             else
-                log_info "WARNING: No VM SSH key ID available, creating inventory without SSH key association"
+                log_info "WARNING: Invalid or missing VM SSH key ID (captured: '$vm_key_id'), creating inventory without SSH key association" >&2
                 create_default_inventory "$project_name" "$project_id" "$admin_session"
             fi
             

@@ -505,3 +505,28 @@ Before presenting ANY plan:
 
 ### The Simplicity Test:
 Can you explain your solution to someone unfamiliar with the project in under 2 minutes? If not, it might be too complex.
+
+## Known Bootstrap Issues
+
+### ~~Critical Issue: Inventory Creation Fails~~ ✅ RESOLVED
+**Status**: ✅ Fixed (2025-07-21) - Hands-off deployment now works
+
+**Problem**: The bootstrap process was failing to create the Semaphore inventory due to a jq JSON parsing error when trying to use the SSH key ID.
+
+**Root Cause**: The `create_semaphore_ssh_key` function was outputting log messages to stdout, which polluted the captured SSH key ID value when using command substitution.
+
+**Fix Applied**:
+1. Added `>&2` to all log output in `create_semaphore_ssh_key` to redirect to stderr
+2. Added validation to ensure captured SSH key ID is numeric before use
+3. Made `create_default_inventory` more robust with defensive validation
+4. Added debug logging to help troubleshoot any future issues
+
+**Result**: Bootstrap now completes fully automated without manual intervention. The inventory is created with proper SSH key association, and services can be deployed immediately.
+
+### Minor Issues (Still Present)
+- Template synchronization depends on inventory existing
+- No post-bootstrap validation to ensure everything is ready
+- Error reporting could be more detailed
+
+### Impact
+The critical blocking issue has been resolved. Users can now enjoy true "one command deployment" from Proxmox to running services without manual intervention.
