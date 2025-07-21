@@ -22,8 +22,8 @@
     confirm_deploy: true
     custom_web_port: "{{ adguard_web_port }}"
     
-    # Minimal metadata for Semaphore template generation
-    # Empty means no survey variables, allowing hands-off deployment
+    # Metadata for Semaphore template generation
+    # Empty dict means generate template without survey variables (hands-off deployment)
     _semaphore_vars_prompt: {}
 
   tasks:

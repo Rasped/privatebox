@@ -223,14 +223,16 @@ def parse_playbook(playbook_path):
         
         # Check for metadata structure in vars
         vars_section = play.get('vars', {})
+        
+        # Check if _semaphore_vars_prompt key exists (even if empty)
+        if '_semaphore_vars_prompt' not in vars_section:
+            # No metadata key found - skip this playbook
+            return None
+            
         metadata = vars_section.get('_semaphore_vars_prompt', {})
         
         # Also get vars_prompt to match variable names
         vars_prompt = play.get('vars_prompt', [])
-        
-        if not metadata:
-            # No metadata found
-            return None
         
         # Build vars list from vars_prompt, enriched with metadata
         semaphore_vars = []
