@@ -3,7 +3,7 @@
 # These variables apply to all hosts unless overridden
 
 # Ansible connection settings
-ansible_user: privatebox
+# User is determined by SSH key configuration in Semaphore
 ansible_become: true
 ansible_become_method: sudo
 

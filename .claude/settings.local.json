@@ -22,7 +22,10 @@
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
       "Bash(find:*)",
-      "WebFetch(domain:192.168.1.21)"
+      "WebFetch(domain:192.168.1.21)",
+      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.20 'sudo /opt/privatebox/scripts/health-check.sh')",
+      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.20 'sudo systemctl status portainer semaphore')",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

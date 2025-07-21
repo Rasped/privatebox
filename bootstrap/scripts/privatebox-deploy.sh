@@ -74,7 +74,7 @@ fi
 # Set variables from config with defaults
 VMID="${VMID:-9000}"
 STATIC_IP="${STATIC_IP:-192.168.1.22}"
-VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
+VM_USERNAME="${VM_USERNAME:-admin}"
 VM_PASSWORD="${VM_PASSWORD:-Changeme123}"
 
 # Function to fix cloud-init configuration

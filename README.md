@@ -110,7 +110,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
   - Unbound DNS for enhanced DNS privacy
   - Additional privacy features
 - **Management Integration**: Pre-configured Portainer and Semaphore with automatic template generation
-- **Modular Design**: Reusable Ansible roles for service deployment
+- **Service-Oriented Design**: Simple, dedicated Ansible playbooks for each service
 
 ## Target Hardware
 
@@ -147,14 +147,13 @@ quickstart.sh          # One-line installer script
 - **health-check.sh**: Service health monitoring
 - **backup.sh**: Configuration and credential backup
 
-## Planned Ansible Roles
+## Service Deployment Approach
 
-- **common**: Base configuration for all managed systems
-- **proxmox**: Manage Proxmox VE host and VM operations
-- **opnsense**: Deploy and configure OPNSense firewall
-- **adguard_home**: Deploy AdGuard Home DNS filtering
-- **unbound_dns**: Deploy Unbound recursive DNS resolver
-- **security_hardening**: Apply security best practices
+- **Service Playbooks**: Each service has its own dedicated playbook in `ansible/playbooks/services/`
+- **Containerized Services**: AdGuard Home, Unbound DNS deployed as Podman containers
+- **VM-based Services**: OPNSense deployed as dedicated VM via SSH to Proxmox host
+- **Semaphore Integration**: Automatic UI templates generated from playbook metadata
+- **Simple Architecture**: No complex role hierarchies - just straightforward playbooks
 
 ## Getting Started
 
@@ -198,8 +197,8 @@ Deploy to a remote Proxmox server:
 After installation completes (5-10 minutes), you can access your PrivateBox VM:
 
 **VM Login Credentials:**
-- SSH: `ssh ubuntuadmin@<VM-IP>`
-- Username: `ubuntuadmin`
+- SSH: `ssh admin@<VM-IP>`
+- Username: `admin`
 - Password: `Changeme123` (⚠️ change immediately after first login!)
 
 **Web Services** (available after VM login):
@@ -209,7 +208,7 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 **Semaphore Login:**
 - Username: `admin`
 - Password: Auto-generated during setup (displayed after installation)
-- To retrieve manually: `ssh ubuntuadmin@<VM-IP>` then `sudo cat /root/.credentials/semaphore_credentials.txt`
+- To retrieve manually: `ssh admin@<VM-IP>` then `sudo cat /root/.credentials/semaphore_credentials.txt`
 
 **Semaphore Template Synchronization:**
 - Bootstrap automatically creates a "Generate Templates" task in Semaphore
