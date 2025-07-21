@@ -18,31 +18,9 @@
     adguard_data_dir: "/opt/privatebox/data/adguard"
     adguard_config_dir: "/opt/privatebox/config/adguard"
     
-    # Semaphore template metadata - used by generate-templates.py
-    _semaphore_vars_prompt:
-      confirm_deploy:
-        type: boolean
-        description: "Confirm deployment of AdGuard Home DNS filter"
-        required: true
-        
-      custom_web_port:
-        type: integer
-        description: "Port for AdGuard web interface (recommended: 8080)"
-        min: 1024
-        max: 65535
-        required: false
-    
-  # Allow override from SemaphoreUI survey
-  vars_prompt:
-    - name: confirm_deploy
-      prompt: "Deploy {{ service_name }}? (yes/no)"
-      default: "yes"
-      private: no
-      
-    - name: custom_web_port
-      prompt: "Web UI port (default: {{ adguard_web_port }})"
-      default: "{{ adguard_web_port }}"
-      private: no
+    # Default values for hands-off deployment (no prompts)
+    confirm_deploy: true
+    custom_web_port: "{{ adguard_web_port }}"
 
   tasks:
     # Pre-deployment validation
