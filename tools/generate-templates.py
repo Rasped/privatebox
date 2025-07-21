@@ -253,14 +253,12 @@ def parse_playbook(playbook_path):
                     var_info['semaphore_max'] = var_metadata['max']
                 semaphore_vars.append(var_info)
         
-        if semaphore_vars:
-            return {
-                'name': play.get('name', 'Unnamed playbook'),
-                'vars': semaphore_vars,
-                'template_config': {}
-            }
-        
-        return None
+        # Return playbook info even if no survey vars (for hands-off deployment)
+        return {
+            'name': play.get('name', 'Unnamed playbook'),
+            'vars': semaphore_vars,
+            'template_config': {}
+        }
     
     except Exception as e:
         print(f"✗ Error parsing {playbook_path}: {e}")
