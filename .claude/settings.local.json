@@ -26,7 +26,8 @@
       "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.20 'sudo /opt/privatebox/scripts/health-check.sh')",
       "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.20 'sudo systemctl status portainer semaphore')",
       "Bash(rm:*)",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh -o StrictHostKeyChecking=no admin@192.168.1.20 'echo \"\"Login successful\"\" && sudo systemctl status cloud-final')"
+      "Bash(SSHPASS='Changeme123' sshpass -e ssh -o StrictHostKeyChecking=no admin@192.168.1.20 'echo \"\"Login successful\"\" && sudo systemctl status cloud-final')",
+      "Bash(SSHPASS='Changeme123' sshpass -e ssh -o StrictHostKeyChecking=no operator@192.168.1.21 'echo \"\"SSH works\"\"')"
     ],
     "deny": []
   }

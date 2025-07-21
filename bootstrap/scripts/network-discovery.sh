@@ -367,7 +367,7 @@ save_network_config() {
 # VM Configuration
 VMID=9000
 UBUNTU_VERSION="24.04"
-VM_USERNAME="operator"
+VM_USERNAME="ubuntuadmin"
 VM_PASSWORD="Changeme123"
 SEMAPHORE_ADMIN_PASSWORD=""
 VM_MEMORY=4096
