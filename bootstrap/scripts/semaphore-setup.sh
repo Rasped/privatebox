@@ -75,11 +75,18 @@ generate_vm_ssh_key_pair() {
     chmod 600 "${vm_key_path}"
     chmod 644 "${vm_key_path}.pub"
     
-    # Add public key to VM's own authorized_keys
-    mkdir -p /root/.ssh
-    chmod 700 /root/.ssh
-    cat "${vm_key_path}.pub" >> /root/.ssh/authorized_keys
-    chmod 600 /root/.ssh/authorized_keys
+    # Add public key to ubuntuadmin's authorized_keys (for Ansible SSH access)
+    local admin_home="/home/ubuntuadmin"
+    if [ -d "$admin_home" ]; then
+        mkdir -p "${admin_home}/.ssh"
+        chmod 700 "${admin_home}/.ssh"
+        cat "${vm_key_path}.pub" >> "${admin_home}/.ssh/authorized_keys"
+        chmod 600 "${admin_home}/.ssh/authorized_keys"
+        chown -R ubuntuadmin:ubuntuadmin "${admin_home}/.ssh"
+        log_info "Added VM SSH public key to ubuntuadmin's authorized_keys"
+    else
+        log_info "WARNING: ubuntuadmin home directory not found, skipping authorized_keys update"
+    fi
     
     log_info "VM SSH key pair generated and added to authorized_keys"
     return 0
