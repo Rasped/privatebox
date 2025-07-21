@@ -104,7 +104,7 @@ else
     # Default configuration values
     VMID=9000
     UBUNTU_VERSION="24.04"
-    VM_USERNAME="admin"
+    VM_USERNAME="operator"
     VM_PASSWORD="Changeme123"
     VM_MEMORY=4096
     VM_CORES=2
@@ -117,7 +117,7 @@ fi
 # Allow environment variables to override config file
 VMID="${VMID:-9000}"
 UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
-VM_USERNAME="${VM_USERNAME:-admin}"
+VM_USERNAME="${VM_USERNAME:-operator}"
 VM_PASSWORD="${VM_PASSWORD:-Changeme123}"
 
 # Generate Semaphore admin password if not already set

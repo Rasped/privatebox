@@ -37,7 +37,7 @@ After bootstrap completes:
 
 #### A. SSH into the VM
 ```bash
-ssh admin@<VM-IP>
+ssh operator@<VM-IP>
 # Password: Changeme123
 ```
 
