@@ -104,7 +104,7 @@ else
     # Default configuration values
     VMID=9000
     UBUNTU_VERSION="24.04"
-    VM_USERNAME="ubuntuadmin"
+    VM_USERNAME="admin"
     VM_PASSWORD="Changeme123"
     VM_MEMORY=4096
     VM_CORES=2
@@ -117,7 +117,7 @@ fi
 # Allow environment variables to override config file
 VMID="${VMID:-9000}"
 UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
-VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
+VM_USERNAME="${VM_USERNAME:-admin}"
 VM_PASSWORD="${VM_PASSWORD:-Changeme123}"
 
 # Generate Semaphore admin password if not already set
@@ -690,7 +690,7 @@ function create_base_vm() {
     
     # Create the VM with base configuration
     if ! qm create "${VMID}" \
-        --name "ubuntu-server-${UBUNTU_VERSION}" \
+        --name "container-host" \
         --memory 4096 \
         --cores 2 \
         --cpu host \

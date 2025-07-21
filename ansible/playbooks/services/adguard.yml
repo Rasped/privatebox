@@ -1,7 +1,6 @@
 ---
 - name: Deploy AdGuard Home DNS Filter
-  hosts: localhost
-  connection: local
+  hosts: container-host
   become: true
   gather_facts: true
   

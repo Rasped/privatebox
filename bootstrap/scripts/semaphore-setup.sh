@@ -1684,11 +1684,23 @@ create_default_inventory() {
     local admin_session="$3"
     
     log_info "Creating default inventory for project '$project_name'..."
+    
+    # Get the IP address from the configuration
+    local vm_ip="${STATIC_IP:-192.168.1.20}"
+    
+    # Create the inventory content with the container-host
+    local inventory_content="all:
+  hosts:
+    container-host:
+      ansible_host: ${vm_ip}
+      ansible_ssh_private_key_file: /root/.credentials/semaphore_vm_key"
+    
     local inventory_payload=$(jq -n \
         --arg name "Default Inventory" \
         --arg type "static" \
         --argjson pid "$project_id" \
-        '{name: $name, type: $type, project_id: $pid}')
+        --arg inv "$inventory_content" \
+        '{name: $name, type: $type, project_id: $pid, inventory: $inv}')
         
     local api_result=$(make_api_request "POST" "http://localhost:3000/api/project/$project_id/inventory" "$inventory_payload" "$admin_session" "Creating inventory for project $project_name")
     if [ $? -ne 0 ]; then

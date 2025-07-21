@@ -1,5 +1,14 @@
 # PrivateBox Ansible - Implementation Recommendations
 
+> **⚠️ OBSOLETE DOCUMENT**
+> 
+> This document reflects the original role-based architecture that was never implemented.
+> The project has pivoted to a simpler service-oriented approach.
+> 
+> **See [ARCHITECTURE.md](/ARCHITECTURE.md) for the current design.**
+> 
+> Keeping this document for historical reference only.
+
 ## Executive Summary
 
 After analyzing the PrivateBox Ansible codebase, I've identified several critical gaps and areas for improvement. While the project has a solid foundation with well-structured directories and comprehensive documentation, many core components are missing or incomplete. This document provides actionable recommendations prioritized by impact and implementation order.

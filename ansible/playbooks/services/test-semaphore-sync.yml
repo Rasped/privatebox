@@ -1,6 +1,6 @@
 ---
 - name: Test Semaphore Template Sync
-  hosts: privatebox
+  hosts: container-host
   gather_facts: no
 
   vars:
