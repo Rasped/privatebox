@@ -1677,11 +1677,43 @@ create_semaphore_project() {
     fi
 }
 
+# Get SSH key ID by name
+get_ssh_key_id_by_name() {
+    local project_id="$1"
+    local key_name="$2"
+    local admin_session="$3"
+    
+    log_info "Looking up SSH key '$key_name' in project $project_id..." >&2
+    
+    local api_result=$(make_api_request "GET" \
+        "http://localhost:3000/api/project/$project_id/keys" "" "$admin_session" "Getting SSH keys")
+    
+    if [ $? -eq 0 ]; then
+        local status_code=$(echo "$api_result" | cut -d'|' -f1)
+        local keys=$(echo "$api_result" | cut -d'|' -f2-)
+        
+        if [ "$status_code" -eq 200 ]; then
+            local key_id=$(echo "$keys" | jq -r ".[] | select(.name==\"$key_name\") | .id" 2>/dev/null)
+            if [ -n "$key_id" ] && [ "$key_id" != "null" ]; then
+                log_info "Found SSH key '$key_name' with ID: $key_id" >&2
+                echo "$key_id"
+            else
+                log_info "WARNING: SSH key '$key_name' not found in project" >&2
+            fi
+        else
+            log_error "Failed to list SSH keys. Status: $status_code"
+        fi
+    else
+        log_error "Failed to get SSH keys list"
+    fi
+}
+
 # Create default inventory for a project
 create_default_inventory() {
     local project_name="$1"
     local project_id="$2"
     local admin_session="$3"
+    local ssh_key_id="${4:-}"  # Optional SSH key ID
     
     log_info "Creating default inventory for project '$project_name'..."
     
@@ -1693,14 +1725,28 @@ create_default_inventory() {
   hosts:
     container-host:
       ansible_host: ${vm_ip}
-      ansible_ssh_private_key_file: /root/.credentials/semaphore_vm_key"
+      ansible_user: ubuntuadmin"
     
-    local inventory_payload=$(jq -n \
-        --arg name "Default Inventory" \
-        --arg type "static" \
-        --argjson pid "$project_id" \
-        --arg inv "$inventory_content" \
-        '{name: $name, type: $type, project_id: $pid, inventory: $inv}')
+    # Build the inventory payload
+    local inventory_payload
+    if [ -n "$ssh_key_id" ]; then
+        # Include SSH key ID if provided
+        inventory_payload=$(jq -n \
+            --arg name "Default Inventory" \
+            --arg type "static" \
+            --argjson pid "$project_id" \
+            --arg inv "$inventory_content" \
+            --argjson ssh_key_id "$ssh_key_id" \
+            '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $ssh_key_id}')
+    else
+        # Create without SSH key ID
+        inventory_payload=$(jq -n \
+            --arg name "Default Inventory" \
+            --arg type "static" \
+            --argjson pid "$project_id" \
+            --arg inv "$inventory_content" \
+            '{name: $name, type: $type, project_id: $pid, inventory: $inv}')
+    fi
         
     local api_result=$(make_api_request "POST" "http://localhost:3000/api/project/$project_id/inventory" "$inventory_payload" "$admin_session" "Creating inventory for project $project_name")
     if [ $? -ne 0 ]; then
@@ -1715,6 +1761,9 @@ create_default_inventory() {
         local inv_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$inv_id" ] && [ "$inv_id" != "null" ]; then
             log_info "Default inventory created for project '$project_name' with ID: $inv_id"
+            if [ -n "$ssh_key_id" ]; then
+                log_info "Inventory is associated with SSH key ID: $ssh_key_id"
+            fi
         else
             log_info "Default inventory created for project '$project_name'"
         fi
@@ -1733,8 +1782,9 @@ create_semaphore_ssh_key() {
     local key_type="${3:-ssh}"  # Default to ssh type
     local admin_session="${4:-}"  # Optional parameter
     local key_path="${5:-$SSH_PRIVATE_KEY_PATH}"  # Use provided path or default
+    local ssh_login="${6:-root}"  # SSH login user (default: root)
     
-    log_info "Creating SSH key '$key_name' for project ID $project_id..."
+    log_info "Creating SSH key '$key_name' for project ID $project_id (login: $ssh_login)..."
     
     # If admin session not provided, get it
     if [ -z "$admin_session" ]; then
@@ -1767,7 +1817,7 @@ create_semaphore_ssh_key() {
     local ssh_key_payload=$(jq -n \
         --arg name "$key_name" \
         --arg type "$key_type" \
-        --arg login "root" \
+        --arg login "$ssh_login" \
         --rawfile private_key "$key_path" \
         --argjson pid "$project_id" \
         '{name: $name, type: $type, project_id: $pid, ssh: {login: $login, passphrase: "", private_key: $private_key}}')
@@ -1793,13 +1843,20 @@ create_semaphore_ssh_key() {
             log_info "SSH key '$key_name' created successfully with ID: $key_id"
             # Store the key ID for potential later use
             echo "SSH Key ID: $key_id" >> /root/.credentials/semaphore_credentials.txt
+            # Return the key ID
+            echo "$key_id"
         else
             log_info "SSH key '$key_name' created successfully"
         fi
         return 0
     elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
          echo "$response_body" | jq -e '.message' 2>/dev/null | grep -q "already exists"); then
-        log_info "SSH key '$key_name' already exists. Skipping creation."
+        log_info "SSH key '$key_name' already exists. Looking up ID..."
+        # Get the existing key ID
+        local existing_id=$(get_ssh_key_id_by_name "$project_id" "$key_name" "$admin_session")
+        if [ -n "$existing_id" ]; then
+            echo "$existing_id"
+        fi
         return 0
     else
         log_info "ERROR: Failed to create SSH key '$key_name'. Status: $status_code"
@@ -1856,20 +1913,25 @@ create_infrastructure_project_with_ssh_key() {
         if [ -n "$project_id" ] && [ "$project_id" != "null" ]; then
             log_info "PrivateBox project created with ID: $project_id"
             
-            # Create default inventory
-            create_default_inventory "$project_name" "$project_id" "$admin_session"
+            # Create SSH key for this project first (before inventory)
+            local proxmox_key_id=$(create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session")
+            
+            # Create SSH key for VM self-management (with ubuntuadmin as the SSH user)
+            local vm_key_id=$(create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "ubuntuadmin")
+            
+            # Create default inventory with the VM SSH key
+            if [ -n "$vm_key_id" ]; then
+                create_default_inventory "$project_name" "$project_id" "$admin_session" "$vm_key_id"
+            else
+                log_info "WARNING: No VM SSH key ID available, creating inventory without SSH key association"
+                create_default_inventory "$project_name" "$project_id" "$admin_session"
+            fi
             
             # Create repository for the project
             if ! create_repository "$project_id" "PrivateBox" "$PRIVATEBOX_GIT_URL" "$admin_session"; then
                 log_error "Failed to create PrivateBox repository - template sync will not work"
                 # Continue anyway to set up other components
             fi
-            
-            # Create SSH key for this project
-            create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session"
-            
-            # Create SSH key for VM self-management
-            create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key"
             
             # Setup template synchronization
             setup_template_synchronization "$project_id" "$admin_session"
