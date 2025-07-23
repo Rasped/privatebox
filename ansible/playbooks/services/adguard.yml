@@ -36,7 +36,8 @@
     container_security_label_disable: false
     container_no_new_privileges: true
     container_drop_capabilities: []
-    container_user_namespace: "keep-id"
+    # AdGuard needs root to bind to port 53, so we don't use user namespaces
+    # container_user_namespace: "keep-id"
     
     # Health check configuration
     health_check_interval: "30s"
