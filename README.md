@@ -273,21 +273,32 @@ vars_prompt:
 
 ## Current Status
 
-- ✅ **Bootstrap Infrastructure**: Fully automated VM creation and service deployment
-- ✅ **Network Auto-Discovery**: Automatic detection of network configuration
-- ✅ **Management Tools**: Portainer and Semaphore pre-installed and configured
-- ✅ **Template Synchronization**: Automatic generation of Semaphore job templates from Ansible playbooks
-- ✅ **Quick Start Script**: One-line installation for easy deployment
-- 📋 **Ansible Automation**: To be rebuilt from scratch with simpler approach
-- 📋 **Privacy Services**: Planned deployment via Ansible (OPNSense, AdGuard, etc.)
+### ✅ Fully Automated Bootstrap (2025-07-21)
+- **100% Hands-Off Deployment**: Complete automation from start to finish (~3 minutes)
+- **Network Auto-Discovery**: Automatic detection and configuration of network settings
+- **Management Tools**: Portainer and Semaphore automatically installed and configured
+- **Template Synchronization**: All service templates generated automatically from playbook metadata
+- **Quick Start Script**: One-line installation with full automation
+- **SSH Key Management**: VM can self-manage via Ansible with proper authorization
+- **API Integration**: Simplified authentication with JSON-safe password generation
+
+### 🚧 In Progress
+- **Service Deployment**: AdGuard Home playbook ready for hands-off deployment
+- **SSH Authentication**: Resolving Ansible SSH access from Semaphore (tracked separately)
+- **Additional Services**: OPNSense, Unbound DNS, and other privacy services planned
+
+### 📋 Planned
+- **Secrets Management**: Secure handling of credentials and sensitive data
+- **Multi-VLAN Support**: Network segregation for enhanced security
+- **Backup/Restore**: Automated configuration backup and recovery
 
 ## Next Steps
 
-- Design and implement simple Ansible structure from scratch
-- Create basic playbooks for service deployment
-- Develop secure secrets and credential management process
-- Integrate with existing Semaphore installation
-- Test deployment of privacy services (OPNSense, AdGuard, etc.)
+- Resolve SSH authentication issue for Ansible playbook execution
+- Deploy additional privacy services (OPNSense, Unbound DNS)
+- Implement secure secrets management with Ansible Vault
+- Create monitoring and health check dashboards
+- Document production deployment best practices
 
 ## Contributing
 

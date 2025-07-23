@@ -75,6 +75,13 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash -s -- --yes
 ```
 
+**IMPORTANT NOTE**: The quickstart script automatically handles cleanup! It will:
+- Stop and destroy any existing VM with ID 9000
+- Clean up old disk images
+- Remove stale configurations
+
+**DO NOT manually clean up before running the script** - just run it directly. The script is designed to be idempotent and handles all cleanup internally.
+
 ### Bootstrap Commands
 
 ```bash
@@ -110,6 +117,39 @@ ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/
 # Using Semaphore UI (recommended)
 # Services are automatically available as job templates in Semaphore
 ```
+
+### Semaphore API Authentication (IMPORTANT!)
+
+**Semaphore uses cookie-based authentication. Here's how to authenticate properly:**
+
+1. **Login and save cookie**:
+```bash
+curl -c /tmp/semaphore-cookie -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"auth": "admin", "password": "YOUR_PASSWORD_HERE"}' \
+  http://VM_IP:3000/api/auth/login
+```
+
+2. **Use the cookie for API requests**:
+```bash
+# List templates
+curl -s -b /tmp/semaphore-cookie http://VM_IP:3000/api/project/1/templates | jq
+
+# Run a task
+curl -s -b /tmp/semaphore-cookie -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"template_id": TEMPLATE_ID, "project_id": 1}' \
+  http://VM_IP:3000/api/project/1/tasks
+
+# Check task status
+curl -s -b /tmp/semaphore-cookie http://VM_IP:3000/api/project/1/tasks/TASK_ID | jq -r '.status'
+```
+
+**Key points:**
+- `-c` saves the cookie to a file
+- `-b` uses the saved cookie for requests
+- Success returns HTTP 204 No Content
+- The cookie contains a session token (starts with "semaphore=")
 
 ## Implementation Status
 
@@ -506,27 +546,30 @@ Before presenting ANY plan:
 ### The Simplicity Test:
 Can you explain your solution to someone unfamiliar with the project in under 2 minutes? If not, it might be too complex.
 
-## Known Bootstrap Issues
+## Known Issues
 
-### ~~Critical Issue: Inventory Creation Fails~~ ✅ RESOLVED
-**Status**: ✅ Fixed (2025-07-21) - Hands-off deployment now works
+### Ansible SSH Authentication from Semaphore
+**Status**: 🟡 Under Investigation
 
-**Problem**: The bootstrap process was failing to create the Semaphore inventory due to a jq JSON parsing error when trying to use the SSH key ID.
+**Problem**: While the bootstrap completes successfully and all templates are created, Ansible playbooks fail to connect via SSH when run through Semaphore.
 
-**Root Cause**: The `create_semaphore_ssh_key` function was outputting log messages to stdout, which polluted the captured SSH key ID value when using command substitution.
+**Symptoms**:
+- Task status shows "error" with exit code 4
+- Ansible reports "unreachable" for container-host
+- SSH key is properly added to authorized_keys during bootstrap
+- Manual SSH from VM to itself works correctly
 
-**Fix Applied**:
-1. Added `>&2` to all log output in `create_semaphore_ssh_key` to redirect to stderr
-2. Added validation to ensure captured SSH key ID is numeric before use
-3. Made `create_default_inventory` more robust with defensive validation
-4. Added debug logging to help troubleshoot any future issues
+**Current Workaround**: 
+- Run playbooks manually via ansible-playbook command
+- Or deploy services using Podman directly
 
-**Result**: Bootstrap now completes fully automated without manual intervention. The inventory is created with proper SSH key association, and services can be deployed immediately.
+**Next Steps**: Investigating why Semaphore's Ansible execution cannot use the SSH key despite it being properly configured.
 
-### Minor Issues (Still Present)
-- Template synchronization depends on inventory existing
-- No post-bootstrap validation to ensure everything is ready
-- Error reporting could be more detailed
+### Bootstrap Issues ✅ ALL RESOLVED (2025-07-21)
+All critical bootstrap issues have been fixed:
+- ✅ Inventory creation with SSH key association
+- ✅ Template generation for all services  
+- ✅ Password generation with JSON-safe characters
+- ✅ SSH key added to ubuntuadmin's authorized_keys
 
-### Impact
-The critical blocking issue has been resolved. Users can now enjoy true "one command deployment" from Proxmox to running services without manual intervention.
+The bootstrap now runs completely hands-off in ~3 minutes.
