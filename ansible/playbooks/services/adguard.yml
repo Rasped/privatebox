@@ -204,13 +204,13 @@
             
         - name: Enable AdGuard Home service
           systemd:
-            name: adguard-container.service
+            name: adguard.service
             enabled: true
             scope: "{{ 'system' if use_system_quadlet else 'user' }}"
             
         - name: Start AdGuard Home service
           systemd:
-            name: adguard-container.service
+            name: adguard.service
             state: started
             scope: "{{ 'system' if use_system_quadlet else 'user' }}"
           register: service_start
@@ -277,7 +277,7 @@
       block:
         - name: Check service status
           systemd:
-            name: adguard-container.service
+            name: adguard.service
             scope: "{{ 'system' if use_system_quadlet else 'user' }}"
           register: service_status
           
@@ -428,7 +428,7 @@
               - Web Interface: {{ service_info.web_url }}
               - DNS Server: {{ service_info.dns_server }}:{{ service_info.dns_port }}
               
-              Service: adguard-container.service
+              Service: adguard.service
               Container: adguard-home
               
               Data Directory: {{ adguard_data_dir }}
@@ -459,6 +459,6 @@
   handlers:
     - name: restart adguard
       systemd:
-        name: adguard-container.service
+        name: adguard.service
         state: restarted
         scope: "{{ 'system' if use_system_quadlet else 'user' }}"
