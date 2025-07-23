@@ -1151,6 +1151,9 @@ PublishPort=3306:3306
 [Service]
 Restart=always
 TimeoutStartSec=90s
+
+[Install]
+WantedBy=multi-user.target
 EOF
 }
 
@@ -1188,6 +1191,9 @@ PublishPort=3000:3000
 [Service]
 Restart=always
 TimeoutStartSec=90s
+
+[Install]
+WantedBy=multi-user.target
 EOF
 }
 

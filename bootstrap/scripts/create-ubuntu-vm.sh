@@ -627,6 +627,7 @@ ${semaphore_setup_content}
       # Main setup script
       echo "Executing post-installation setup script..."
       export SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
+      export STATIC_IP="${STATIC_IP}"
       /bin/bash /usr/local/bin/initial-setup.sh
       setup_exit_code=\$?
       if [ \$setup_exit_code -ne 0 ]; then
