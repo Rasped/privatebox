@@ -22,6 +22,11 @@
     confirm_deploy: true
     custom_web_port: "{{ adguard_web_port }}"
     
+    # Quadlet configuration
+    use_system_quadlet: true
+    quadlet_system_path: "/etc/containers/systemd"
+    quadlet_user_path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+    
     # Metadata for Semaphore template generation
     # Empty dict means generate template without survey variables (hands-off deployment)
     _semaphore_vars_prompt: {}
