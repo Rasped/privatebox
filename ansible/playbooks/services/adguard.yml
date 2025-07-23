@@ -10,6 +10,8 @@
     service_tag: "adguard"
     
     # AdGuard default configuration - can be overridden by group_vars
+    adguard_image: "adguard/adguardhome"
+    adguard_version: "latest"
     adguard_web_port: 8080      # Web interface port
     adguard_dns_port: 53        # DNS service port
     adguard_dns_port_udp: 53    # DNS service UDP port
@@ -26,6 +28,31 @@
     use_system_quadlet: true
     quadlet_system_path: "/etc/containers/systemd"
     quadlet_user_path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+    
+    # Container runtime configuration
+    container_image_registry: "docker.io"
+    volume_mount_options: "Z"
+    timezone: "UTC"
+    container_security_label_disable: false
+    container_no_new_privileges: true
+    container_drop_capabilities: []
+    container_user_namespace: "keep-id"
+    
+    # Health check configuration
+    health_check_interval: "30s"
+    health_check_retries: 3
+    health_check_start_period: "60s"
+    health_check_timeout: "10s"
+    
+    # Container management configuration
+    container_log_driver: "journald"
+    container_pull_policy: "missing"
+    container_restart_policy: "always"
+    container_restart_sec: 30
+    
+    # Systemd configuration
+    systemd_timeout_start_sec: 900
+    systemd_timeout_stop_sec: 90
     
     # Metadata for Semaphore template generation
     # Empty dict means generate template without survey variables (hands-off deployment)
