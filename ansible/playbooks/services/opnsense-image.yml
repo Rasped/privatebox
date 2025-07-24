@@ -1,6 +1,6 @@
 ---
 - name: Manage OPNsense Image
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: false
   
   vars:

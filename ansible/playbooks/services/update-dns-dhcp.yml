@@ -3,7 +3,7 @@
 # Configure DHCP servers for all VLANs
 
 - name: Update DNS and DHCP for VLAN Network
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: yes
   vars_prompt:
     - name: opnsense_ip

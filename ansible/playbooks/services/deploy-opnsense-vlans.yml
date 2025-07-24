@@ -3,7 +3,7 @@
 # Deploy OPNsense VM with all VLANs configured
 
 - name: Deploy OPNsense with VLAN Support
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: yes
   vars_prompt:
     - name: vm_id

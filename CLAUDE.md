@@ -66,13 +66,13 @@ documentation/           # Comprehensive planning and technical documentation
 
 ```bash
 # Basic installation with auto-discovery
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash
 
 # With custom IP
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash -s -- --ip 192.168.1.50
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash -s -- --ip 192.168.1.50
 
 # Skip confirmation prompt
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash -s -- --yes
 ```
 
 **IMPORTANT NOTE**: The quickstart script automatically handles cleanup! It will:
@@ -267,6 +267,21 @@ Phase 2 is complete when:
 - OPNsense automation approach fully researched and documented
 - All risks identified with mitigation strategies
 - Clear implementation path for Phase 3
+
+## Important Notes for Proxmox Operations
+
+### Running Commands on Proxmox Host
+- When SSH'd into Proxmox as root, **never use sudo** - you're already root
+- Correct: `curl -fsSL ... | bash`
+- Incorrect: `curl -fsSL ... | sudo bash`
+- This applies to all commands run directly on the Proxmox host
+
+### Bootstrap Timing Requirements
+- **ALWAYS wait the full requested time when monitoring bootstrap**
+- If user says "wait for 5 minutes", use `timeout=300000` (5 minutes in milliseconds)
+- Bootstrap takes 5-10 minutes to complete fully
+- Cloud-init needs time to install all packages and configure services
+- DO NOT interrupt or timeout early - the process needs to complete
 
 ## Key Files to Reference
 

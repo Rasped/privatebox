@@ -1,6 +1,6 @@
 ---
 - name: Deploy OPNsense VM
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: false
   
   vars:

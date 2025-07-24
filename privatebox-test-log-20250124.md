@@ -4,6 +4,7 @@
 **Test Environment**: Proxmox 192.168.1.10
 **Tester**: Claude Code
 **Log File**: /Users/rasped/privatebox/privatebox-test-log-20250124.md
+**Last Updated**: 2025-01-24 22:10
 
 ## Test Execution Rules
 1. ✅ Each step must complete successfully before proceeding
@@ -21,10 +22,12 @@
 3. **Initial-setup.sh**: Full scan inefficient - Added prioritized common IPs
 4. **Semaphore-setup.sh**: Not checking /etc/privatebox-proxmox-host file - Added check
 5. **Semaphore-setup.sh**: Not adding discovered Proxmox to inventory - Fixed
+6. **Semaphore-setup.sh**: Template sync looking for "Default Inventory" instead of "VM Inventory" - Fixed
 
 ### Commits:
 - fd98c5a: Fix Proxmox host discovery reliability 
 - 384fe41: Add Proxmox host to Semaphore inventory when discovered
+- [pending]: Fix template sync to use "VM Inventory" instead of "Default Inventory"
 
 ### Final Test Result: ✅ SUCCESS
 - Deployment Time: ~2:48 (20:28:00 - 20:30:48)
@@ -641,4 +644,89 @@ The bootstrap process discovered the Proxmox host and added it to inventory, but
 2. Add public key to Proxmox host's authorized_keys
 3. Add private key to Semaphore as new SSH key
 4. Update inventory to use correct SSH key ID for proxmox-host
+
+
+
+### SSH Authentication Fix for Hands-Off Deployment
+**Time**: 19:00-19:10
+**Issue**: Bootstrap was creating a single inventory with both VM and Proxmox hosts, but could only associate one SSH key
+**Root Cause**: Semaphore inventories can only have one SSH key associated
+
+**Resolution**:
+1. Modified semaphore-setup.sh to create two separate inventories:
+   - VM Inventory: Contains container-host, uses vm-container-host SSH key (ID 3)
+   - Proxmox Inventory: Contains proxmox-host, uses proxmox-host SSH key (ID 2)
+2. Updated template generator to auto-select correct inventory based on playbook's 'hosts' field
+3. Both SSH keys already exist from bootstrap, just needed proper association
+
+**Code Changes**:
+- Refactored create_default_inventory() to create two inventories
+- Added logic to detect proxmox-host playbooks and use Proxmox Inventory
+- Template generator now parses 'hosts' field from playbooks
+
+**Next Step**: Need to redeploy with updated bootstrap to test the fix
+
+
+## Test Run 3: Bootstrap with Separate Inventories
+
+### Quickstart Deployment
+**Time**: 21:48:34 - 21:51:21
+**Duration**: ~3 minutes
+**VM Created**: 192.168.1.20
+**Result**: ✅ SUCCESS
+
+**Key Improvements Verified**:
+1. ✅ Two separate inventories created:
+   - VM Inventory (ID: 1) with vm-container-host SSH key (ID: 3)
+   - Proxmox Inventory (ID: 2) with proxmox-host SSH key (ID: 2)
+2. ✅ Each inventory correctly associated with its respective SSH key
+3. ✅ Bootstrap completed 100% hands-off
+4. ✅ Proxmox host discovered and added to separate inventory
+
+**Credentials**:
+- SSH: ubuntuadmin/Changeme123
+- Semaphore: admin/n2)P7-_dU9k3g2M4lgND@w6Z-+=O+WeJ
+
+**Next Step**: Run template generation and test network discovery playbook
+
+
+## Test Run 4: Template Generation Fix Investigation
+
+### Template Generation Failure Analysis
+**Time**: 22:06-22:10
+**Bootstrap Run**: VM created at 192.168.1.21
+**Duration**: ~3 minutes (100% hands-off)
+**Result**: ✅ Bootstrap Success, ❌ Template Generation Failed
+
+**Issue Found**:
+- 0 templates exist in Semaphore (should be 15+)
+- 0 tasks have been run
+- Repository, Environment, and Inventories all created successfully
+
+**Root Cause Identified**:
+- The `setup_template_synchronization()` function in semaphore-setup.sh looks for "Default Inventory"
+- But bootstrap now creates "VM Inventory" and "Proxmox Inventory" (no "Default Inventory")
+- This causes template sync to fail at step 3: "Failed to find Default Inventory"
+
+**Fix Applied**:
+```bash
+# In /bootstrap/scripts/semaphore-setup.sh:
+# Changed line 729 from:
+local inv_id=$(get_inventory_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "Default Inventory")
+# To:
+local inv_id=$(get_inventory_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "VM Inventory")
+```
+
+**Also Updated Error Message** (line 737):
+```bash
+# From: "Failed to find Default Inventory"
+# To: "Failed to find VM Inventory"
+```
+
+**Why This Fix Works**:
+- Template generation runs Python script on the VM, so VM Inventory is appropriate
+- VM Inventory has the correct SSH key for container-host access
+- Aligns with the new dual-inventory architecture
+
+**Verification Needed**: Run bootstrap again to confirm template generation now works
 
