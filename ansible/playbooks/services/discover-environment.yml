@@ -15,7 +15,11 @@
     confirm_discovery: true
     
     # Empty vars_prompt for Semaphore template generation
-    _semaphore_vars_prompt: {}
+    _semaphore_vars_prompt:
+      confirm_discovery:
+        type: "yes_no"
+        description: "Confirm environment discovery"
+        required: false
     
   # Metadata for Semaphore template generation
   vars_prompt:
@@ -23,9 +27,6 @@
       prompt: "Proceed with Proxmox environment discovery?"
       default: "yes"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_description: "Confirm environment discovery"
-      semaphore_required: false
       
   tasks:
     # Pre-discovery validation
