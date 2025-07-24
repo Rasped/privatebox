@@ -543,9 +543,9 @@ def main():
         # Determine inventory based on playbook hosts
         hosts = playbook_info.get('hosts', 'all')
         if hosts in ['proxmox-host', 'proxmox']:
-            inventory_name = config.get('semaphore_inventory', 'Proxmox Inventory')
+            inventory_name = config.get('semaphore_inventory', 'proxmox')
         else:
-            inventory_name = config.get('semaphore_inventory', 'VM Inventory')
+            inventory_name = config.get('semaphore_inventory', 'container-host')
         
         repository_name = config.get('semaphore_repository', 'PrivateBox')
         environment_name = config.get('semaphore_environment')

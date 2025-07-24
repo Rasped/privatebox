@@ -726,7 +726,7 @@ setup_template_synchronization() {
     # Get resource IDs
     log_info "Step 3/5: Looking up resource IDs..."
     local repo_id=$(get_repository_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "PrivateBox")
-    local inv_id=$(get_inventory_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "Default Inventory")
+    local inv_id=$(get_inventory_id_by_name "http://localhost:3000" "$admin_session" "$project_id" "container-host")
     
     if [ -z "$repo_id" ]; then
         log_error "❌ Failed to find PrivateBox repository"
@@ -734,7 +734,7 @@ setup_template_synchronization() {
         return 1
     fi
     if [ -z "$inv_id" ]; then
-        log_error "❌ Failed to find Default Inventory"
+        log_error "❌ Failed to find container-host inventory"
         log_info "Template sync setup FAILED at step 3 - inventory not found"
         return 1
     fi
@@ -1785,7 +1785,7 @@ create_default_inventory() {
       ansible_become: true
       ansible_become_method: sudo"
         
-        create_inventory "$project_id" "$admin_session" "VM Inventory" "$vm_inventory" "$vm_ssh_key_id"
+        create_inventory "$project_id" "$admin_session" "container-host" "$vm_inventory" "$vm_ssh_key_id"
     else
         log_warn "No valid VM SSH key ID provided, skipping VM inventory creation"
     fi
@@ -1797,16 +1797,16 @@ create_default_inventory() {
             log_info "Found Proxmox host IP: $proxmox_ip"
             
             # Get the Proxmox SSH key ID (should be key ID 2 based on earlier creation)
-            local proxmox_key_id=$(get_ssh_key_id_by_name "$project_id" "proxmox-host" "$admin_session")
+            local proxmox_key_id=$(get_ssh_key_id_by_name "$project_id" "proxmox" "$admin_session")
             
             if [ -n "$proxmox_key_id" ] && [[ "$proxmox_key_id" =~ ^[0-9]+$ ]]; then
                 local proxmox_inventory="all:
   hosts:
-    proxmox-host:
+    proxmox:
       ansible_host: ${proxmox_ip}
       ansible_user: root"
                 
-                create_inventory "$project_id" "$admin_session" "Proxmox Inventory" "$proxmox_inventory" "$proxmox_key_id"
+                create_inventory "$project_id" "$admin_session" "proxmox" "$proxmox_inventory" "$proxmox_key_id"
             else
                 log_warn "No Proxmox SSH key found, cannot create Proxmox inventory"
             fi
@@ -1957,7 +1957,7 @@ create_infrastructure_project_with_ssh_key() {
             # Create SSH key for this project first (before inventory)
             local proxmox_key_id=""
             if [ -f "$SSH_PRIVATE_KEY_PATH" ]; then
-                proxmox_key_id=$(create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session")
+                proxmox_key_id=$(create_semaphore_ssh_key "$project_id" "proxmox" "ssh" "$admin_session")
             else
                 log_info "WARNING: SSH key not found at $SSH_PRIVATE_KEY_PATH - skipping Proxmox SSH key creation"
             fi
@@ -1965,7 +1965,7 @@ create_infrastructure_project_with_ssh_key() {
             # Create SSH key for VM self-management (with ubuntuadmin as the SSH user)
             local vm_key_id=""
             if [ -f "/root/.credentials/semaphore_vm_key" ]; then
-                vm_key_id=$(create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "ubuntuadmin")
+                vm_key_id=$(create_semaphore_ssh_key "$project_id" "container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "ubuntuadmin")
             else
                 log_info "WARNING: VM SSH key not found at /root/.credentials/semaphore_vm_key - skipping VM SSH key creation"
             fi

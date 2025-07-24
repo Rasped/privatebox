@@ -1,6 +1,6 @@
 ---
 - name: Discover Proxmox Environment
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: true
   
   vars:

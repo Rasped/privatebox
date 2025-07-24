@@ -4,7 +4,7 @@
 # and prepares for automated configuration
 
 - name: Configure OPNsense VM Boot Settings
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: false
   
   vars:
