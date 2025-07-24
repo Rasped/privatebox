@@ -1,0 +1,397 @@
+---
+# Task 5.1: Create Base Firewall Rules Template
+# Implements foundational security rules for OPNsense based on Phase 3 planning
+- name: Configure OPNsense Base Firewall Rules
+  hosts: container-host
+  become: true
+  gather_facts: true
+  
+  vars:
+    service_name: "OPNsense Base Firewall Rules"
+    service_description: "Implement foundational security rules including anti-lockout, management access, and default deny"
+    service_tag: "firewall-base"
+    
+    # API credentials location
+    api_key_file: "/etc/privatebox-opnsense-api-key"
+    api_secret_file: "/etc/privatebox-opnsense-api-secret"
+    
+    # Secure paths
+    backup_dir: "/opt/privatebox/backups"
+    scripts_dir: "/opt/privatebox/scripts"
+    
+    # Metadata for Semaphore template generation
+    _semaphore_vars_prompt:
+      opnsense_host:
+        semaphore_type: "string"
+        semaphore_required: true
+        semaphore_description: "OPNsense IP address or hostname"
+      confirm_firewall_changes:
+        semaphore_type: "boolean"
+        semaphore_required: true
+        semaphore_default: false
+        semaphore_description: "Confirm firewall rule changes (can lock you out if misconfigured)"
+  
+  tasks:
+    - name: Pre-flight checks
+      block:
+        - name: Verify confirmation
+          assert:
+            that:
+              - confirm_firewall_changes | bool
+            fail_msg: "Firewall changes not confirmed. Set confirm_firewall_changes=true to proceed."
+            
+        - name: Check API credentials exist
+          stat:
+            path: "{{ item }}"
+          loop:
+            - "{{ api_key_file }}"
+            - "{{ api_secret_file }}"
+          register: cred_files
+          
+        - name: Verify all credential files exist
+          assert:
+            that:
+              - item.stat.exists
+            fail_msg: "API credential file missing: {{ item.item }}. Run opnsense-enable-api.yml first."
+          loop: "{{ cred_files.results }}"
+          
+        - name: Load API credentials
+          set_fact:
+            api_key: "{{ lookup('file', api_key_file) | trim }}"
+            api_secret: "{{ lookup('file', api_secret_file) | trim }}"
+          no_log: true
+            
+        - name: Test API connectivity
+          uri:
+            url: "https://{{ opnsense_host }}/api/core/system/status"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: api_test
+          
+        - name: Create secure directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0700'
+            owner: root
+            group: root
+          loop:
+            - "{{ backup_dir }}"
+            - "{{ scripts_dir }}"
+            
+        - name: Create configuration backup
+          uri:
+            url: "https://{{ opnsense_host }}/api/core/backup/download/this"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            dest: "{{ backup_dir }}/opnsense-backup-{{ ansible_date_time.epoch }}.xml"
+            status_code: 200
+          register: backup_result
+          
+    - name: Create network aliases
+      block:
+        - name: Define network aliases
+          set_fact:
+            network_aliases:
+              - name: "MGMT_net"
+                content: "10.0.10.0/24"
+                description: "Management VLAN network"
+              - name: "SVC_net"
+                content: "10.0.20.0/24"
+                description: "Services VLAN network"
+              - name: "LAN_net"
+                content: "10.0.30.0/24"
+                description: "LAN VLAN network"
+              - name: "IOT_net"
+                content: "10.0.40.0/24"
+                description: "IoT VLAN network"
+              - name: "RFC1918"
+                content: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+                description: "Private IP address ranges"
+                
+        - name: Create/update network aliases via API
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/alias/setItem"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              alias:
+                name: "{{ item.name }}"
+                type: "network"
+                content: "{{ item.content }}"
+                description: "{{ item.description }}"
+                enabled: "1"
+            status_code: [200, 201]
+          loop: "{{ network_aliases }}"
+          register: alias_results
+          retries: 3
+          delay: 5
+          
+        - name: Apply alias changes
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/alias/reconfigure"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body: {}
+            status_code: 200
+            
+    - name: Configure base firewall rules
+      block:
+        - name: Define base firewall rules
+          set_fact:
+            base_rules:
+              # Anti-lockout rule (highest priority)
+              - sequence: "1"
+                action: "pass"
+                interface: "MGMT"
+                source: "MGMT_net"
+                destination: "MGMT:address"
+                destination_port: "443,22"
+                protocol: "tcp"
+                description: "Anti-lockout rule - Management access to OPNsense"
+                log: "1"
+                
+              # Management VLAN full access
+              - sequence: "100"
+                action: "pass"
+                interface: "MGMT"
+                source: "MGMT_net"
+                destination: "any"
+                protocol: "any"
+                description: "100-MGMT-ANY-ANY-ALLOW - Management has full access"
+                log: "1"
+                
+              # Default deny all inter-VLAN traffic
+              - sequence: "999"
+                action: "block"
+                interface: "lan"
+                source: "any"
+                destination: "any"
+                protocol: "any"
+                description: "Default deny all - Log denied traffic"
+                log: "1"
+                
+        - name: Clear existing rules (careful!)
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/filter/delRule/{{ item }}"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: [200, 404]
+          loop: "{{ range(1, 1000) | list }}"
+          when: false  # Safety: disabled by default
+          
+        - name: Add base firewall rules
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/filter/addRule"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              rule:
+                sequence: "{{ item.sequence }}"
+                action: "{{ item.action }}"
+                interface: "{{ item.interface }}"
+                direction: "in"
+                ipprotocol: "inet"
+                protocol: "{{ item.protocol }}"
+                source: "{{ item.source }}"
+                destination: "{{ item.destination }}"
+                destination_port: "{{ item.destination_port | default('') }}"
+                log: "{{ item.log | default('0') }}"
+                description: "{{ item.description }}"
+                enabled: "1"
+            status_code: [200, 201]
+          loop: "{{ base_rules }}"
+          register: rule_results
+          retries: 3
+          delay: 5
+          
+        - name: Apply firewall changes
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/filter/apply"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body: {}
+            status_code: 200
+          register: apply_result
+      rescue:
+        - name: Display error and rollback instructions
+          debug:
+            msg:
+              - "ERROR: Failed to configure firewall rules"
+              - "To restore from backup:"
+              - "1. Access OPNsense web UI"
+              - "2. Go to System > Configuration > Backups"
+              - "3. Upload backup from {{ backup_dir }}/"
+          failed_when: true
+          
+    - name: Configure logging settings
+      block:
+        - name: Set firewall logging parameters
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/settings/set"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              settings:
+                logdefaultblock: "1"
+                logdefaultpass: "0"
+                logbogons: "1"
+                logprivateaddress: "1"
+                loglevel: "normal"
+            status_code: 200
+            
+    - name: Configure default policies
+      block:
+        - name: Set default deny policy
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/settings/set"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              settings:
+                defaultpolicy: "deny"
+            status_code: 200
+            
+    - name: Validate configuration
+      block:
+        - name: Test management access
+          uri:
+            url: "https://{{ opnsense_host }}/api/core/system/status"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: post_config_test
+          
+        - name: Get current firewall rules
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/filter/searchRule"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: current_rules
+          
+        - name: Display configured rules summary
+          debug:
+            msg:
+              - "Base firewall rules configured successfully"
+              - "Total rules: {{ current_rules.json.rowCount | default(0) }}"
+              - "Management access verified"
+              
+    - name: Create rollback script
+      copy:
+        content: |
+          #!/bin/bash
+          # Emergency firewall rollback script
+          # Generated: {{ ansible_date_time.iso8601 }}
+          
+          echo "WARNING: This will reset firewall to allow all traffic!"
+          read -p "Are you sure? (yes/no): " confirm
+          
+          if [ "$confirm" != "yes" ]; then
+              echo "Aborted"
+              exit 1
+          fi
+          
+          # SSH to OPNsense and reset firewall
+          ssh root@{{ opnsense_host }} << 'EOF'
+          # Backup current config
+          cp /usr/local/etc/config.xml /usr/local/etc/config.xml.firewall-backup
+          
+          # Remove all filter rules
+          /usr/local/bin/php << 'PHP'
+          <?php
+          require_once("config.inc");
+          $config = parse_xml_config('/usr/local/etc/config.xml', array('opnsense'));
+          
+          // Clear all filter rules
+          $config['filter']['rule'] = array();
+          
+          // Add allow all rule
+          $config['filter']['rule'][] = array(
+              'type' => 'pass',
+              'interface' => 'lan',
+              'source' => array('any' => ''),
+              'destination' => array('any' => ''),
+              'descr' => 'EMERGENCY - Allow all'
+          );
+          
+          write_config("Emergency firewall reset");
+          
+          // Reload firewall
+          system("/usr/local/etc/rc.filter_configure");
+          PHP
+          
+          echo "Firewall reset to allow all traffic"
+          EOF
+        dest: "{{ scripts_dir }}/firewall-emergency-reset.sh"
+        mode: '0755'
+        
+    - name: Display completion information
+      debug:
+        msg:
+          - "=========================================="
+          - "Base Firewall Rules Configured!"
+          - "=========================================="
+          - ""
+          - "Configured rules:"
+          - "1. Anti-lockout rule (Management access)"
+          - "2. Management VLAN full access"
+          - "3. Default deny all with logging"
+          - ""
+          - "Network aliases created:"
+          - "- MGMT_net: 10.0.10.0/24"
+          - "- SVC_net: 10.0.20.0/24"
+          - "- LAN_net: 10.0.30.0/24"
+          - "- IOT_net: 10.0.40.0/24"
+          - "- RFC1918: All private IP ranges"
+          - ""
+          - "Emergency rollback script:"
+          - "{{ scripts_dir }}/firewall-emergency-reset.sh"
+          - ""
+          - "Configuration backup saved:"
+          - "{{ backup_dir }}/opnsense-backup-{{ ansible_date_time.epoch }}.xml"
+          - ""
+          - "Next steps:"
+          - "- Run configure-inter-vlan.yml to set up VLAN routing"
+          - "- Monitor logs for denied traffic"
+          - "=========================================="

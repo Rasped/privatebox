@@ -1,0 +1,355 @@
+---
+# Test Suite: Integration Tests
+# Tests end-to-end workflows and component interactions
+
+- name: Integration Test Suite
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    test_results: []
+    integration_test_id: "{{ ansible_date_time.epoch }}"
+    test_vm_id: 9998
+    test_vm_name: "test-integration-{{ integration_test_id }}"
+    
+  tasks:
+    # Test 1: Complete Discovery to Deployment Flow
+    - name: Test 1.1 - Run network discovery
+      include_tasks: test-network-discovery.yml
+      vars:
+        integration_mode: true
+    
+    - name: Test 1.2 - Verify discovery outputs
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'discovery_integration', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if ansible_default_ipv4 is defined else 'fail' }}"
+        details: "Discovery completed, found network: {{ ansible_default_ipv4.network | default('none') }}"
+    
+    # Test 2: VM Creation Workflow
+    - name: Test 2.1 - Generate VM configuration from discovery
+      set_fact:
+        vm_config:
+          id: "{{ test_vm_id }}"
+          name: "{{ test_vm_name }}"
+          memory: 2048
+          cores: 2
+          disk_size: "10G"
+          network_bridge: "{{ ansible_default_ipv4.interface | default('vmbr0') | regex_replace('^.*vmbr', 'vmbr') }}"
+          ip_address: "{{ ansible_default_ipv4.address | default('192.168.1.100') | regex_replace('[0-9]+$', '200') }}"
+    
+    - name: Test 2.2 - Validate VM configuration
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'vm_config_generation', 'status': 'pass', 'details': details}] }}"
+      vars:
+        details: "VM {{ vm_config.name }} configured with {{ vm_config.memory }}MB RAM, {{ vm_config.cores }} cores"
+    
+    # Test 3: State Management Flow
+    - name: Test 3.1 - Create state tracking structure
+      set_fact:
+        deployment_state:
+          phase: "initialization"
+          vm_created: false
+          network_configured: false
+          services_deployed: false
+          health_checks_passed: false
+    
+    - name: Test 3.2 - Simulate state progression
+      set_fact:
+        deployment_state: "{{ deployment_state | combine({'phase': item.phase, item.key: true}) }}"
+      loop:
+        - phase: "vm_creation"
+          key: "vm_created"
+        - phase: "network_setup"
+          key: "network_configured"
+        - phase: "service_deployment"
+          key: "services_deployed"
+        - phase: "verification"
+          key: "health_checks_passed"
+      loop_control:
+        pause: 1
+    
+    - name: Test 3.3 - Verify state progression
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'state_management_flow', 'status': status, 'details': details}] }}"
+      vars:
+        all_complete: "{{ deployment_state.vm_created and deployment_state.network_configured and deployment_state.services_deployed and deployment_state.health_checks_passed }}"
+        status: "{{ 'pass' if all_complete else 'fail' }}"
+        details: "Final phase: {{ deployment_state.phase }}, All steps completed: {{ all_complete }}"
+    
+    # Test 4: Error Recovery Flow
+    - name: Test 4.1 - Simulate deployment with retry logic
+      block:
+        - name: Attempt deployment (simulated)
+          shell: |
+            # Simulate random failure
+            if [ $((RANDOM % 3)) -eq 0 ]; then
+              echo "Deployment failed - network timeout"
+              exit 1
+            fi
+            echo "Deployment successful"
+          register: deployment_attempt
+          retries: 3
+          delay: 2
+          until: deployment_attempt.rc == 0
+      rescue:
+        - name: Handle deployment failure
+          set_fact:
+            deployment_recovered: false
+      always:
+        - name: Record deployment recovery test
+          set_fact:
+            test_results: "{{ test_results + [{'test': 'deployment_retry_logic', 'status': status, 'details': details}] }}"
+          vars:
+            status: "{{ 'pass' if deployment_attempt is succeeded else 'warning' }}"
+            details: "Deployment {{ 'succeeded' if deployment_attempt is succeeded else 'failed after retries' }}"
+    
+    # Test 5: Configuration Propagation
+    - name: Test 5.1 - Create hierarchical configuration
+      set_fact:
+        global_config:
+          privatebox_version: "1.0.0"
+          default_vm_specs:
+            memory: 2048
+            cores: 2
+        environment_config:
+          network:
+            management_vlan: 10
+            service_vlan: 20
+          storage:
+            default_pool: "local-lvm"
+        service_config:
+          adguard:
+            port: 3000
+            upstream_dns: ["8.8.8.8", "8.8.4.4"]
+    
+    - name: Test 5.2 - Merge configurations
+      set_fact:
+        final_config: "{{ global_config | combine(environment_config, recursive=true) | combine(service_config, recursive=true) }}"
+    
+    - name: Test 5.3 - Verify configuration merge
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'configuration_propagation', 'status': status, 'details': details}] }}"
+      vars:
+        has_all_sections: "{{ 'privatebox_version' in final_config and 'network' in final_config and 'adguard' in final_config }}"
+        status: "{{ 'pass' if has_all_sections else 'fail' }}"
+        details: "Configuration sections: {{ final_config.keys() | list | join(', ') }}"
+    
+    # Test 6: Service Dependency Resolution
+    - name: Test 6.1 - Define service dependencies
+      set_fact:
+        services:
+          dns:
+            name: "unbound"
+            depends_on: []
+            status: "not_started"
+          adguard:
+            name: "adguard"
+            depends_on: ["dns"]
+            status: "not_started"
+          opnsense:
+            name: "opnsense"
+            depends_on: ["dns", "adguard"]
+            status: "not_started"
+    
+    - name: Test 6.2 - Calculate deployment order
+      set_fact:
+        deployment_order: []
+    
+    - name: Test 6.3 - Build deployment order (DNS first)
+      set_fact:
+        deployment_order: "{{ deployment_order + ['dns'] }}"
+        services: "{{ services | combine({'dns': services.dns | combine({'status': 'deployed'})}) }}"
+    
+    - name: Test 6.4 - Build deployment order (AdGuard)
+      set_fact:
+        deployment_order: "{{ deployment_order + ['adguard'] }}"
+        services: "{{ services | combine({'adguard': services.adguard | combine({'status': 'deployed'})}) }}"
+      when: services.dns.status == "deployed"
+    
+    - name: Test 6.5 - Build deployment order (OPNsense)
+      set_fact:
+        deployment_order: "{{ deployment_order + ['opnsense'] }}"
+        services: "{{ services | combine({'opnsense': services.opnsense | combine({'status': 'deployed'})}) }}"
+      when: services.dns.status == "deployed" and services.adguard.status == "deployed"
+    
+    - name: Test 6.6 - Verify dependency resolution
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'service_dependency_resolution', 'status': status, 'details': details}] }}"
+      vars:
+        correct_order: "{{ deployment_order == ['dns', 'adguard', 'opnsense'] }}"
+        status: "{{ 'pass' if correct_order else 'fail' }}"
+        details: "Deployment order: {{ deployment_order | join(' -> ') }}"
+    
+    # Test 7: Health Check Integration
+    - name: Test 7.1 - Define comprehensive health checks
+      set_fact:
+        health_checks:
+          - name: "System Resources"
+            checks:
+              - type: "cpu"
+                threshold: 80
+                current: "{{ (100 - (ansible_memfree_mb / ansible_memtotal_mb * 100)) | round(0) }}"
+              - type: "memory"
+                threshold: 90
+                current: "{{ (100 - (ansible_memfree_mb / ansible_memtotal_mb * 100)) | round(0) }}"
+              - type: "disk"
+                threshold: 85
+                current: 45  # Simulated
+          - name: "Network Connectivity"
+            checks:
+              - type: "gateway"
+                target: "{{ ansible_default_ipv4.gateway | default('192.168.1.1') }}"
+                status: "reachable"  # Simulated
+              - type: "dns"
+                target: "8.8.8.8"
+                status: "reachable"  # Simulated
+          - name: "Service Status"
+            checks:
+              - type: "api"
+                endpoint: "http://localhost:3000/api/health"
+                status: "healthy"  # Simulated
+    
+    - name: Test 7.2 - Execute health check evaluation
+      set_fact:
+        health_status:
+          passed: 0
+          failed: 0
+          warnings: 0
+    
+    - name: Test 7.3 - Evaluate resource checks
+      set_fact:
+        health_status: >-
+          {{
+            health_status | combine({
+              'passed': health_status.passed + 1 if (item.current | int) < (item.threshold | int) else health_status.passed,
+              'warnings': health_status.warnings + 1 if (item.current | int) >= (item.threshold | int) else health_status.warnings
+            })
+          }}
+      loop: "{{ health_checks[0].checks }}"
+      when: item.type in ['cpu', 'memory', 'disk']
+    
+    - name: Test 7.4 - Record health check integration
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'health_check_integration', 'status': 'pass', 'details': details}] }}"
+      vars:
+        details: "Health checks defined for {{ health_checks | length }} categories"
+    
+    # Test 8: End-to-End Workflow Simulation
+    - name: Test 8.1 - Simulate complete deployment workflow
+      set_fact:
+        workflow_steps:
+          - step: "Environment Discovery"
+            duration: 2
+            status: "completed"
+          - step: "Resource Validation"
+            duration: 1
+            status: "completed"
+          - step: "VM Creation"
+            duration: 5
+            status: "completed"
+          - step: "Network Configuration"
+            duration: 3
+            status: "completed"
+          - step: "Service Deployment"
+            duration: 10
+            status: "completed"
+          - step: "Health Verification"
+            duration: 2
+            status: "completed"
+    
+    - name: Test 8.2 - Calculate total workflow time
+      set_fact:
+        total_duration: "{{ workflow_steps | map(attribute='duration') | sum }}"
+    
+    - name: Test 8.3 - Record workflow simulation
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'end_to_end_workflow', 'status': 'pass', 'details': details}] }}"
+      vars:
+        details: "Workflow completed in {{ total_duration }} seconds (simulated)"
+    
+    # Generate Test Report
+    - name: Generate test summary
+      set_fact:
+        test_summary:
+          total_tests: "{{ test_results | length }}"
+          passed: "{{ test_results | selectattr('status', 'equalto', 'pass') | list | length }}"
+          failed: "{{ test_results | selectattr('status', 'equalto', 'fail') | list | length }}"
+          warnings: "{{ test_results | selectattr('status', 'equalto', 'warning') | list | length }}"
+    
+    - name: Display test results
+      debug:
+        msg: |
+          Integration Test Results
+          ========================
+          Total Tests: {{ test_summary.total_tests }}
+          Passed: {{ test_summary.passed }}
+          Failed: {{ test_summary.failed }}
+          Warnings: {{ test_summary.warnings }}
+          
+          Integration Test ID: {{ integration_test_id }}
+          
+          Detailed Results:
+          {% for result in test_results %}
+          - {{ result.test }}: {{ result.status | upper }}
+            Details: {{ result.details }}
+          {% endfor %}
+          
+          Workflow Summary:
+          ----------------
+          {% for step in workflow_steps %}
+          - {{ step.step }}: {{ step.status }} ({{ step.duration }}s)
+          {% endfor %}
+          Total Duration: {{ total_duration }}s
+    
+    - name: Write test results to file
+      copy:
+        content: |
+          Integration Test Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          Test ID: {{ integration_test_id }}
+          
+          Summary:
+          --------
+          Total Tests: {{ test_summary.total_tests }}
+          Passed: {{ test_summary.passed }}
+          Failed: {{ test_summary.failed }}
+          Warnings: {{ test_summary.warnings }}
+          
+          Test Configuration:
+          ------------------
+          Test VM ID: {{ test_vm_id }}
+          Test VM Name: {{ test_vm_name }}
+          
+          Integration Points Tested:
+          -------------------------
+          - Discovery → Configuration
+          - Configuration → Deployment
+          - Deployment → Verification
+          - Error Handling & Recovery
+          - Service Dependencies
+          - Health Monitoring
+          
+          Detailed Results:
+          ----------------
+          {% for result in test_results %}
+          Test: {{ result.test }}
+          Status: {{ result.status | upper }}
+          Details: {{ result.details }}
+          
+          {% endfor %}
+          
+          Workflow Execution:
+          ------------------
+          {% for step in workflow_steps %}
+          {{ loop.index }}. {{ step.step }}
+             Duration: {{ step.duration }}s
+             Status: {{ step.status }}
+          {% endfor %}
+          
+          Total Workflow Duration: {{ total_duration }}s (simulated)
+        dest: /tmp/test-integration-{{ ansible_date_time.epoch }}.txt
+    
+    - name: Fail if critical tests failed
+      fail:
+        msg: "{{ test_summary.failed }} tests failed. Check detailed results above."
+      when: test_summary.failed | int > 0

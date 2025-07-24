@@ -1,0 +1,365 @@
+---
+- name: Enable and configure OPNsense API access
+  hosts: container-host
+  become: true
+  gather_facts: true
+  
+  vars:
+    service_name: "OPNsense API Configuration"
+    service_description: "Configure OPNsense API access with authentication tokens"
+    service_tag: "opnsense-api"
+    
+    # API user configuration
+    api_username: "ansible-api"
+    api_full_name: "Ansible API User"
+    api_key_file: "/etc/privatebox-opnsense-api-key"
+    api_secret_file: "/etc/privatebox-opnsense-api-secret"
+    
+    # Metadata for Semaphore template generation
+    _semaphore_vars_prompt:
+      opnsense_host:
+        semaphore_type: "string"
+        semaphore_required: true
+        semaphore_description: "OPNsense IP address or hostname"
+  
+  tasks:
+    - name: Pre-flight checks
+      block:
+        - name: Check SSH connectivity to OPNsense
+          wait_for:
+            host: "{{ opnsense_host }}"
+            port: 22
+            timeout: 10
+          register: ssh_check
+          
+        - name: Test SSH authentication
+          command: >
+            ssh -o BatchMode=yes -o ConnectTimeout=5 
+            root@{{ opnsense_host }} "echo 'SSH OK'"
+          register: ssh_test
+          changed_when: false
+          failed_when: false
+          
+        - name: Verify SSH access
+          assert:
+            that:
+              - ssh_test.rc == 0
+            fail_msg: "Cannot SSH to OPNsense. Please run opnsense-ssh-keys.yml first"
+            
+    - name: Generate API credentials
+      block:
+        - name: Check if API key exists
+          stat:
+            path: "{{ api_key_file }}"
+          register: api_key_stat
+          
+        - name: Generate API key
+          set_fact:
+            api_key: "{{ lookup('password', '/tmp/opnsense-api-key chars=ascii_letters,digits length=32') }}"
+          when: not api_key_stat.stat.exists
+          
+        - name: Generate API secret
+          set_fact:
+            api_secret: "{{ lookup('password', '/tmp/opnsense-api-secret chars=ascii_letters,digits length=64') }}"
+          when: not api_key_stat.stat.exists
+          
+        - name: Save API credentials
+          when: not api_key_stat.stat.exists
+          block:
+            - name: Save API key
+              copy:
+                content: "{{ api_key }}"
+                dest: "{{ api_key_file }}"
+                mode: '0600'
+                owner: root
+                group: root
+                
+            - name: Save API secret
+              copy:
+                content: "{{ api_secret }}"
+                dest: "{{ api_secret_file }}"
+                mode: '0600'
+                owner: root
+                group: root
+                
+        - name: Read existing credentials
+          when: api_key_stat.stat.exists
+          block:
+            - name: Read API key
+              slurp:
+                src: "{{ api_key_file }}"
+              register: existing_key
+              
+            - name: Read API secret
+              slurp:
+                src: "{{ api_secret_file }}"
+              register: existing_secret
+              
+            - name: Set credentials from files
+              set_fact:
+                api_key: "{{ existing_key.content | b64decode | trim }}"
+                api_secret: "{{ existing_secret.content | b64decode | trim }}"
+                
+    - name: Configure API on OPNsense
+      block:
+        - name: Create API configuration script
+          copy:
+            content: |
+              #!/bin/sh
+              # OPNsense API configuration script
+              
+              # Create API user if not exists
+              if ! grep -q "{{ api_username }}" /usr/local/etc/config.xml; then
+                  echo "Creating API user..."
+                  
+                  # Generate user XML
+                  cat > /tmp/api-user.xml << EOF
+              <user>
+                  <name>{{ api_username }}</name>
+                  <descr>{{ api_full_name }}</descr>
+                  <scope>system</scope>
+                  <groupname>admins</groupname>
+                  <password>*</password>
+                  <uid>0</uid>
+                  <priv>user-shell-access</priv>
+                  <apikeys>
+                      <item>
+                          <key>{{ api_key }}</key>
+                          <secret>{{ api_secret }}</secret>
+                          <descr>Ansible API Access</descr>
+                      </item>
+                  </apikeys>
+                  <authorizedkeys></authorizedkeys>
+              </user>
+              EOF
+                  
+                  # Backup config
+                  cp /usr/local/etc/config.xml /usr/local/etc/config.xml.bak.$(date +%s)
+                  
+                  # Add user to config (requires OPNsense PHP scripts)
+                  /usr/local/bin/php << 'PHP'
+              <?php
+              require_once("config.inc");
+              require_once("auth.inc");
+              
+              $config = parse_xml_config('/usr/local/etc/config.xml', array('opnsense'));
+              
+              if (!isset($config['system']['user'])) {
+                  $config['system']['user'] = array();
+              }
+              
+              $newuser = array(
+                  'name' => '{{ api_username }}',
+                  'descr' => '{{ api_full_name }}',
+                  'scope' => 'system',
+                  'groupname' => 'admins',
+                  'password' => '*',
+                  'uid' => '0',
+                  'priv' => array('user-shell-access'),
+                  'apikeys' => array(
+                      'item' => array(
+                          array(
+                              'key' => '{{ api_key }}',
+                              'secret' => '{{ api_secret }}',
+                              'descr' => 'Ansible API Access'
+                          )
+                      )
+                  )
+              );
+              
+              $config['system']['user'][] = $newuser;
+              
+              write_config("Added API user for Ansible");
+              PHP
+                  
+                  echo "API user created successfully"
+              else
+                  echo "API user already exists, updating API keys..."
+                  
+                  # Update existing user's API keys
+                  /usr/local/bin/php << 'PHP'
+              <?php
+              require_once("config.inc");
+              require_once("auth.inc");
+              
+              $config = parse_xml_config('/usr/local/etc/config.xml', array('opnsense'));
+              
+              foreach ($config['system']['user'] as &$user) {
+                  if ($user['name'] == '{{ api_username }}') {
+                      $user['apikeys'] = array(
+                          'item' => array(
+                              array(
+                                  'key' => '{{ api_key }}',
+                                  'secret' => '{{ api_secret }}',
+                                  'descr' => 'Ansible API Access'
+                              )
+                          )
+                      );
+                      break;
+                  }
+              }
+              
+              write_config("Updated API keys for Ansible user");
+              PHP
+                  
+                  echo "API keys updated successfully"
+              fi
+              
+              # Enable API if not already enabled
+              if ! grep -q '<api>' /usr/local/etc/config.xml; then
+                  echo "Enabling API..."
+                  /usr/local/bin/php << 'PHP'
+              <?php
+              require_once("config.inc");
+              
+              $config = parse_xml_config('/usr/local/etc/config.xml', array('opnsense'));
+              
+              if (!isset($config['api'])) {
+                  $config['api'] = array();
+              }
+              
+              $config['api']['enabled'] = '1';
+              
+              write_config("Enabled API");
+              PHP
+              fi
+              
+              # Restart web service to apply changes
+              /usr/local/etc/rc.restart_webgui
+              
+              echo "API configuration complete"
+            dest: /tmp/configure-api.sh
+            mode: '0755'
+            
+        - name: Copy script to OPNsense
+          command: >
+            scp -o StrictHostKeyChecking=no /tmp/configure-api.sh 
+            root@{{ opnsense_host }}:/tmp/configure-api.sh
+            
+        - name: Execute API configuration script
+          command: >
+            ssh -o StrictHostKeyChecking=no root@{{ opnsense_host }} 
+            "/tmp/configure-api.sh"
+          register: api_config_result
+          
+        - name: Display configuration result
+          debug:
+            var: api_config_result.stdout_lines
+            
+        - name: Clean up script
+          file:
+            path: /tmp/configure-api.sh
+            state: absent
+            
+    - name: Test API access
+      block:
+        - name: Wait for web service to restart
+          pause:
+            seconds: 10
+            
+        - name: Test API endpoint
+          uri:
+            url: "https://{{ opnsense_host }}/api/core/system/status"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: api_test
+          until: api_test.status == 200
+          retries: 3
+          delay: 5
+          
+        - name: Display API test result
+          debug:
+            msg:
+              - "API access successful!"
+              - "System version: {{ api_test.json.version_data.product_version | default('Unknown') }}"
+              
+    - name: Save API access information
+      block:
+        - name: Create API client configuration
+          copy:
+            content: |
+              # OPNsense API Configuration
+              # Generated: {{ ansible_date_time.iso8601 }}
+              
+              OPNSENSE_HOST={{ opnsense_host }}
+              OPNSENSE_API_KEY={{ api_key }}
+              OPNSENSE_API_SECRET={{ api_secret }}
+              
+              # Example usage with curl:
+              # curl -k -u "$OPNSENSE_API_KEY:$OPNSENSE_API_SECRET" \
+              #   https://$OPNSENSE_HOST/api/core/system/status
+            dest: /opt/privatebox/config/opnsense-api.conf
+            mode: '0600'
+            owner: root
+            group: root
+            
+        - name: Create Python API client example
+          copy:
+            content: |
+              #!/usr/bin/env python3
+              """
+              OPNsense API Client Example
+              Generated: {{ ansible_date_time.iso8601 }}
+              """
+              
+              import requests
+              import json
+              from requests.auth import HTTPBasicAuth
+              
+              # API Configuration
+              OPNSENSE_HOST = "{{ opnsense_host }}"
+              API_KEY = "{{ api_key }}"
+              API_SECRET = "{{ api_secret }}"
+              
+              # Disable SSL warnings for self-signed certificates
+              requests.packages.urllib3.disable_warnings()
+              
+              def opnsense_api_call(endpoint, method="GET", data=None):
+                  """Make an API call to OPNsense."""
+                  url = f"https://{OPNSENSE_HOST}/api/{endpoint}"
+                  auth = HTTPBasicAuth(API_KEY, API_SECRET)
+                  
+                  response = requests.request(
+                      method=method,
+                      url=url,
+                      auth=auth,
+                      verify=False,
+                      json=data
+                  )
+                  
+                  response.raise_for_status()
+                  return response.json()
+              
+              # Example: Get system status
+              try:
+                  status = opnsense_api_call("core/system/status")
+                  print(f"OPNsense Version: {status['version_data']['product_version']}")
+                  print(f"System Uptime: {status['uptime']}")
+              except Exception as e:
+                  print(f"API Error: {e}")
+            dest: /opt/privatebox/scripts/opnsense-api-client.py
+            mode: '0755'
+            
+    - name: Display completion information
+      debug:
+        msg:
+          - "=========================================="
+          - "OPNsense API Configuration Complete!"
+          - "=========================================="
+          - ""
+          - "API Endpoint: https://{{ opnsense_host }}/api/"
+          - "API User: {{ api_username }}"
+          - "API Key: Saved in {{ api_key_file }}"
+          - "API Secret: Saved in {{ api_secret_file }}"
+          - ""
+          - "Configuration saved to:"
+          - "- /opt/privatebox/config/opnsense-api.conf"
+          - "- /opt/privatebox/scripts/opnsense-api-client.py"
+          - ""
+          - "Test API access:"
+          - "python3 /opt/privatebox/scripts/opnsense-api-client.py"
+          - "=========================================="

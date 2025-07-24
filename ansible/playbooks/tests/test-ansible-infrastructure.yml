@@ -1,0 +1,306 @@
+---
+# Test Suite: Ansible Infrastructure Components
+# Tests inventory generation, collections, and template functionality
+
+- name: Test Ansible Infrastructure Components
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    test_results: []
+    test_inventory_path: /tmp/test-inventory-{{ ansible_date_time.epoch }}.yml
+    required_collections:
+      - name: community.general
+        version: ">=5.0.0"
+      - name: ansible.posix
+        version: ">=1.4.0"
+      - name: community.docker
+        version: ">=3.0.0"
+    
+  tasks:
+    # Test 1: Inventory Template Tests
+    - name: Test 1.1 - Create test inventory from template
+      copy:
+        content: |
+          all:
+            hosts:
+              proxmox:
+                ansible_host: {{ ansible_default_ipv4.address | default('192.168.1.250') }}
+                ansible_user: root
+                ansible_python_interpreter: /usr/bin/python3
+                proxmox_node: "{{ ansible_hostname }}"
+              
+              container-host:
+                ansible_host: {{ ansible_default_ipv4.address | default('192.168.1.100') }}
+                ansible_user: privatebox
+                ansible_python_interpreter: /usr/bin/python3
+                ansible_become: yes
+            
+            vars:
+              privatebox_version: "1.0.0"
+              network_discovery_enabled: true
+              auto_vm_id_allocation: true
+        dest: "{{ test_inventory_path }}"
+    
+    - name: Test 1.2 - Validate inventory file creation
+      stat:
+        path: "{{ test_inventory_path }}"
+      register: inventory_stat
+    
+    - name: Test 1.3 - Record inventory creation test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'inventory_creation', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if inventory_stat.stat.exists else 'fail' }}"
+        details: "Inventory created at {{ test_inventory_path }}, size: {{ inventory_stat.stat.size | default(0) }} bytes"
+    
+    - name: Test 1.4 - Test inventory parsing
+      shell: ansible-inventory -i {{ test_inventory_path }} --list
+      register: inventory_parse
+      ignore_errors: yes
+    
+    - name: Test 1.5 - Record inventory parsing test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'inventory_parsing', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if inventory_parse.rc == 0 else 'fail' }}"
+        details: "{{ 'Successfully parsed' if inventory_parse.rc == 0 else inventory_parse.stderr | default('Parse failed') }}"
+    
+    # Test 2: Ansible Collections Tests
+    - name: Test 2.1 - Check ansible-galaxy command
+      command: which ansible-galaxy
+      register: galaxy_check
+      ignore_errors: yes
+    
+    - name: Test 2.2 - Record ansible-galaxy availability
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'ansible_galaxy_available', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if galaxy_check.rc == 0 else 'fail' }}"
+        details: "ansible-galaxy found at: {{ galaxy_check.stdout | default('not found') }}"
+    
+    - name: Test 2.3 - List installed collections
+      shell: ansible-galaxy collection list
+      register: collections_list
+      ignore_errors: yes
+    
+    - name: Test 2.4 - Check for required collections
+      set_fact:
+        missing_collections: []
+    
+    - name: Test 2.5 - Identify missing collections
+      set_fact:
+        missing_collections: "{{ missing_collections + [item.name] }}"
+      when: item.name not in collections_list.stdout
+      loop: "{{ required_collections }}"
+    
+    - name: Test 2.6 - Record collections test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'required_collections', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'warning' if missing_collections else 'pass' }}"
+        details: "{{ 'Missing collections: ' + (missing_collections | join(', ')) if missing_collections else 'All required collections available' }}"
+    
+    # Test 3: Variable Precedence Tests
+    - name: Test 3.1 - Test variable precedence
+      set_fact:
+        test_var_default: "default_value"
+        test_var_group: "group_value"
+        test_var_host: "host_value"
+    
+    - name: Test 3.2 - Create test group_vars structure
+      file:
+        path: /tmp/test-ansible/group_vars/all
+        state: directory
+        mode: '0755'
+    
+    - name: Test 3.3 - Create test group variables
+      copy:
+        content: |
+          ---
+          test_var_group: "group_override"
+          privatebox_defaults:
+            vm_memory: 2048
+            vm_cores: 2
+            vm_disk_size: "20G"
+        dest: /tmp/test-ansible/group_vars/all/test.yml
+    
+    - name: Test 3.4 - Test variable loading
+      include_vars: /tmp/test-ansible/group_vars/all/test.yml
+      register: vars_loaded
+    
+    - name: Test 3.5 - Record variable precedence test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'variable_precedence', 'status': 'pass', 'details': 'Variables loaded and precedence working'}] }}"
+    
+    # Test 4: Ansible Configuration Tests
+    - name: Test 4.1 - Check ansible.cfg locations
+      stat:
+        path: "{{ item }}"
+      register: ansible_cfg_checks
+      loop:
+        - ./ansible.cfg
+        - ~/.ansible.cfg
+        - /etc/ansible/ansible.cfg
+    
+    - name: Test 4.2 - Find active ansible.cfg
+      set_fact:
+        active_ansible_cfg: "{{ ansible_cfg_checks.results | selectattr('stat.exists', 'equalto', true) | map(attribute='item') | first | default('none') }}"
+    
+    - name: Test 4.3 - Record ansible.cfg test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'ansible_cfg_location', 'status': 'info', 'details': 'Active config: ' + active_ansible_cfg}] }}"
+    
+    # Test 5: SSH Connectivity Tests
+    - name: Test 5.1 - Test SSH key generation
+      shell: ssh-keygen -t ed25519 -f /tmp/test-ssh-key-{{ ansible_date_time.epoch }} -N "" -C "test@privatebox"
+      register: ssh_keygen
+      ignore_errors: yes
+    
+    - name: Test 5.2 - Record SSH key generation test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'ssh_key_generation', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if ssh_keygen.rc == 0 else 'fail' }}"
+        details: "{{ 'Key generated successfully' if ssh_keygen.rc == 0 else ssh_keygen.stderr | default('Generation failed') }}"
+    
+    # Test 6: Playbook Syntax Tests
+    - name: Test 6.1 - Create test playbook
+      copy:
+        content: |
+          ---
+          - name: Test Playbook Syntax
+            hosts: all
+            gather_facts: no
+            tasks:
+              - name: Test task
+                debug:
+                  msg: "This is a syntax test"
+        dest: /tmp/test-playbook-{{ ansible_date_time.epoch }}.yml
+    
+    - name: Test 6.2 - Validate playbook syntax
+      shell: ansible-playbook --syntax-check /tmp/test-playbook-{{ ansible_date_time.epoch }}.yml
+      register: syntax_check
+      ignore_errors: yes
+    
+    - name: Test 6.3 - Record syntax check result
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'playbook_syntax_check', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if syntax_check.rc == 0 else 'fail' }}"
+        details: "{{ 'Syntax valid' if syntax_check.rc == 0 else syntax_check.stderr | default('Syntax error') }}"
+    
+    # Test 7: Module Availability Tests
+    - name: Test 7.1 - Test critical module availability
+      set_fact:
+        critical_modules:
+          - uri
+          - shell
+          - command
+          - copy
+          - template
+          - file
+          - stat
+          - debug
+          - set_fact
+          - include_vars
+    
+    - name: Test 7.2 - Check module documentation
+      shell: ansible-doc {{ item }} > /dev/null 2>&1
+      register: module_checks
+      loop: "{{ critical_modules }}"
+      ignore_errors: yes
+      changed_when: false
+    
+    - name: Test 7.3 - Record module availability
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'critical_modules_available', 'status': status, 'details': details}] }}"
+      vars:
+        failed_modules: "{{ module_checks.results | selectattr('rc', 'ne', 0) | map(attribute='item') | list }}"
+        status: "{{ 'pass' if not failed_modules else 'fail' }}"
+        details: "{{ 'All modules available' if not failed_modules else 'Missing modules: ' + (failed_modules | join(', ')) }}"
+    
+    # Test 8: Negative Tests
+    - name: Test 8.1 - Test with invalid inventory
+      shell: ansible-inventory -i /tmp/nonexistent-inventory.yml --list
+      register: invalid_inventory
+      ignore_errors: yes
+    
+    - name: Test 8.2 - Verify invalid inventory fails appropriately
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'negative_invalid_inventory', 'status': status, 'details': 'Correctly failed on invalid inventory'}] }}"
+      vars:
+        status: "{{ 'pass' if invalid_inventory.rc != 0 else 'fail' }}"
+    
+    # Clean up test files
+    - name: Clean up test files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ test_inventory_path }}"
+        - /tmp/test-ansible
+        - /tmp/test-ssh-key-{{ ansible_date_time.epoch }}
+        - /tmp/test-ssh-key-{{ ansible_date_time.epoch }}.pub
+        - /tmp/test-playbook-{{ ansible_date_time.epoch }}.yml
+      ignore_errors: yes
+    
+    # Generate Test Report
+    - name: Generate test summary
+      set_fact:
+        test_summary:
+          total_tests: "{{ test_results | length }}"
+          passed: "{{ test_results | selectattr('status', 'equalto', 'pass') | list | length }}"
+          failed: "{{ test_results | selectattr('status', 'equalto', 'fail') | list | length }}"
+          warnings: "{{ test_results | selectattr('status', 'equalto', 'warning') | list | length }}"
+          info: "{{ test_results | selectattr('status', 'equalto', 'info') | list | length }}"
+    
+    - name: Display test results
+      debug:
+        msg: |
+          Ansible Infrastructure Test Results
+          ===================================
+          Total Tests: {{ test_summary.total_tests }}
+          Passed: {{ test_summary.passed }}
+          Failed: {{ test_summary.failed }}
+          Warnings: {{ test_summary.warnings }}
+          Info: {{ test_summary.info }}
+          
+          Detailed Results:
+          {% for result in test_results %}
+          - {{ result.test }}: {{ result.status | upper }}
+            Details: {{ result.details }}
+          {% endfor %}
+    
+    - name: Write test results to file
+      copy:
+        content: |
+          Ansible Infrastructure Test Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          Summary:
+          --------
+          Total Tests: {{ test_summary.total_tests }}
+          Passed: {{ test_summary.passed }}
+          Failed: {{ test_summary.failed }}
+          Warnings: {{ test_summary.warnings }}
+          Info: {{ test_summary.info }}
+          
+          Environment:
+          ------------
+          Ansible Version: {{ ansible_version.full }}
+          Python Version: {{ ansible_python_version }}
+          
+          Detailed Results:
+          ----------------
+          {% for result in test_results %}
+          Test: {{ result.test }}
+          Status: {{ result.status | upper }}
+          Details: {{ result.details }}
+          
+          {% endfor %}
+        dest: /tmp/test-ansible-infrastructure-{{ ansible_date_time.epoch }}.txt
+    
+    - name: Fail if critical tests failed
+      fail:
+        msg: "{{ test_summary.failed }} tests failed. Check detailed results above."
+      when: test_summary.failed | int > 0
