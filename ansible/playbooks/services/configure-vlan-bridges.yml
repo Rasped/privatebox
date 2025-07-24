@@ -3,7 +3,7 @@
 # Configure Proxmox bridges with VLAN support
 
 - name: Configure VLAN Bridges on Proxmox
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: yes
   vars_prompt:
     - name: physical_interface

@@ -4,7 +4,7 @@
 # and attaches network interfaces according to the network plan
 
 - name: Create OPNsense VM
-  hosts: proxmox-host
+  hosts: proxmox
   gather_facts: true
   
   vars:
