@@ -108,14 +108,25 @@ ssh privatebox@<VM-IP> 'sudo /opt/privatebox/scripts/health-check.sh'
 
 ```bash
 # Deploy a specific service (e.g., AdGuard Home)
-ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/services/deploy-adguard.yml
+ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/services/adguard.yml
 
 # Run with specific variables
-ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/services/deploy-adguard.yml \
+ansible-playbook -i ansible/inventories/development/hosts.yml ansible/playbooks/services/adguard.yml \
   -e "adguard_data_path=/opt/adguard" -e "adguard_web_port=8080"
 
 # Using Semaphore UI (recommended)
 # Services are automatically available as job templates in Semaphore
+
+# Deploy via Semaphore API
+curl -c /tmp/semaphore-cookie -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"auth": "admin", "password": "YOUR_PASSWORD"}' \
+  http://VM_IP:3000/api/auth/login
+
+curl -s -b /tmp/semaphore-cookie -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"template_id": 2, "project_id": 1}' \
+  http://VM_IP:3000/api/project/1/tasks
 ```
 
 ### Semaphore API Authentication (IMPORTANT!)
@@ -162,9 +173,16 @@ curl -s -b /tmp/semaphore-cookie http://VM_IP:3000/api/project/1/tasks/TASK_ID |
 - ✅ **Remote Deployment**: Deploy to remote Proxmox servers
 - ✅ **Health Monitoring**: Service health check scripts
 
+### Phase 0: Prerequisites & Information Gathering (COMPLETE - 2025-07-24)
+- ✅ **VM Hostname Resolution**: Fixed "sudo: unable to resolve host" errors in cloud-init
+- ✅ **Container Networking**: Documented Podman Quadlet binding behavior (binds to VM IP)
+- ✅ **AdGuard API Documentation**: Created comprehensive test scripts and endpoint docs
+- ✅ **100% Hands-Off AdGuard**: Automatic deployment and configuration via Ansible
+- ✅ **DNS Integration**: System automatically configured to use AdGuard after deployment
+
 ### Ansible (SERVICE-ORIENTED APPROACH)
 - ✅ **Service Playbooks**: Individual playbooks for each service
-- ✅ **AdGuard Deployment**: Fully implemented with Podman Quadlet
+- ✅ **AdGuard Deployment**: Fully automated with Podman Quadlet and API configuration
 - ✅ **Semaphore Integration**: Automatic template synchronization
 - ✅ **Inventory**: SSH-based access to management VM
 - 🚧 **Additional Services**: OPNSense, Unbound DNS planned
@@ -573,3 +591,57 @@ All critical bootstrap issues have been fixed:
 - ✅ SSH key added to ubuntuadmin's authorized_keys
 
 The bootstrap now runs completely hands-off in ~3 minutes.
+
+## Phase 0 Lessons Learned (2025-07-24)
+
+### Key Fixes and Discoveries
+
+1. **Hostname Resolution Fix**:
+   - **Problem**: "sudo: unable to resolve host ubuntu" errors after VM creation
+   - **Fix**: Added hostname configuration to cloud-init in `create-ubuntu-vm.sh`:
+     ```yaml
+     hostname: ubuntu
+     manage_etc_hosts: true
+     ```
+
+2. **Container Binding Behavior**:
+   - **Discovery**: Podman Quadlet containers bind to VM's specific IP, not localhost
+   - **Impact**: Health checks and API calls must use `ansible_default_ipv4.address`
+   - **Not a bug**: This is correct security behavior for systemd services
+
+3. **AdGuard Port Configuration**:
+   - **Problem**: AdGuard switches from port 3000 to configured port after setup
+   - **Fix**: Configure AdGuard to keep using port 3000 internally:
+     ```yaml
+     web:
+       port: 3000  # Keep internal port consistent
+       ip: "0.0.0.0"
+     ```
+
+4. **Password File Detection**:
+   - **Problem**: `lookup('file', path, errors='ignore')` returns empty string, not error
+   - **Fix**: Use stat module to check file existence before lookup:
+     ```yaml
+     - name: Check if password file exists
+       stat:
+         path: /etc/privatebox-adguard-password
+       register: password_file_stat
+     ```
+
+5. **Semaphore Task Execution**:
+   - **Problem**: Ansible running inside Semaphore cannot restart Semaphore
+   - **Fix**: Removed Semaphore restart task from playbooks
+   - **Lesson**: Consider execution context when designing automation
+
+6. **API Authentication Timing**:
+   - **Discovery**: AdGuard API requires different endpoints pre/post configuration
+   - **Solution**: Check `/control/status` redirect to determine configuration state
+   - **Implementation**: Conditional logic based on HTTP 302 vs 200 responses
+
+### Best Practices Established
+
+1. **Always Test End-to-End**: Run from quickstart.sh to validate entire flow
+2. **Use VM IP for Services**: Never assume localhost binding in containers
+3. **Handle API State Changes**: Services may behave differently during/after setup
+4. **Check File Existence Explicitly**: Don't rely on lookup error handling
+5. **Consider Execution Context**: Automation running inside services it manages needs special handling
