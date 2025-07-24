@@ -1,0 +1,533 @@
+---
+# Task 6.5: Update DNS and DHCP Configuration
+# Configure DHCP servers for all VLANs
+
+- name: Update DNS and DHCP for VLAN Network
+  hosts: proxmox-host
+  gather_facts: yes
+  vars_prompt:
+    - name: opnsense_ip
+      prompt: "OPNsense management IP"
+      default: "10.100.0.1"
+      private: no
+      semaphore_type: "text"
+      semaphore_display_name: "OPNsense IP"
+      semaphore_description: "IP address of OPNsense on management VLAN"
+    
+    - name: configure_static_mappings
+      prompt: "Configure static DHCP mappings? (yes/no)"
+      default: "yes"
+      private: no
+      semaphore_type: "yes_no"
+      semaphore_display_name: "Static Mappings"
+      semaphore_description: "Create static DHCP reservations for known services"
+
+  vars:
+    # VLAN DHCP configurations
+    vlan_dhcp_config:
+      management:
+        vlan: 100
+        network: "10.100.0.0/24"
+        range_start: "10.100.0.100"
+        range_end: "10.100.0.199"
+        gateway: "10.100.0.1"
+        dns_servers:
+          - "10.101.0.10"  # AdGuard on Infrastructure VLAN
+          - "1.1.1.1"
+      infrastructure:
+        vlan: 101
+        network: "10.101.0.0/24"
+        range_start: "10.101.0.100"
+        range_end: "10.101.0.199"
+        gateway: "10.101.0.1"
+        dns_servers:
+          - "10.101.0.10"  # AdGuard (self)
+          - "1.1.1.1"
+      services:
+        vlan: 102
+        network: "10.102.0.0/24"
+        range_start: "10.102.0.100"
+        range_end: "10.102.0.199"
+        gateway: "10.102.0.1"
+        dns_servers:
+          - "10.101.0.10"
+          - "1.1.1.1"
+      dmz:
+        vlan: 103
+        network: "10.103.0.0/24"
+        range_start: "10.103.0.100"
+        range_end: "10.103.0.199"
+        gateway: "10.103.0.1"
+        dns_servers:
+          - "10.101.0.10"
+          - "1.1.1.1"
+      iot:
+        vlan: 104
+        network: "10.104.0.0/24"
+        range_start: "10.104.0.100"
+        range_end: "10.104.0.199"
+        gateway: "10.104.0.1"
+        dns_servers:
+          - "10.101.0.10"
+          - "1.1.1.1"
+      guest:
+        vlan: 105
+        network: "10.105.0.0/24"
+        range_start: "10.105.0.100"
+        range_end: "10.105.0.199"
+        gateway: "10.105.0.1"
+        dns_servers:
+          - "1.1.1.1"  # Guest uses public DNS only
+          - "8.8.8.8"
+    
+    # Static DHCP mappings
+    static_mappings:
+      - hostname: "privatebox-mgmt"
+        mac: "auto"  # Will be determined from current system
+        ip: "10.100.0.2"
+        vlan: "management"
+      - hostname: "adguard"
+        mac: "auto"
+        ip: "10.101.0.10"
+        vlan: "infrastructure"
+      - hostname: "portainer"
+        mac: "auto"
+        ip: "10.100.0.20"
+        vlan: "management"
+      - hostname: "semaphore"
+        mac: "auto"
+        ip: "10.100.0.21"
+        vlan: "management"
+
+  pre_tasks:
+    # Validate required host groups exist
+    - name: Check if proxmox-host group is defined
+      assert:
+        that:
+          - groups['proxmox-host'] is defined
+          - groups['proxmox-host'] | length > 0
+        fail_msg: |
+          ERROR: The 'proxmox-host' group is not defined in the inventory.
+          
+          This playbook requires a Proxmox host to be defined in your inventory.
+          Please add a proxmox-host group to your inventory file:
+          
+          [proxmox-host]
+          your-proxmox-server ansible_host=192.168.1.X ansible_user=root
+          
+          The host should have SSH access configured with appropriate credentials.
+        success_msg: "✓ Found {{ groups['proxmox-host'] | length }} Proxmox host(s) in inventory"
+
+    # Load network discovery results if available
+    - name: Check for network discovery results
+      stat:
+        path: /opt/privatebox/network-discovery-results.yml
+      register: discovery_file
+      delegate_to: localhost
+
+    - name: Load network discovery results
+      include_vars:
+        file: /opt/privatebox/network-discovery-results.yml
+        name: discovered_network
+      when: discovery_file.stat.exists
+      delegate_to: localhost
+
+    - name: Use discovered network or defaults
+      set_fact:
+        network_config: "{{ discovered_network | default(vlan_dhcp_config) }}"
+
+  tasks:
+    # Check OPNsense API availability
+    - name: Check if API credentials exist
+      stat:
+        path: /etc/privatebox-opnsense-api
+      register: api_creds
+      delegate_to: localhost
+      become: yes
+
+    - name: Create API configuration script if no credentials
+      copy:
+        content: |
+          #!/bin/bash
+          # OPNsense DHCP/DNS Configuration
+          # Manual configuration required - API not available
+          
+          echo "OPNsense Manual DHCP/DNS Configuration"
+          echo "======================================"
+          echo ""
+          echo "Access OPNsense at: https://{{ opnsense_ip }}"
+          echo ""
+          echo "Configure DHCP for each VLAN:"
+          echo ""
+          {% for name, config in vlan_dhcp_config.items() %}
+          echo "{{ name|upper }} (VLAN {{ config.vlan }}):"
+          echo "  - Network: {{ config.network }}"
+          echo "  - Range: {{ config.range_start }} - {{ config.range_end }}"
+          echo "  - Gateway: {{ config.gateway }}"
+          echo "  - DNS: {{ config.dns_servers|join(', ') }}"
+          echo ""
+          {% endfor %}
+          
+          {% if configure_static_mappings|bool %}
+          echo "Static DHCP Mappings:"
+          {% for mapping in static_mappings %}
+          echo "  - {{ mapping.hostname }}: {{ mapping.ip }} ({{ mapping.vlan }})"
+          {% endfor %}
+          {% endif %}
+          
+          echo ""
+          echo "DNS Configuration:"
+          echo "  1. Enable DNS Forwarder"
+          echo "  2. Listen on all VLAN interfaces"
+          echo "  3. Configure upstream servers:"
+          echo "     - 10.101.0.10 (AdGuard)"
+          echo "     - 1.1.1.1 (Cloudflare)"
+          echo "  4. Enable DHCP registration in DNS"
+        dest: /opt/privatebox/scripts/configure-dhcp-dns-manual.sh
+        mode: '0755'
+      when: not api_creds.stat.exists
+
+    # Create DHCP configuration via API (if available)
+    - block:
+        - name: Read API credentials
+          slurp:
+            src: /etc/privatebox-opnsense-api
+          register: api_creds_content
+          delegate_to: localhost
+          become: yes
+
+        - name: Parse API credentials
+          set_fact:
+            opnsense_key: "{{ (api_creds_content.content | b64decode).split('\n')[0].split('=')[1] }}"
+            opnsense_secret: "{{ (api_creds_content.content | b64decode).split('\n')[1].split('=')[1] }}"
+
+        # Validate credentials work
+        - name: Test OPNsense API connectivity
+          uri:
+            url: "https://{{ opnsense_ip }}/api/core/system/status"
+            method: GET
+            user: "{{ opnsense_key }}"
+            password: "{{ opnsense_secret }}"
+            validate_certs: no
+            timeout: 10
+          register: api_test
+          failed_when: false
+
+        - name: Check API test result
+          assert:
+            that:
+              - api_test.status == 200
+            fail_msg: |
+              OPNsense API credentials are invalid or API is not accessible.
+              
+              Please verify:
+              1. OPNsense is accessible at https://{{ opnsense_ip }}
+              2. API credentials in /etc/privatebox-opnsense-api are correct
+              3. API user has appropriate permissions
+              
+              To configure manually, run: /opt/privatebox/scripts/configure-dhcp-dns-manual.sh
+            success_msg: "✓ OPNsense API connectivity verified"
+
+        # Configure DHCP for each VLAN
+        - name: Configure DHCP via API
+          uri:
+            url: "https://{{ opnsense_ip }}/api/dhcpv4/settings/set"
+            method: POST
+            user: "{{ opnsense_key }}"
+            password: "{{ opnsense_secret }}"
+            validate_certs: no
+            headers:
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              dhcpd:
+                enabled: "1"
+                interfaces: "{{ vlan_dhcp_config.keys() | list }}"
+          register: dhcp_enable
+
+        - name: Configure DHCP for each interface
+          uri:
+            url: "https://{{ opnsense_ip }}/api/dhcpv4/{{ item.key }}/set"
+            method: POST
+            user: "{{ opnsense_key }}"
+            password: "{{ opnsense_secret }}"
+            validate_certs: no
+            headers:
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              interface:
+                enable: "1"
+                range_from: "{{ item.value.range_start }}"
+                range_to: "{{ item.value.range_end }}"
+                gateway: "{{ item.value.gateway }}"
+                domain: "privatebox.local"
+                dns1: "{{ item.value.dns_servers[0] }}"
+                dns2: "{{ item.value.dns_servers[1] | default('') }}"
+                ddnsdomainname: "privatebox.local"
+                ddnsupdate: "1"
+          loop: "{{ vlan_dhcp_config | dict2items }}"
+          register: dhcp_config
+
+      when: api_creds.stat.exists
+      rescue:
+        - name: API configuration failed - create detailed manual guide
+          copy:
+            content: |
+              #!/bin/bash
+              # OPNsense Manual Configuration Guide
+              # API configuration failed - follow these steps
+              
+              echo "OPNsense Manual Configuration Required"
+              echo "====================================="
+              echo ""
+              echo "API Error: {{ api_test.msg | default('Unknown error') }}"
+              echo ""
+              echo "Manual Configuration Steps:"
+              echo ""
+              echo "1. Access OPNsense Web UI:"
+              echo "   https://{{ opnsense_ip }}"
+              echo "   Username: root or admin"
+              echo "   Password: [your password]"
+              echo ""
+              echo "2. Configure DHCP (Services -> DHCPv4 -> [Interface]):"
+              {% for name, config in vlan_dhcp_config.items() %}
+              echo ""
+              echo "   {{ name|upper }} Interface:"
+              echo "   - Enable: Yes"
+              echo "   - Range: {{ config.range_start }} to {{ config.range_end }}"
+              echo "   - DNS servers: {{ config.dns_servers|join(', ') }}"
+              echo "   - Gateway: {{ config.gateway }}"
+              echo "   - Domain: privatebox.local"
+              {% endfor %}
+              echo ""
+              echo "3. Configure DNS Forwarder (Services -> Unbound DNS -> General):"
+              echo "   - Enable: Yes"
+              echo "   - Listen on: All interfaces"
+              echo "   - DHCP Registration: Enable"
+              echo "   - Forward to: 10.101.0.10, 1.1.1.1"
+              echo ""
+              echo "4. Apply Changes:"
+              echo "   Click 'Apply' after each configuration section"
+              echo ""
+              echo "5. Test Configuration:"
+              echo "   Run: /opt/privatebox/scripts/test-dns-resolution.sh"
+            dest: /opt/privatebox/scripts/configure-dhcp-dns-manual-detailed.sh
+            mode: '0755'
+          delegate_to: localhost
+          become: yes
+
+        - name: Display manual configuration message
+          debug:
+            msg: |
+              ⚠️  API configuration failed. Manual configuration required.
+              
+              Detailed guide created: /opt/privatebox/scripts/configure-dhcp-dns-manual-detailed.sh
+              
+              This guide includes specific steps for your network configuration.
+
+    # Update AdGuard DNS configuration
+    - name: Determine AdGuard IP from network config
+      set_fact:
+        adguard_ip: "{{ network_config.infrastructure.dns_servers[0] | default('10.101.0.10') }}"
+
+    - name: Check AdGuard availability
+      uri:
+        url: "http://{{ adguard_ip }}:3000/control/status"
+        method: GET
+        timeout: 5
+      register: adguard_status
+      failed_when: false
+      delegate_to: localhost
+
+    - name: Verify AdGuard is accessible
+      assert:
+        that:
+          - adguard_status.status == 200
+        fail_msg: |
+          AdGuard is not accessible at http://{{ adguard_ip }}:3000
+          
+          Please verify:
+          1. AdGuard is running on the infrastructure VLAN
+          2. Firewall rules allow access from management VLAN
+          3. AdGuard migration to VLAN network is complete
+        success_msg: "✓ AdGuard is accessible at {{ adguard_ip }}"
+      when: adguard_status is not skipped
+
+    - name: Update AdGuard upstream DNS
+      block:
+        - name: Configure AdGuard DNS settings
+          uri:
+            url: "http://{{ adguard_ip }}:3000/control/dns_config"
+            method: POST
+            headers:
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              upstream_dns:
+                - "{{ opnsense_ip }}"  # OPNsense as primary
+                - "1.1.1.1"
+                - "8.8.8.8"
+              bootstrap_dns:
+                - "1.1.1.1"
+                - "8.8.8.8"
+          delegate_to: localhost
+
+        - name: Configure AdGuard to use OPNsense for local domains
+          uri:
+            url: "http://{{ adguard_ip }}:3000/control/dns_config"
+            method: POST
+            headers:
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              local_ptr_upstreams:
+                - "{{ opnsense_ip }}"
+          delegate_to: localhost
+      when: adguard_status.status == 200
+      rescue:
+        - name: AdGuard configuration failed
+          debug:
+            msg: |
+              ⚠️  Could not update AdGuard DNS configuration.
+              Please configure manually in AdGuard web UI:
+              - Upstream DNS: {{ opnsense_ip }}, 1.1.1.1, 8.8.8.8
+              - Local PTR: {{ opnsense_ip }}
+
+    # Create DNS test script
+    - name: Create DNS resolution test script
+      copy:
+        content: |
+          #!/bin/bash
+          # DNS Resolution Test Script
+          
+          echo "DNS Resolution Tests"
+          echo "==================="
+          echo ""
+          
+          # Test from each VLAN
+          VLANS=("10.100.0.1" "10.101.0.1" "10.102.0.1" "10.103.0.1" "10.104.0.1" "10.105.0.1")
+          VLAN_NAMES=("Management" "Infrastructure" "Services" "DMZ" "IoT" "Guest")
+          
+          for i in "${!VLANS[@]}"; do
+              echo "Testing from ${VLAN_NAMES[$i]} VLAN (${VLANS[$i]}):"
+              
+              # Test internal resolution
+              echo -n "  Internal DNS (privatebox.local): "
+              nslookup privatebox.local ${VLANS[$i]} &>/dev/null && echo "PASS" || echo "FAIL"
+              
+              # Test external resolution
+              echo -n "  External DNS (google.com): "
+              nslookup google.com ${VLANS[$i]} &>/dev/null && echo "PASS" || echo "FAIL"
+              
+              echo ""
+          done
+          
+          echo "AdGuard Statistics:"
+          curl -s http://10.101.0.10:3000/control/stats | jq '.dns_queries' 2>/dev/null || echo "  Unable to fetch"
+        dest: /opt/privatebox/scripts/test-dns-resolution.sh
+        mode: '0755'
+
+    # Create DHCP lease monitoring script
+    - name: Create DHCP monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          # DHCP Lease Monitoring
+          
+          echo "DHCP Lease Status"
+          echo "================="
+          echo ""
+          
+          if [ -f /etc/privatebox-opnsense-api ]; then
+              source /etc/privatebox-opnsense-api
+              
+              # Get DHCP leases via API
+              curl -sk -u "$key:$secret" https://{{ opnsense_ip }}/api/dhcpv4/leases/searchLease | \
+                jq -r '.rows[] | "\(.mac) \(.address) \(.hostname // "unknown")"' 2>/dev/null | \
+                while read mac ip hostname; do
+                    echo "$hostname: $ip ($mac)"
+                done
+          else
+              echo "API credentials not found."
+              echo "Configure manually via OPNsense web UI."
+          fi
+        dest: /opt/privatebox/scripts/monitor-dhcp-leases.sh
+        mode: '0755'
+
+    # Create summary documentation
+    - name: Create DNS/DHCP configuration summary
+      copy:
+        content: |
+          # DNS and DHCP Configuration Summary
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          ## DHCP Configuration
+          
+          {% for name, config in vlan_dhcp_config.items() %}
+          ### {{ name|title }} VLAN ({{ config.vlan }})
+          - Network: {{ config.network }}
+          - DHCP Range: {{ config.range_start }} - {{ config.range_end }}
+          - Gateway: {{ config.gateway }}
+          - DNS Servers: {{ config.dns_servers|join(', ') }}
+          
+          {% endfor %}
+          
+          ## DNS Architecture
+          
+          1. **Primary DNS**: AdGuard Home (10.101.0.10)
+             - Filtering and ad blocking
+             - Caching
+             - Statistics
+          
+          2. **Secondary DNS**: OPNsense (10.100.0.1)
+             - DHCP registration
+             - Local domain resolution
+             - Fallback resolver
+          
+          3. **Upstream DNS**:
+             - Cloudflare: 1.1.1.1
+             - Google: 8.8.8.8
+          
+          ## Static Mappings
+          
+          {% if configure_static_mappings|bool %}
+          {% for mapping in static_mappings %}
+          - {{ mapping.hostname }}: {{ mapping.ip }} ({{ mapping.vlan }})
+          {% endfor %}
+          {% endif %}
+          
+          ## Testing
+          
+          1. Test DNS resolution: `/opt/privatebox/scripts/test-dns-resolution.sh`
+          2. Monitor DHCP leases: `/opt/privatebox/scripts/monitor-dhcp-leases.sh`
+          3. Check AdGuard stats: `http://10.101.0.10:3000`
+          
+          ## Troubleshooting
+          
+          - If DNS fails: Check firewall rules between VLANs
+          - If DHCP fails: Verify interface configuration in OPNsense
+          - If static mappings fail: Check MAC addresses are correct
+        dest: /opt/privatebox/dns-dhcp-config.md
+        mode: '0644'
+
+    - name: Display configuration summary
+      debug:
+        msg: |
+          ✓ DNS and DHCP configuration complete!
+          
+          DHCP Servers configured for:
+          {% for name, config in vlan_dhcp_config.items() %}
+          - {{ name|title }}: {{ config.network }} (VLAN {{ config.vlan }})
+          {% endfor %}
+          
+          DNS Architecture:
+          - Primary: AdGuard (10.101.0.10)
+          - Secondary: OPNsense ({{ opnsense_ip }})
+          - Upstream: Cloudflare, Google
+          
+          Test Tools:
+          - DNS Test: /opt/privatebox/scripts/test-dns-resolution.sh
+          - DHCP Monitor: /opt/privatebox/scripts/monitor-dhcp-leases.sh
+          
+          Documentation: /opt/privatebox/dns-dhcp-config.md

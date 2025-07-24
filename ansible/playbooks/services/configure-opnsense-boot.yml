@@ -1,0 +1,273 @@
+---
+# Task 3.3: Configure VM Boot Settings
+# This playbook configures OPNsense VM boot settings, serial console,
+# and prepares for automated configuration
+
+- name: Configure OPNsense VM Boot Settings
+  hosts: proxmox-host
+  gather_facts: false
+  
+  vars:
+    vm_id: 100
+    vm_name: "opnsense"
+    serial_port: 0
+    
+  tasks:
+    - name: Verify VM exists
+      shell: |
+        qm status {{ vm_id }} 2>&1 | grep -q "does not exist" && echo "absent" || echo "present"
+      register: vm_exists
+      changed_when: false
+      failed_when: false
+      
+    - name: Fail if VM doesn't exist
+      fail:
+        msg: "VM {{ vm_id }} does not exist. Run create-opnsense-vm.yml first."
+      when: vm_exists.stdout == "absent"
+      
+    - name: Check current boot configuration
+      shell: |
+        qm config {{ vm_id }} | grep -E "^(boot|ide2):"
+      register: current_boot_config
+      changed_when: false
+      
+    - name: Remove installation ISO if present
+      shell: |
+        if qm config {{ vm_id }} | grep -q "^ide2:"; then
+          qm set {{ vm_id }} --delete ide2
+          echo "ISO removed"
+        else
+          echo "No ISO attached"
+        fi
+      register: iso_removal
+      changed_when: "'ISO removed' in iso_removal.stdout"
+      
+    - name: Configure boot order for disk
+      shell: |
+        qm set {{ vm_id }} --boot order=scsi0
+      
+    - name: Enable VM autostart
+      shell: |
+        qm set {{ vm_id }} --onboot 1
+        qm set {{ vm_id }} --startup order=1,up=30,down=120
+      
+    - name: Configure serial console
+      shell: |
+        # Add serial port for console access
+        qm set {{ vm_id }} --serial{{ serial_port }} socket
+        
+        # Configure VM to use serial console
+        qm set {{ vm_id }} --args "-device isa-serial,chardev=charserial{{ serial_port }}"
+      failed_when: false  # Some Proxmox versions handle this differently
+      
+    - name: Create initial config.xml template
+      copy:
+        content: |
+          <?xml version="1.0"?>
+          <opnsense>
+            <system>
+              <hostname>opnsense</hostname>
+              <domain>privatebox.local</domain>
+              <timezone>UTC</timezone>
+              <dnsserver>1.1.1.1</dnsserver>
+              <dnsserver>9.9.9.9</dnsserver>
+            </system>
+            <interfaces>
+              <wan>
+                <enable>1</enable>
+                <if>vtnet0</if>
+                <ipaddr>dhcp</ipaddr>
+              </wan>
+              <lan>
+                <enable>1</enable>
+                <if>vtnet1</if>
+                <ipaddr>10.0.10.1</ipaddr>
+                <subnet>24</subnet>
+              </lan>
+            </interfaces>
+            <vlans>
+              <vlan>
+                <vlanif>vtnet1</vlanif>
+                <tag>10</tag>
+                <descr>Management</descr>
+              </vlan>
+              <vlan>
+                <vlanif>vtnet1</vlanif>
+                <tag>20</tag>
+                <descr>Services</descr>
+              </vlan>
+              <vlan>
+                <vlanif>vtnet1</vlanif>
+                <tag>30</tag>
+                <descr>LAN</descr>
+              </vlan>
+              <vlan>
+                <vlanif>vtnet1</vlanif>
+                <tag>40</tag>
+                <descr>IoT</descr>
+              </vlan>
+            </vlans>
+            <dhcpd>
+              <lan>
+                <enable>1</enable>
+                <range>
+                  <from>10.0.10.100</from>
+                  <to>10.0.10.200</to>
+                </range>
+              </lan>
+            </dhcpd>
+          </opnsense>
+        dest: "/var/lib/vz/snippets/opnsense-config.xml"
+        mode: '0644'
+      
+    - name: Create automation helper script
+      copy:
+        content: |
+          #!/bin/bash
+          # OPNsense Console Automation Helper
+          # This script helps automate the initial console setup
+          
+          VM_ID={{ vm_id }}
+          
+          echo "OPNsense Console Automation Helper"
+          echo "================================="
+          echo ""
+          echo "This script will help automate the OPNsense setup process."
+          echo ""
+          
+          # Function to send commands to console
+          send_to_console() {
+              echo -n "$1" | qm sendkey $VM_ID "$2"
+          }
+          
+          # Check if VM is running
+          if ! qm status $VM_ID | grep -q "running"; then
+              echo "Starting VM $VM_ID..."
+              qm start $VM_ID
+              echo "Waiting 60 seconds for boot..."
+              sleep 60
+          fi
+          
+          echo "To access the console:"
+          echo "  qm console $VM_ID"
+          echo ""
+          echo "Initial setup steps:"
+          echo "1. Login as: root"
+          echo "2. Password: opnsense"
+          echo "3. Assign interfaces:"
+          echo "   - WAN: vtnet0"
+          echo "   - LAN: vtnet1"
+          echo "4. Set LAN IP: 10.0.10.1/24"
+          echo ""
+          echo "For automated setup, you can use:"
+          echo "  qm sendkey $VM_ID <key>"
+          echo ""
+          echo "Available keys: ret, spc, tab, up, down, etc."
+          
+        dest: "/usr/local/bin/opnsense-setup-helper"
+        mode: '0755'
+        
+    - name: Configure VM for cloud-init (if available)
+      block:
+        - name: Check if VM has cloud-init drive
+          shell: |
+            qm config {{ vm_id }} | grep -q "^ide2:.*cloudinit" && echo "yes" || echo "no"
+          register: has_cloudinit
+          changed_when: false
+          
+        - name: Add cloud-init drive if not present
+          shell: |
+            qm set {{ vm_id }} --ide2 local-lvm:cloudinit
+          when: has_cloudinit.stdout == "no"
+          failed_when: false
+          
+        - name: Configure cloud-init settings
+          shell: |
+            qm set {{ vm_id }} --ciuser root
+            qm set {{ vm_id }} --cipassword opnsense
+            qm set {{ vm_id }} --ipconfig0 ip=dhcp
+            qm set {{ vm_id }} --ipconfig1 ip=10.0.10.1/24
+          when: has_cloudinit.stdout == "yes" or has_cloudinit.stdout == "no"
+          failed_when: false
+          
+    - name: Generate post-install automation script
+      copy:
+        content: |
+          #!/bin/sh
+          # OPNsense Post-Install Configuration
+          # Run this after OPNsense is installed and booted
+          
+          # Enable SSH for automation
+          configctl system ssh start
+          
+          # Enable API
+          configctl api enable
+          
+          # Set up initial firewall rules to allow management
+          pfctl -d  # Temporarily disable firewall
+          
+          # Configure network interfaces
+          ifconfig vtnet0 up
+          dhclient vtnet0
+          
+          ifconfig vtnet1 up
+          ifconfig vtnet1 inet 10.0.10.1 netmask 255.255.255.0
+          
+          # Create VLANs
+          ifconfig vtnet1.10 create
+          ifconfig vtnet1.10 inet 10.0.10.1 netmask 255.255.255.0
+          
+          ifconfig vtnet1.20 create
+          ifconfig vtnet1.20 inet 10.0.20.1 netmask 255.255.255.0
+          
+          ifconfig vtnet1.30 create
+          ifconfig vtnet1.30 inet 10.0.30.1 netmask 255.255.255.0
+          
+          ifconfig vtnet1.40 create
+          ifconfig vtnet1.40 inet 10.0.40.1 netmask 255.255.255.0
+          
+          # Re-enable firewall with basic rules
+          pfctl -e
+          
+          echo "Post-install configuration complete!"
+          echo "Access web interface at: https://10.0.10.1"
+          
+        dest: "/var/lib/vz/snippets/opnsense-postinstall.sh"
+        mode: '0644'
+        
+    - name: Check VM network configuration
+      shell: |
+        qm config {{ vm_id }} | grep "^net"
+      register: vm_networks
+      changed_when: false
+      
+    - name: Display boot configuration summary
+      debug:
+        msg:
+          - "OPNsense VM boot configuration complete!"
+          - "VM ID: {{ vm_id }}"
+          - "Boot Order: scsi0 (primary disk)"
+          - "Autostart: Enabled (order=1)"
+          - "Serial Console: {{ 'Configured' if serial_port is defined else 'Not configured' }}"
+          - ""
+          - "Network Interfaces:"
+          - "{{ vm_networks.stdout_lines }}"
+          - ""
+          - "Helper Files Created:"
+          - "- /usr/local/bin/opnsense-setup-helper"
+          - "- /var/lib/vz/snippets/opnsense-config.xml"
+          - "- /var/lib/vz/snippets/opnsense-postinstall.sh"
+          - ""
+          - "Next Steps:"
+          - "1. Start VM: qm start {{ vm_id }}"
+          - "2. Access console: qm console {{ vm_id }}"
+          - "3. Complete installation or run automation"
+          - "4. Use helper script: /usr/local/bin/opnsense-setup-helper"
+          
+    - name: Create ready marker file
+      copy:
+        content: |
+          VM {{ vm_id }} is configured and ready for OPNsense deployment.
+          Created: {{ ansible_date_time.iso8601 }}
+        dest: "/etc/pve/nodes/{{ ansible_hostname }}/qemu-server/{{ vm_id }}.ready"
+        mode: '0644'

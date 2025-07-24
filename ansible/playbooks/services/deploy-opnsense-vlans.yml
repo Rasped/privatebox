@@ -1,0 +1,324 @@
+---
+# Task 6.3: Deploy OPNsense with VLAN Support
+# Deploy OPNsense VM with all VLANs configured
+
+- name: Deploy OPNsense with VLAN Support
+  hosts: proxmox-host
+  gather_facts: yes
+  vars_prompt:
+    - name: vm_id
+      prompt: "VM ID for OPNsense (200-999)"
+      default: "200"
+      private: no
+      semaphore_type: "integer"
+      semaphore_display_name: "VM ID"
+      semaphore_description: "Unique VM ID for OPNsense instance"
+    
+    - name: vm_memory
+      prompt: "Memory allocation in MB"
+      default: "4096"
+      private: no
+      semaphore_type: "integer"
+      semaphore_display_name: "Memory (MB)"
+      semaphore_description: "RAM allocation for OPNsense VM"
+    
+    - name: vm_cores
+      prompt: "Number of CPU cores"
+      default: "2"
+      private: no
+      semaphore_type: "integer"
+      semaphore_display_name: "CPU Cores"
+      semaphore_description: "Number of CPU cores for OPNsense VM"
+
+  vars:
+    opnsense_iso: "OPNsense-24.7-dvd-amd64.iso"
+    vm_name: "opnsense-vlan"
+    disk_size: "32G"
+    wan_bridge: "vmbr0"  # Existing flat network bridge
+    vlan_bridges:
+      - bridge: vmbr100
+        vlan: 100
+        name: "Management"
+      - bridge: vmbr101
+        vlan: 101
+        name: "Infrastructure"
+      - bridge: vmbr102
+        vlan: 102
+        name: "Services"
+      - bridge: vmbr103
+        vlan: 103
+        name: "DMZ"
+      - bridge: vmbr104
+        vlan: 104
+        name: "IoT"
+      - bridge: vmbr105
+        vlan: 105
+        name: "Guest"
+
+  pre_tasks:
+    # Validate required host groups exist
+    - name: Check if proxmox-host group is defined
+      assert:
+        that:
+          - groups['proxmox-host'] is defined
+          - groups['proxmox-host'] | length > 0
+        fail_msg: |
+          ERROR: The 'proxmox-host' group is not defined in the inventory.
+          
+          This playbook requires a Proxmox host to be defined in your inventory.
+          Please add a proxmox-host group to your inventory file:
+          
+          [proxmox-host]
+          your-proxmox-server ansible_host=192.168.1.X ansible_user=root
+          
+          The host should have SSH access configured with appropriate credentials.
+        success_msg: "✓ Found {{ groups['proxmox-host'] | length }} Proxmox host(s) in inventory"
+
+  tasks:
+    # Check prerequisites
+    - name: Verify Proxmox environment
+      command: pvesh get /version
+      register: proxmox_version
+      changed_when: false
+
+    - name: Check if VM ID already exists
+      shell: qm list | awk '{print $1}' | grep -q "^{{ vm_id }}$"
+      register: vm_exists
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if VM already exists
+      fail:
+        msg: "VM with ID {{ vm_id }} already exists. Please choose a different ID or remove the existing VM."
+      when: vm_exists.rc == 0
+
+    # Find storage and ISO
+    - name: Discover available storage
+      shell: pvesm status | grep -E "^local|^local-lvm" | head -1 | awk '{print $1}'
+      register: storage_name
+      changed_when: false
+
+    - name: Check if OPNsense ISO exists
+      shell: pvesh get /nodes/{{ ansible_hostname }}/storage/{{ storage_name.stdout }}/content | grep -q "{{ opnsense_iso }}"
+      register: iso_exists
+      failed_when: false
+      changed_when: false
+
+    - name: List available ISOs if OPNsense not found
+      shell: pvesh get /nodes/{{ ansible_hostname }}/storage/{{ storage_name.stdout }}/content | grep -i iso || echo "No ISOs found"
+      register: available_isos
+      when: iso_exists.rc != 0
+      changed_when: false
+
+    - name: Fail if ISO not found
+      fail:
+        msg: |
+          OPNsense ISO '{{ opnsense_iso }}' not found in storage '{{ storage_name.stdout }}'.
+          Available ISOs:
+          {{ available_isos.stdout if available_isos is defined else 'Check failed' }}
+          
+          Please upload the OPNsense ISO first.
+      when: iso_exists.rc != 0
+
+    # Create VM
+    - name: Create OPNsense VM
+      command: |
+        qm create {{ vm_id }} \
+          --name {{ vm_name }} \
+          --memory {{ vm_memory }} \
+          --cores {{ vm_cores }} \
+          --sockets 1 \
+          --cpu host \
+          --ostype l26 \
+          --bootdisk scsi0 \
+          --scsihw virtio-scsi-pci \
+          --cdrom {{ storage_name.stdout }}:iso/{{ opnsense_iso }} \
+          --boot order=scsi0\;ide2\;net0
+      register: vm_create
+
+    # Configure disk
+    - name: Add disk to VM
+      command: |
+        qm set {{ vm_id }} \
+          --scsi0 {{ storage_name.stdout }}:{{ disk_size }},discard=on
+
+    # Configure network interfaces
+    - name: Add WAN interface (net0)
+      command: |
+        qm set {{ vm_id }} \
+          --net0 virtio,bridge={{ wan_bridge }},firewall=0
+
+    - name: Add VLAN interfaces
+      command: |
+        qm set {{ vm_id }} \
+          --net{{ loop.index }} virtio,bridge={{ item.bridge }},firewall=0,tag={{ item.vlan }}
+      loop: "{{ vlan_bridges }}"
+      loop_control:
+        index_var: loop_index
+
+    # Configure VM options
+    - name: Set VM options
+      command: |
+        qm set {{ vm_id }} \
+          --onboot 1 \
+          --protection 0 \
+          --tablet 0 \
+          --audio0 none
+
+    # Create interface mapping documentation
+    - name: Create interface mapping file
+      copy:
+        content: |
+          # OPNsense VLAN Interface Mapping
+          # Generated: {{ ansible_date_time.iso8601 }}
+          # VM ID: {{ vm_id }}
+          
+          Network Interface Mapping:
+          net0: WAN - {{ wan_bridge }} (Untagged)
+          {% for vlan in vlan_bridges %}
+          net{{ loop.index }}: {{ vlan.name }} - {{ vlan.bridge }} (VLAN {{ vlan.vlan }})
+          {% endfor %}
+          
+          Expected OPNsense Assignment:
+          vtnet0: WAN
+          {% for vlan in vlan_bridges %}
+          vtnet{{ loop.index }}: {{ vlan.name }} (VLAN {{ vlan.vlan }})
+          {% endfor %}
+          
+          Initial Configuration Steps:
+          1. Boot VM and access console
+          2. Complete installation to disk
+          3. Assign interfaces as mapped above
+          4. Configure LAN IP: 10.100.0.1/24 (Management VLAN)
+          5. Access web UI at https://10.100.0.1
+        dest: /opt/privatebox/opnsense-vlan-mapping.txt
+        mode: '0644'
+      delegate_to: localhost
+      become: no
+
+    # Start VM
+    - name: Start OPNsense VM
+      command: qm start {{ vm_id }}
+      register: vm_start
+
+    - name: Wait for VM to boot
+      pause:
+        seconds: 10
+
+    # Check VM status
+    - name: Get VM status
+      command: qm status {{ vm_id }}
+      register: vm_status
+      changed_when: false
+
+    - name: Get VM configuration
+      command: qm config {{ vm_id }}
+      register: vm_config
+      changed_when: false
+
+    # Create post-deployment script
+    - name: Create OPNsense configuration script
+      copy:
+        content: |
+          #!/bin/bash
+          # OPNsense Post-Installation Configuration
+          # Run this after initial OPNsense installation
+          
+          VM_ID={{ vm_id }}
+          
+          echo "OPNsense VLAN Configuration Helper"
+          echo "=================================="
+          echo ""
+          echo "1. Access VM console: qm terminal $VM_ID"
+          echo "2. Complete installation if needed"
+          echo "3. Assign interfaces:"
+          echo "   - WAN: vtnet0"
+          {% for vlan in vlan_bridges %}
+          echo "   - {{ vlan.name }}: vtnet{{ loop.index }}"
+          {% endfor %}
+          echo ""
+          echo "4. Configure Management LAN:"
+          echo "   - Interface: vtnet1"
+          echo "   - IP: 10.100.0.1"
+          echo "   - Subnet: 24"
+          echo ""
+          echo "5. Access web UI: https://10.100.0.1"
+          echo "   - Username: root"
+          echo "   - Password: opnsense (change immediately)"
+          echo ""
+          echo "Current VM Status:"
+          qm status $VM_ID
+          echo ""
+          echo "Network Interfaces:"
+          qm config $VM_ID | grep ^net
+        dest: /opt/privatebox/scripts/configure-opnsense-vlans.sh
+        mode: '0755'
+      delegate_to: localhost
+      become: no
+
+    # Create API automation preparation
+    - name: Create API enablement preparation script
+      copy:
+        content: |
+          #!/bin/bash
+          # Prepare OPNsense for API automation
+          
+          OPNSENSE_IP="10.100.0.1"
+          
+          echo "OPNsense API Enablement Guide"
+          echo "============================="
+          echo ""
+          echo "After web UI is accessible:"
+          echo ""
+          echo "1. Log in to https://$OPNSENSE_IP"
+          echo "2. Navigate to System -> Access -> Users"
+          echo "3. Create API user:"
+          echo "   - Username: ansible-api"
+          echo "   - Generate strong password"
+          echo "   - Add to 'admins' group"
+          echo ""
+          echo "4. Generate API credentials:"
+          echo "   - Click on user -> API Keys"
+          echo "   - Click '+' to generate new key/secret"
+          echo "   - Save credentials securely"
+          echo ""
+          echo "5. Store credentials:"
+          echo "   echo 'key=YOUR_KEY' > /etc/privatebox-opnsense-api"
+          echo "   echo 'secret=YOUR_SECRET' >> /etc/privatebox-opnsense-api"
+          echo "   chmod 600 /etc/privatebox-opnsense-api"
+          echo ""
+          echo "6. Test API access:"
+          echo '   curl -k -u "$key:$secret" https://'$OPNSENSE_IP'/api/core/system/status'
+        dest: /opt/privatebox/scripts/enable-opnsense-api.sh
+        mode: '0755'
+      delegate_to: localhost
+      become: no
+
+    # Display summary
+    - name: Display deployment summary
+      debug:
+        msg: |
+          ✓ OPNsense VM deployed with VLAN support!
+          
+          VM Details:
+          - ID: {{ vm_id }}
+          - Name: {{ vm_name }}
+          - Memory: {{ vm_memory }}MB
+          - Cores: {{ vm_cores }}
+          - Disk: {{ disk_size }}
+          
+          Network Configuration:
+          - WAN: {{ wan_bridge }} (net0)
+          {% for vlan in vlan_bridges %}
+          - {{ vlan.name }}: {{ vlan.bridge }} (net{{ loop.index }}, VLAN {{ vlan.vlan }})
+          {% endfor %}
+          
+          Next Steps:
+          1. Access console: qm terminal {{ vm_id }}
+          2. Complete OPNsense installation
+          3. Run: /opt/privatebox/scripts/configure-opnsense-vlans.sh
+          4. Configure API: /opt/privatebox/scripts/enable-opnsense-api.sh
+          
+          Documentation:
+          - Interface mapping: /opt/privatebox/opnsense-vlan-mapping.txt
+          - Configuration helper: /opt/privatebox/scripts/configure-opnsense-vlans.sh

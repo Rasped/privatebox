@@ -1,0 +1,280 @@
+---
+- name: Discover Proxmox Environment
+  hosts: proxmox-host
+  gather_facts: true
+  
+  vars:
+    service_name: "Proxmox Environment Discovery"
+    service_description: "Discover Proxmox host capabilities, storage, and network configuration"
+    service_tag: "discovery"
+    
+    # Discovery output file
+    discovery_file: "/opt/privatebox/ansible/host_vars/proxmox/discovered.yml"
+    
+    # Default values for hands-off deployment
+    confirm_discovery: true
+    
+    # Empty vars_prompt for Semaphore template generation
+    _semaphore_vars_prompt: {}
+    
+  # Metadata for Semaphore template generation
+  vars_prompt:
+    - name: confirm_discovery
+      prompt: "Proceed with Proxmox environment discovery?"
+      default: "yes"
+      private: no
+      semaphore_type: "yes_no"
+      semaphore_description: "Confirm environment discovery"
+      semaphore_required: false
+      
+  tasks:
+    # Pre-discovery validation
+    - name: "{{ service_name }} - Pre-discovery checks"
+      when: confirm_discovery | bool
+      tags: [discovery, preflight]
+      block:
+        - name: Check if running on Proxmox host
+          command: which pvesh
+          register: pvesh_check
+          changed_when: false
+          failed_when: false
+          
+        - name: Verify Proxmox tools available
+          assert:
+            that:
+              - pvesh_check.rc == 0
+            fail_msg: "This playbook must be run on a Proxmox host"
+            
+    # Main discovery tasks
+    - name: "{{ service_name }} - Environment discovery"
+      when: confirm_discovery | bool
+      tags: [discovery, collect]
+      block:
+        - name: Get Proxmox version
+          command: pveversion
+          register: pve_version_raw
+          changed_when: false
+          
+        - name: Parse Proxmox version
+          set_fact:
+            pve_version:
+              stdout: "{{ pve_version_raw.stdout | regex_replace('^pve-manager/([0-9.]+).*', '\\1') }}"
+      
+    - name: Get cluster status
+      command: pvecm status
+      register: cluster_status
+      changed_when: false
+      failed_when: false
+      
+    - name: Check if clustered
+      set_fact:
+        is_clustered: "{{ 'Cluster information' in cluster_status.stdout }}"
+        
+    - name: Get storage information
+      command: pvesm status --content images
+      register: storage_info
+      changed_when: false
+      
+    - name: Parse storage pools
+      set_fact:
+        storage_pools: >-
+          {{
+            storage_info.stdout_lines[1:] |
+            map('split') |
+            map('first') |
+            list
+          }}
+          
+    - name: Get detailed storage info
+      shell: |
+        for pool in {{ storage_pools | map('quote') | join(' ') }}; do
+          echo "=== $pool ==="
+          pvesm status | grep "^$pool"
+          path=$(pvesm path "$pool:test" 2>/dev/null | cut -d':' -f1)
+          if [ -n "$path" ]; then
+            df -BG "$path" 2>/dev/null | tail -1 || echo "N/A"
+          else
+            echo "N/A"
+          fi
+        done
+      register: detailed_storage
+      changed_when: false
+      
+    - name: Determine preferred storage
+      set_fact:
+        preferred_storage: >-
+          {{
+            storage_info.stdout_lines[1:] |
+            map('split') |
+            selectattr('1', 'in', ['dir', 'lvmthin', 'zfspool']) |
+            sort(attribute='3', reverse=true) |
+            map(attribute='0') |
+            first |
+            default('local')
+          }}
+          
+    - name: Get bridge information
+      command: ip -j link show type bridge
+      register: bridges_json
+      changed_when: false
+      
+    - name: Parse bridge names
+      set_fact:
+        bridges:
+          stdout_lines: "{{ bridges_json.stdout | from_json | map(attribute='ifname') | reject('equalto', 'lo') | list }}"
+      
+    - name: Check VLAN support
+      shell: |
+        for bridge in {{ bridges.stdout_lines | map('quote') | join(' ') }}; do
+          if grep -q "bridge-vlan-aware yes" /etc/network/interfaces 2>/dev/null && grep -q "$bridge" /etc/network/interfaces; then
+            echo "$bridge:vlan-aware"
+          else
+            echo "$bridge:standard"
+          fi
+        done
+      register: vlan_support
+      changed_when: false
+      when: bridges.stdout_lines | length > 0
+      
+    - name: Get existing VLAN IDs
+      command: bridge -j vlan show
+      register: vlans_json
+      changed_when: false
+      failed_when: false
+      
+    - name: Parse VLAN IDs
+      set_fact:
+        existing_vlans:
+          stdout_lines: "{{ vlans_json.stdout | from_json | map(attribute='vlan') | select('ne', 1) | unique | list | default([]) }}"
+      when: vlans_json.rc == 0
+      
+    - name: Get next available VMID
+      command: pvesh get /cluster/nextid
+      register: next_vmid_raw
+      changed_when: false
+      failed_when: false
+      
+    - name: Set default VMID if command failed
+      set_fact:
+        next_vmid_raw:
+          stdout: "100"
+      when: next_vmid_raw.rc != 0
+      
+    - name: Parse next VMID
+      set_fact:
+        next_vmid: "{{ next_vmid_raw.stdout | regex_replace('[^0-9]', '') | default('100') }}"
+        
+    - name: Get CPU information
+      command: nproc
+      register: cpu_count
+      changed_when: false
+      
+    - name: Get CPU usage
+      command: top -bn1
+      register: top_output
+      changed_when: false
+      ignore_errors: true
+      
+    - name: Parse CPU usage
+      set_fact:
+        cpu_usage:
+          stdout: "{{ top_output.stdout_lines | select('match', '^%Cpu') | first | regex_replace('^%Cpu.*:\s+([0-9.]+)\s+us.*', '\\1') | default('0') }}"
+      when: top_output.rc == 0
+      
+    - name: Calculate available CPUs
+      set_fact:
+        available_cpus: >-
+          {{
+            [
+              (cpu_count.stdout | int - (cpu_count.stdout | int * (cpu_usage.stdout | default('0') | float / 100)) | round(0, 'floor')) | int,
+              1
+            ] | max
+          }}
+          
+    - name: Get memory information
+      command: free -g
+      register: memory_output
+      changed_when: false
+      
+    - name: Parse memory information
+      set_fact:
+        memory_info:
+          stdout: "{{ memory_output.stdout_lines | select('match', '^Mem:') | first | split | select('match', '^[0-9]+$') | list | join(' ') }}"
+      
+    - name: Parse memory
+      set_fact:
+        total_memory_gb: "{{ memory_info.stdout.split()[0] }}"
+        used_memory_gb: "{{ memory_info.stdout.split()[1] }}"
+        available_memory_gb: "{{ (total_memory_gb | int - used_memory_gb | int) | int }}"
+        
+    - name: Build discovery results
+      set_fact:
+        discovery_results:
+          proxmox:
+            version: "{{ pve_version.stdout }}"
+            clustered: "{{ is_clustered }}"
+            node_name: "{{ ansible_hostname }}"
+          storage:
+            pools: "{{ storage_pools }}"
+            preferred: "{{ preferred_storage }}"
+            details: "{{ detailed_storage.stdout }}"
+          network:
+            bridges: "{{ bridges.stdout_lines | default([]) }}"
+            vlan_capable_bridges: >-
+              {{
+                vlan_support.stdout_lines |
+                select('match', '.*:vlan-aware') |
+                map('split', ':') |
+                map('first') |
+                list
+              }}
+            existing_vlans: "{{ existing_vlans.stdout_lines | default([]) }}"
+          resources:
+            next_vmid: "{{ next_vmid }}"
+            available_cpus: "{{ available_cpus }}"
+            available_memory_gb: "{{ available_memory_gb }}"
+          discovered_at: "{{ ansible_date_time.iso8601 }}"
+          
+    - name: Create host_vars directory
+      file:
+        path: "{{ discovery_file | dirname }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      
+    - name: Save discovery results
+      copy:
+        content: "{{ discovery_results | to_nice_yaml }}"
+        dest: "{{ discovery_file }}"
+        mode: '0644'
+      delegate_to: localhost
+      
+    # Display results
+    - name: "{{ service_name }} - Discovery results"
+      when: confirm_discovery | bool
+      tags: [discovery, info]
+      block:
+        - name: Display discovery summary
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Complete!"
+              - "=========================================="
+              - ""
+              - "Proxmox Version: {{ pve_version.stdout }}"
+              - "Node Name: {{ ansible_hostname }}"
+              - "Clustered: {{ is_clustered }}"
+              - ""
+              - "Storage Pools: {{ storage_pools | join(', ') }}"
+              - "Preferred Storage: {{ preferred_storage }}"
+              - ""
+              - "Network Bridges: {{ bridges.stdout_lines | default([]) | join(', ') }}"
+              - "VLAN-capable: {{ discovery_results.network.vlan_capable_bridges | join(', ') or 'None' }}"
+              - "Existing VLANs: {{ existing_vlans.stdout_lines | default([]) | join(', ') or 'None' }}"
+              - ""
+              - "Next Available VM ID: {{ next_vmid }}"
+              - "Available CPU cores: {{ available_cpus }}"
+              - "Available Memory: {{ available_memory_gb }}GB"
+              - ""
+              - "Discovery data saved to: {{ discovery_file }}"
+              - "=========================================="

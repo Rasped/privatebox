@@ -1,0 +1,349 @@
+---
+- name: Backup OPNsense configuration
+  hosts: container-host
+  become: true
+  gather_facts: true
+  
+  vars:
+    service_name: "OPNsense Backup"
+    service_description: "Backup OPNsense configuration for disaster recovery"
+    service_tag: "opnsense-backup"
+    
+    # Backup settings
+    backup_dir: "/opt/privatebox/backups/opnsense"
+    backup_retention_days: 30
+    backup_compress: true
+    
+    # Metadata for Semaphore template generation
+    _semaphore_vars_prompt:
+      opnsense_host:
+        semaphore_type: "string"
+        semaphore_required: true
+        semaphore_description: "OPNsense IP address or hostname"
+      backup_type:
+        semaphore_type: "select"
+        semaphore_required: false
+        semaphore_description: "Backup type"
+        semaphore_options:
+          - "full"
+          - "config_only"
+        semaphore_default: "full"
+  
+  tasks:
+    - name: Pre-flight checks
+      block:
+        - name: Load API credentials
+          block:
+            - name: Read API key
+              slurp:
+                src: /etc/privatebox-opnsense-api-key
+              register: api_key_content
+              
+            - name: Read API secret
+              slurp:
+                src: /etc/privatebox-opnsense-api-secret
+              register: api_secret_content
+              
+            - name: Set API credentials
+              set_fact:
+                api_key: "{{ api_key_content.content | b64decode | trim }}"
+                api_secret: "{{ api_secret_content.content | b64decode | trim }}"
+                
+        - name: Create backup directory structure
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0750'
+            owner: root
+            group: root
+          loop:
+            - "{{ backup_dir }}"
+            - "{{ backup_dir }}/configs"
+            - "{{ backup_dir }}/scripts"
+            - "{{ backup_dir }}/metadata"
+            
+    - name: Generate backup timestamp
+      set_fact:
+        backup_timestamp: "{{ ansible_date_time.epoch }}"
+        backup_date: "{{ ansible_date_time.date }}"
+        backup_time: "{{ ansible_date_time.time | replace(':', '-') }}"
+        
+    - name: Backup OPNsense configuration via API
+      block:
+        - name: Download configuration backup
+          uri:
+            url: "https://{{ opnsense_host }}/api/core/backup/download/config.xml"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            dest: "{{ backup_dir }}/configs/config-{{ backup_date }}-{{ backup_time }}.xml"
+            status_code: 200
+          register: config_backup
+          
+        - name: Verify backup file
+          stat:
+            path: "{{ config_backup.dest }}"
+          register: backup_stat
+          
+        - name: Display backup info
+          debug:
+            msg:
+              - "Configuration backup created:"
+              - "File: {{ backup_stat.stat.path }}"
+              - "Size: {{ backup_stat.stat.size | human_readable }}"
+              
+    - name: Backup additional components
+      when: backup_type | default('full') == 'full'
+      block:
+        - name: Get system information
+          uri:
+            url: "https://{{ opnsense_host }}/api/core/system/status"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: system_info
+          
+        - name: Get interface configuration
+          uri:
+            url: "https://{{ opnsense_host }}/api/interfaces/overview/export"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: interface_config
+          
+        - name: Get firewall rules
+          uri:
+            url: "https://{{ opnsense_host }}/api/firewall/filter/searchRule"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: firewall_rules
+          
+        - name: Save system metadata
+          copy:
+            content: |
+              # OPNsense System Backup Metadata
+              # Generated: {{ ansible_date_time.iso8601 }}
+              
+              ## System Information
+              Hostname: {{ system_info.json.hostname | default('Unknown') }}
+              Version: {{ system_info.json.version_data.product_version | default('Unknown') }}
+              Uptime: {{ system_info.json.uptime | default('Unknown') }}
+              
+              ## Backup Details
+              Backup Date: {{ backup_date }}
+              Backup Time: {{ ansible_date_time.time }}
+              Backup Type: {{ backup_type | default('full') }}
+              Config File: config-{{ backup_date }}-{{ backup_time }}.xml
+              
+              ## Interface Summary
+              {% if interface_config.json is defined %}
+              {% for iface, data in interface_config.json.items() %}
+              {{ iface }}: {{ data.ipaddr | default('No IP') }}
+              {% endfor %}
+              {% endif %}
+              
+              ## Firewall Rules Count
+              Total Rules: {{ firewall_rules.json.rowCount | default(0) }}
+            dest: "{{ backup_dir }}/metadata/backup-{{ backup_date }}-{{ backup_time }}.info"
+            mode: '0640'
+            
+    - name: Create backup package
+      when: backup_compress | default(true)
+      block:
+        - name: Create compressed backup archive
+          archive:
+            path:
+              - "{{ backup_dir }}/configs/config-{{ backup_date }}-{{ backup_time }}.xml"
+              - "{{ backup_dir }}/metadata/backup-{{ backup_date }}-{{ backup_time }}.info"
+            dest: "{{ backup_dir }}/opnsense-backup-{{ backup_date }}-{{ backup_time }}.tar.gz"
+            format: gz
+            mode: '0640'
+          register: backup_archive
+          
+        - name: Generate checksum
+          stat:
+            path: "{{ backup_archive.dest }}"
+            checksum_algorithm: sha256
+          register: archive_stat
+          
+        - name: Save checksum
+          copy:
+            content: "{{ archive_stat.stat.checksum }}  opnsense-backup-{{ backup_date }}-{{ backup_time }}.tar.gz\n"
+            dest: "{{ backup_dir }}/opnsense-backup-{{ backup_date }}-{{ backup_time }}.tar.gz.sha256"
+            mode: '0640'
+            
+    - name: Create restore script
+      copy:
+        content: |
+          #!/bin/bash
+          # OPNsense Configuration Restore Script
+          # Generated: {{ ansible_date_time.iso8601 }}
+          
+          set -e
+          
+          if [ $# -ne 2 ]; then
+              echo "Usage: $0 <backup-file.tar.gz> <opnsense-ip>"
+              echo "Example: $0 opnsense-backup-2024-01-15.tar.gz 10.0.0.1"
+              exit 1
+          fi
+          
+          BACKUP_FILE="$1"
+          OPNSENSE_IP="$2"
+          TEMP_DIR="/tmp/opnsense-restore-$$"
+          
+          # Check if backup file exists
+          if [ ! -f "$BACKUP_FILE" ]; then
+              echo "Error: Backup file '$BACKUP_FILE' not found"
+              exit 1
+          fi
+          
+          # Verify checksum if available
+          if [ -f "$BACKUP_FILE.sha256" ]; then
+              echo "Verifying backup integrity..."
+              sha256sum -c "$BACKUP_FILE.sha256" || exit 1
+          fi
+          
+          # Extract backup
+          echo "Extracting backup..."
+          mkdir -p "$TEMP_DIR"
+          tar -xzf "$BACKUP_FILE" -C "$TEMP_DIR"
+          
+          # Find config file
+          CONFIG_FILE=$(find "$TEMP_DIR" -name "config-*.xml" -type f | head -1)
+          if [ -z "$CONFIG_FILE" ]; then
+              echo "Error: No configuration file found in backup"
+              rm -rf "$TEMP_DIR"
+              exit 1
+          fi
+          
+          echo "Found configuration: $(basename $CONFIG_FILE)"
+          
+          # Upload config to OPNsense
+          echo "Uploading configuration to OPNsense..."
+          echo "This will require API credentials..."
+          
+          read -p "API Key: " API_KEY
+          read -s -p "API Secret: " API_SECRET
+          echo
+          
+          # Upload configuration
+          curl -k -u "$API_KEY:$API_SECRET" \
+               -X POST \
+               -F "config=@$CONFIG_FILE" \
+               "https://$OPNSENSE_IP/api/core/backup/restore/config" \
+               || { echo "Failed to upload configuration"; rm -rf "$TEMP_DIR"; exit 1; }
+          
+          echo "Configuration uploaded successfully"
+          echo "OPNsense will reboot to apply the configuration"
+          
+          # Cleanup
+          rm -rf "$TEMP_DIR"
+          
+          echo "Restore complete!"
+          echo "Wait for OPNsense to reboot (approximately 2-3 minutes)"
+        dest: "{{ backup_dir }}/scripts/restore-config.sh"
+        mode: '0750'
+        
+    - name: Clean up old backups
+      block:
+        - name: Find old backup files
+          find:
+            paths: "{{ backup_dir }}"
+            patterns:
+              - "opnsense-backup-*.tar.gz"
+              - "opnsense-backup-*.tar.gz.sha256"
+            age: "{{ backup_retention_days }}d"
+          register: old_backups
+          
+        - name: Remove old backups
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ old_backups.files }}"
+          when: old_backups.files | length > 0
+          
+        - name: Find old config files
+          find:
+            paths: "{{ backup_dir }}/configs"
+            patterns: "config-*.xml"
+            age: "{{ backup_retention_days }}d"
+          register: old_configs
+          
+        - name: Remove old config files
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ old_configs.files }}"
+          when: old_configs.files | length > 0
+          
+    - name: Create backup inventory
+      block:
+        - name: List all backups
+          find:
+            paths: "{{ backup_dir }}"
+            patterns: "opnsense-backup-*.tar.gz"
+          register: all_backups
+          
+        - name: Create backup inventory file
+          copy:
+            content: |
+              # OPNsense Backup Inventory
+              # Updated: {{ ansible_date_time.iso8601 }}
+              
+              ## Current Backups ({{ all_backups.files | length }} total)
+              {% for backup in all_backups.files | sort(attribute='mtime', reverse=True) %}
+              {{ loop.index }}. {{ backup.path | basename }}
+                 Size: {{ backup.size | human_readable }}
+                 Date: {{ backup.mtime | strftime('%Y-%m-%d %H:%M:%S') }}
+                 SHA256: {{ backup.path | basename }}.sha256
+              {% endfor %}
+              
+              ## Backup Settings
+              Retention: {{ backup_retention_days }} days
+              Location: {{ backup_dir }}
+              
+              ## Restore Instructions
+              1. Copy backup file to management server
+              2. Run: {{ backup_dir }}/scripts/restore-config.sh <backup-file> <opnsense-ip>
+              3. Wait for OPNsense to reboot
+              
+              ## Automated Backup
+              This playbook can be scheduled via cron or Semaphore:
+              ansible-playbook opnsense-backup.yml -e opnsense_host=<ip>
+            dest: "{{ backup_dir }}/INVENTORY.txt"
+            mode: '0644'
+            
+    - name: Display backup summary
+      debug:
+        msg:
+          - "=========================================="
+          - "OPNsense Backup Complete!"
+          - "=========================================="
+          - ""
+          - "Backup Type: {{ backup_type | default('full') }}"
+          - "Backup Date: {{ backup_date }} {{ ansible_date_time.time }}"
+          - ""
+          - "Files Created:"
+          - "- Config: {{ backup_dir }}/configs/config-{{ backup_date }}-{{ backup_time }}.xml"
+          - "{% if backup_compress | default(true) %}- Archive: {{ backup_dir }}/opnsense-backup-{{ backup_date }}-{{ backup_time }}.tar.gz"
+          - "- Checksum: {{ backup_dir }}/opnsense-backup-{{ backup_date }}-{{ backup_time }}.tar.gz.sha256{% endif %}"
+          - "- Restore Script: {{ backup_dir }}/scripts/restore-config.sh"
+          - ""
+          - "Total Backups: {{ all_backups.files | length }}"
+          - "Retention: {{ backup_retention_days }} days"
+          - ""
+          - "To restore this backup:"
+          - "{{ backup_dir }}/scripts/restore-config.sh {{ backup_dir }}/opnsense-backup-{{ backup_date }}-{{ backup_time }}.tar.gz {{ opnsense_host }}"
+          - "=========================================="

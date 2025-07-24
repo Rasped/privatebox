@@ -37,7 +37,14 @@
       "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo podman exec semaphore-ui ls -la /tmp/semaphore/\")",
       "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo grep -B10 -A5 ''jq: invalid JSON'' /var/log/cloud-init-output.log\")",
       "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo podman ps | grep adguard\")",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "WebFetch(domain:docs.opnsense.org)",
+      "WebFetch(domain:forum.opnsense.org)",
+      "WebFetch(domain:opnsense.org)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(nc:*)",
+      "Bash(sshpass -p 'Changeme123' ssh ubuntuadmin@192.168.1.23 \"find /opt /home/ubuntuadmin -name ''*.sh'' -type f 2>/dev/null | grep -E ''(setup|initial|proxmox|discover)'' | head -10\")"
     ],
     "deny": []
   }

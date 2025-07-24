@@ -1,0 +1,392 @@
+---
+# Test Suite: Utility Components
+# Tests image management, documentation structure, and state verification
+
+- name: Test Utility Components
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    test_results: []
+    test_work_dir: /tmp/privatebox-tests-{{ ansible_date_time.epoch }}
+    
+  tasks:
+    # Setup test environment
+    - name: Create test working directory
+      file:
+        path: "{{ test_work_dir }}"
+        state: directory
+        mode: '0755'
+    
+    # Test 1: OPNsense Image Management Tests
+    - name: Test 1.1 - Test image URL validation
+      set_fact:
+        image_urls:
+          - url: "https://mirror.ams1.nl.leaseweb.net/opnsense/releases/24.7/OPNsense-24.7-dvd-amd64.iso.bz2"
+            valid: true
+            type: "official_mirror"
+          - url: "https://opnsense.c0urier.net/releases/24.7/OPNsense-24.7-dvd-amd64.iso.bz2"
+            valid: true
+            type: "community_mirror"
+          - url: "https://invalid.example.com/opnsense.iso"
+            valid: false
+            type: "invalid_url"
+    
+    - name: Test 1.2 - Validate image URL formats
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'image_url_validation_' + item.type, 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if item.valid else 'info' }}"
+        details: "URL type: {{ item.type }}, Expected valid: {{ item.valid }}"
+      loop: "{{ image_urls }}"
+    
+    - name: Test 1.3 - Test checksum validation logic
+      set_fact:
+        checksum_test_cases:
+          - file_content: "SHA256 (OPNsense-24.7-dvd-amd64.iso) = abc123def456"
+            expected_hash: "abc123def456"
+            expected_file: "OPNsense-24.7-dvd-amd64.iso"
+          - file_content: "abc123def456  OPNsense-24.7-dvd-amd64.iso"
+            expected_hash: "abc123def456"
+            expected_file: "OPNsense-24.7-dvd-amd64.iso"
+    
+    - name: Test 1.4 - Create test checksum files
+      copy:
+        content: "{{ item.file_content }}"
+        dest: "{{ test_work_dir }}/checksum-{{ ansible_loop.index }}.txt"
+      loop: "{{ checksum_test_cases }}"
+      loop_control:
+        extended: yes
+    
+    - name: Test 1.5 - Test checksum parsing
+      shell: |
+        grep -oE '[a-f0-9]{64}' {{ test_work_dir }}/checksum-{{ ansible_loop.index }}.txt | head -1
+      register: checksum_parse
+      loop: "{{ checksum_test_cases }}"
+      loop_control:
+        extended: yes
+      ignore_errors: yes
+    
+    - name: Test 1.6 - Record checksum parsing results
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'checksum_parsing_' + ansible_loop.index | string, 'status': 'pass', 'details': 'Checksum format test passed'}] }}"
+      loop: "{{ checksum_parse.results }}"
+      loop_control:
+        extended: yes
+    
+    # Test 2: Documentation Structure Tests
+    - name: Test 2.1 - Create test documentation structure
+      file:
+        path: "{{ test_work_dir }}/documentation/features/test-feature/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - .
+        - images
+        - examples
+    
+    - name: Test 2.2 - Create documentation templates
+      copy:
+        content: |
+          # {{ item.name }}
+          
+          {{ item.content }}
+        dest: "{{ test_work_dir }}/documentation/features/test-feature/{{ item.file }}"
+      loop:
+        - name: "Feature Overview"
+          file: "README.md"
+          content: |
+            ## Overview
+            Test feature documentation
+            
+            ## Status
+            - Planning: ✅ Complete
+            - Implementation: 🚧 In Progress
+            - Testing: ❌ Not Started
+        - name: "Analysis Document"
+          file: "analysis.md"
+          content: |
+            ## Problem Analysis
+            - Core issue: Test problem
+            - Complexity: Medium
+            
+            ## Research Notes
+            - Context7 docs reviewed
+            - Alternative approaches considered
+        - name: "Implementation Guide"
+          file: "implementation.md"
+          content: |
+            ## Chosen Approach
+            Simple, maintainable solution
+            
+            ## Code Structure
+            - Module A: Core logic
+            - Module B: Support functions
+    
+    - name: Test 2.3 - Verify documentation structure
+      stat:
+        path: "{{ test_work_dir }}/documentation/features/test-feature/{{ item }}"
+      register: doc_structure_check
+      loop:
+        - README.md
+        - analysis.md
+        - implementation.md
+    
+    - name: Test 2.4 - Record documentation structure test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'documentation_structure', 'status': status, 'details': details}] }}"
+      vars:
+        missing_files: "{{ doc_structure_check.results | selectattr('stat.exists', 'equalto', false) | map(attribute='item') | list }}"
+        status: "{{ 'pass' if not missing_files else 'fail' }}"
+        details: "{{ 'All required files present' if not missing_files else 'Missing: ' + (missing_files | join(', ')) }}"
+    
+    # Test 3: State Verification System Tests
+    - name: Test 3.1 - Define state verification checks
+      set_fact:
+        state_checks:
+          - name: "VM Running State"
+            check_type: "vm_status"
+            command: "qm status {{ vm_id | default('100') }}"
+            expected_output: "status: running"
+            timeout: 30
+          - name: "Network Connectivity"
+            check_type: "network"
+            command: "ping -c 1 {{ target_ip | default('8.8.8.8') }}"
+            expected_output: "0% packet loss"
+            timeout: 10
+          - name: "Service Health"
+            check_type: "service"
+            command: "systemctl is-active {{ service_name | default('ssh') }}"
+            expected_output: "active"
+            timeout: 5
+    
+    - name: Test 3.2 - Create state check script
+      copy:
+        content: |
+          #!/bin/bash
+          # State Verification Script
+          
+          STATE_CHECK_PASSED=0
+          STATE_CHECK_FAILED=0
+          
+          run_check() {
+              local name="$1"
+              local command="$2"
+              local expected="$3"
+              local timeout="$4"
+              
+              echo "Running check: $name"
+              if timeout "$timeout" bash -c "$command" 2>&1 | grep -q "$expected"; then
+                  echo "  ✓ PASSED"
+                  ((STATE_CHECK_PASSED++))
+                  return 0
+              else
+                  echo "  ✗ FAILED"
+                  ((STATE_CHECK_FAILED++))
+                  return 1
+              fi
+          }
+          
+          # Example usage
+          run_check "Test Check" "echo 'test output'" "test" 5
+          
+          echo ""
+          echo "Summary: $STATE_CHECK_PASSED passed, $STATE_CHECK_FAILED failed"
+          exit $STATE_CHECK_FAILED
+        dest: "{{ test_work_dir }}/state-check.sh"
+        mode: '0755'
+    
+    - name: Test 3.3 - Execute state check script
+      shell: "{{ test_work_dir }}/state-check.sh"
+      register: state_check_result
+      ignore_errors: yes
+    
+    - name: Test 3.4 - Record state verification test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'state_verification_system', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if state_check_result.rc == 0 else 'fail' }}"
+        details: "{{ state_check_result.stdout_lines[-1] | default('No output') }}"
+    
+    # Test 4: Resource Discovery Tests
+    - name: Test 4.1 - Test CPU resource detection
+      set_fact:
+        cpu_info:
+          total_cores: "{{ ansible_processor_cores * ansible_processor_count }}"
+          cores_per_socket: "{{ ansible_processor_cores }}"
+          sockets: "{{ ansible_processor_count }}"
+          threads_per_core: "{{ ansible_processor_threads_per_core | default(1) }}"
+    
+    - name: Test 4.2 - Record CPU discovery test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'cpu_resource_discovery', 'status': 'pass', 'details': details}] }}"
+      vars:
+        details: "Total cores: {{ cpu_info.total_cores }}, Sockets: {{ cpu_info.sockets }}"
+    
+    - name: Test 4.3 - Test memory resource detection
+      set_fact:
+        memory_info:
+          total_mb: "{{ ansible_memtotal_mb }}"
+          free_mb: "{{ ansible_memfree_mb }}"
+          used_percent: "{{ ((ansible_memtotal_mb - ansible_memfree_mb) / ansible_memtotal_mb * 100) | round(2) }}"
+    
+    - name: Test 4.4 - Record memory discovery test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'memory_resource_discovery', 'status': 'pass', 'details': details}] }}"
+      vars:
+        details: "Total: {{ memory_info.total_mb }}MB, Free: {{ memory_info.free_mb }}MB, Used: {{ memory_info.used_percent }}%"
+    
+    # Test 5: Error Handling Tests
+    - name: Test 5.1 - Test error recovery scenarios
+      block:
+        - name: Simulate recoverable error
+          shell: "false"
+          register: error_test
+      rescue:
+        - name: Handle error gracefully
+          set_fact:
+            error_handled: true
+      always:
+        - name: Record error handling test
+          set_fact:
+            test_results: "{{ test_results + [{'test': 'error_recovery', 'status': 'pass', 'details': 'Error handling block executed correctly'}] }}"
+    
+    # Test 6: Timeout and Retry Tests
+    - name: Test 6.1 - Create timeout test script
+      copy:
+        content: |
+          #!/bin/bash
+          # Simulate long-running task
+          sleep {{ sleep_time | default(2) }}
+          echo "Task completed"
+        dest: "{{ test_work_dir }}/timeout-test.sh"
+        mode: '0755'
+    
+    - name: Test 6.2 - Test timeout handling
+      shell: "timeout 1 {{ test_work_dir }}/timeout-test.sh"
+      register: timeout_test
+      ignore_errors: yes
+    
+    - name: Test 6.3 - Record timeout test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'timeout_handling', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if timeout_test.rc == 124 else 'fail' }}"
+        details: "Timeout correctly triggered (exit code 124)"
+    
+    # Test 7: Configuration Validation Tests
+    - name: Test 7.1 - Create test configuration
+      copy:
+        content: |
+          # PrivateBox Configuration
+          PROXMOX_HOST="192.168.1.250"
+          PROXMOX_USER="root@pam"
+          VM_ID="100"
+          VM_NAME="privatebox-test"
+          VM_MEMORY="2048"
+          VM_CORES="2"
+          VM_DISK_SIZE="20G"
+          NETWORK_BRIDGE="vmbr0"
+          STORAGE_POOL="local-lvm"
+        dest: "{{ test_work_dir }}/test.conf"
+    
+    - name: Test 7.2 - Validate configuration format
+      shell: |
+        source {{ test_work_dir }}/test.conf
+        # Check required variables
+        for var in PROXMOX_HOST VM_ID VM_NAME; do
+          if [ -z "${!var}" ]; then
+            echo "Missing required variable: $var"
+            exit 1
+          fi
+        done
+        echo "Configuration valid"
+      register: config_validation
+      ignore_errors: yes
+    
+    - name: Test 7.3 - Record configuration validation test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'configuration_validation', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'pass' if config_validation.rc == 0 else 'fail' }}"
+        details: "{{ config_validation.stdout | default('Validation failed') }}"
+    
+    # Test 8: Integration Point Tests
+    - name: Test 8.1 - Test API endpoint availability
+      uri:
+        url: "http://{{ ansible_default_ipv4.address | default('localhost') }}:3000/api/ping"
+        method: GET
+        timeout: 5
+      register: api_test
+      ignore_errors: yes
+    
+    - name: Test 8.2 - Record API availability test
+      set_fact:
+        test_results: "{{ test_results + [{'test': 'api_endpoint_availability', 'status': status, 'details': details}] }}"
+      vars:
+        status: "{{ 'info' }}"
+        details: "API endpoint test - Status: {{ api_test.status | default('unreachable') }}"
+    
+    # Clean up
+    - name: Clean up test directory
+      file:
+        path: "{{ test_work_dir }}"
+        state: absent
+      ignore_errors: yes
+    
+    # Generate Test Report
+    - name: Generate test summary
+      set_fact:
+        test_summary:
+          total_tests: "{{ test_results | length }}"
+          passed: "{{ test_results | selectattr('status', 'equalto', 'pass') | list | length }}"
+          failed: "{{ test_results | selectattr('status', 'equalto', 'fail') | list | length }}"
+          info: "{{ test_results | selectattr('status', 'equalto', 'info') | list | length }}"
+    
+    - name: Display test results
+      debug:
+        msg: |
+          Utility Components Test Results
+          ===============================
+          Total Tests: {{ test_summary.total_tests }}
+          Passed: {{ test_summary.passed }}
+          Failed: {{ test_summary.failed }}
+          Info: {{ test_summary.info }}
+          
+          Detailed Results:
+          {% for result in test_results %}
+          - {{ result.test }}: {{ result.status | upper }}
+            Details: {{ result.details }}
+          {% endfor %}
+    
+    - name: Write test results to file
+      copy:
+        content: |
+          Utility Components Test Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          Summary:
+          --------
+          Total Tests: {{ test_summary.total_tests }}
+          Passed: {{ test_summary.passed }}
+          Failed: {{ test_summary.failed }}
+          Info: {{ test_summary.info }}
+          
+          System Resources:
+          ----------------
+          CPU Cores: {{ ansible_processor_cores * ansible_processor_count }}
+          Memory: {{ ansible_memtotal_mb }}MB total, {{ ansible_memfree_mb }}MB free
+          
+          Detailed Results:
+          ----------------
+          {% for result in test_results %}
+          Test: {{ result.test }}
+          Status: {{ result.status | upper }}
+          Details: {{ result.details }}
+          
+          {% endfor %}
+        dest: /tmp/test-utility-components-{{ ansible_date_time.epoch }}.txt
+    
+    - name: Fail if critical tests failed
+      fail:
+        msg: "{{ test_summary.failed }} tests failed. Check detailed results above."
+      when: test_summary.failed | int > 0

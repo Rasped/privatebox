@@ -1,0 +1,45 @@
+---
+# Allocate a VM ID for Proxmox
+# Variables required: preferred_vmid, vmid_start, vmid_max
+
+- name: Get list of existing VM IDs
+  shell: qm list | tail -n +2 | awk '{print $1}' | sort -n
+  register: existing_vmids
+  changed_when: false
+  
+- name: Convert existing VM IDs to list
+  set_fact:
+    used_vmids: "{{ existing_vmids.stdout_lines | map('int') | list }}"
+    
+- name: Check if preferred VMID is available
+  set_fact:
+    allocated_vmid: "{{ preferred_vmid }}"
+  when: preferred_vmid | int not in used_vmids
+  
+- name: Find next available VMID if preferred is taken
+  block:
+    - name: Generate list of potential VMIDs
+      set_fact:
+        potential_vmids: "{{ range(vmid_start | int, vmid_max | int + 1) | list }}"
+        
+    - name: Find first available VMID
+      set_fact:
+        allocated_vmid: >-
+          {{
+            potential_vmids |
+            difference(used_vmids) |
+            first
+          }}
+  when: allocated_vmid is not defined
+  
+- name: Verify VMID was allocated
+  assert:
+    that:
+      - allocated_vmid is defined
+      - allocated_vmid | int >= vmid_start | int
+      - allocated_vmid | int <= vmid_max | int
+    fail_msg: "Failed to allocate VMID in range {{ vmid_start }}-{{ vmid_max }}"
+    
+- name: Display allocated VMID
+  debug:
+    msg: "Allocated VM ID: {{ allocated_vmid }}"
