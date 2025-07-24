@@ -221,6 +221,53 @@ curl -s -b /tmp/semaphore-cookie http://VM_IP:3000/api/project/1/tasks/TASK_ID |
 4. **VM Creation**: Use SSH commands to Proxmox host, not API calls
 5. **Keep It Simple**: Avoid complex role hierarchies - direct, readable playbooks are preferred
 
+## Phase 2: Network Design & Planning
+
+### Current Status
+Phase 0 (Prerequisites) and Phase 1 (AdGuard fixes) are complete. Phase 2 is a **planning-only phase** focused on detailed design before implementation.
+
+### Phase 2 Objectives
+1. **Detailed Firewall Rules**: Document every rule with ports, protocols, and justification
+2. **Migration Strategy**: Plan zero-downtime migration from flat to VLAN network
+3. **OPNsense Automation**: Research deployment automation capabilities
+4. **Risk Assessment**: Identify and plan for all failure scenarios
+
+### Key Deliverables
+- Firewall rule matrix (use `/documentation/templates/firewall-rules-template.md`)
+- Migration runbook (use `/documentation/templates/migration-runbook-template.md`)
+- OPNsense automation research (use `/documentation/templates/opnsense-automation-research.md`)
+- Updated network diagrams
+- Risk assessment with mitigation plans
+
+### Critical Decisions Needed
+1. **OPNsense Deployment Method**:
+   - How much can be automated vs manual configuration?
+   - Best approach for initial setup (config.xml, console, API)?
+   
+2. **Migration Approach**:
+   - Big bang (all VLANs at once) vs incremental?
+   - How to maintain access during transition?
+   - Temporary dual-network period?
+
+3. **Technical Architecture**:
+   - Proxmox bridge configuration for VLANs
+   - Performance implications of inter-VLAN routing
+   - High availability considerations
+
+### Research Requirements
+- OPNsense config.xml structure and templating options
+- Ansible modules for Proxmox VM creation
+- VLAN configuration on Proxmox bridges
+- OPNsense API capabilities post-deployment
+
+### Success Criteria
+Phase 2 is complete when:
+- All firewall rules documented with technical detail
+- Step-by-step migration plan with rollback procedures
+- OPNsense automation approach fully researched and documented
+- All risks identified with mitigation strategies
+- Clear implementation path for Phase 3
+
 ## Key Files to Reference
 
 ### Bootstrap Files
