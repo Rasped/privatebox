@@ -386,6 +386,11 @@
       when: confirm_deploy | bool
       tags: [adguard, configure]
       block:
+        - name: Check if password file exists
+          stat:
+            path: /etc/privatebox-adguard-password
+          register: password_file_stat
+          
         - name: Ensure password file exists
           copy:
             content: "{{ adguard_admin_password }}"
@@ -393,7 +398,7 @@
             mode: '0600'
             owner: root
             group: root
-          when: lookup('file', '/etc/privatebox-adguard-password', errors='ignore') == ""
+          when: not password_file_stat.stat.exists
           
         - name: Wait for AdGuard API to be available
           uri:
