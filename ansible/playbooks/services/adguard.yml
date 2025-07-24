@@ -316,41 +316,9 @@
               - "Image: {{ container_info.Image | default('Unknown') }}"
           when: container_info is defined
           
-        - name: Test DNS resolution through AdGuard
-          block:
-            - name: Wait for DNS service to stabilize
-              wait_for:
-                port: "{{ adguard_dns_port }}"
-                host: "{{ ansible_default_ipv4.address }}"
-                delay: 5
-                timeout: 30
-                
-            - name: Test DNS resolution - attempt 1
-              command: >
-                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
-                +short +time=2 google.com
-              register: dns_test
-              changed_when: false
-              failed_when: false
-              
-            - name: Test DNS resolution - with retries
-              when: dns_test.rc != 0 or dns_test.stdout == ""
-              command: >
-                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
-                +short +time=2 cloudflare.com
-              register: dns_test_retry
-              until: dns_test_retry.rc == 0 and dns_test_retry.stdout != ""
-              retries: 5
-              delay: 10
-              failed_when: false
-              
-            - name: Set final DNS test result
-              set_fact:
-                dns_working: "{{ (dns_test.rc == 0 and dns_test.stdout != '') or (dns_test_retry.rc|default(1) == 0 and dns_test_retry.stdout|default('') != '') }}"
-                
-            - name: Check DNS test result
-              debug:
-                msg: "DNS resolution test: {{ 'PASSED' if dns_working else 'FAILED - Will be configured automatically' }}"
+        - name: Note about DNS configuration
+          debug:
+            msg: "DNS will be configured automatically after AdGuard setup"
             
     # Display access information
     - name: "{{ service_name }} - Access information"
@@ -365,9 +333,6 @@
               web_url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
               dns_server: "{{ ansible_default_ipv4.address }}"
               dns_port: "{{ adguard_dns_port }}"
-              dns_functional: "{{ dns_working | default(false) }}"
-              host_dns_updated: "{{ dns_working | default(false) }}"
-              setup_required: true
               
         - name: Display access information
           debug:
@@ -413,7 +378,7 @@
               
               Data Directory: {{ adguard_data_dir }}
               Config Directory: {{ adguard_config_dir }}
-            dest: "{{ privatebox_base_path }}/deployment-info-adguard.txt"
+            dest: "/opt/privatebox/deployment-info-adguard.txt"
             mode: '0644'
 
     # Automatic AdGuard configuration
