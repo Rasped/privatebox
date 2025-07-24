@@ -218,7 +218,7 @@
           
         - name: Wait for AdGuard Home to be ready
           uri:
-            url: "http://127.0.0.1:{{ custom_web_port }}/"
+            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/"
             status_code: [200, 302]  # 302 is expected for initial setup redirect
             timeout: 10
           register: adguard_ready
