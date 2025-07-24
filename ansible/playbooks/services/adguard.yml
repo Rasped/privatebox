@@ -455,7 +455,7 @@
               
             - name: Wait for AdGuard to restart after configuration
               pause:
-                seconds: 10
+                seconds: 20
                 
             - name: Verify AdGuard is now configured and running
               uri:
@@ -466,6 +466,9 @@
                 force_basic_auth: true
                 status_code: 200
               register: final_status
+              until: final_status.status == 200
+              retries: 5
+              delay: 5
               
             - name: Display configuration status
               debug:
