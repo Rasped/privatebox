@@ -24,6 +24,36 @@ This document outlines the network architecture implementation plan for PrivateB
 
 ## Current State Analysis
 
+### Recent Discoveries (2025-07-24)
+
+During implementation attempts, we discovered:
+
+1. **AdGuard Container Networking**:
+   - Container successfully binds to VM IP (192.168.1.21) on ports 53, 853, 3001, 8080
+   - Health checks fail because they expect localhost (127.0.0.1)
+   - This is due to Quadlet PublishPort directive: `PublishPort={{ ansible_default_ipv4.address }}:{{ port }}`
+
+2. **systemd-resolved Conflict**:
+   - Successfully disabled by playbook to free port 53
+   - Temporary DNS servers configured (1.1.1.1, 8.8.8.8, 9.9.9.9)
+   - VM has working DNS resolution
+
+3. **VM Configuration Issues**:
+   - Hostname resolution error: `sudo: unable to resolve host ubuntu`
+   - Missing entry in /etc/hosts for local hostname
+   - Does not affect functionality but clutters output
+
+4. **AdGuard Initial State**:
+   - Web UI redirects to `/control/install.html` (expected)
+   - API endpoint `/control/status` returns 302 redirect
+   - Service is running but awaits manual configuration
+   - DNS port 53 not functional until setup complete
+
+5. **Semaphore Execution Issues**:
+   - Tasks fail with DNS resolution errors in Semaphore container
+   - Semaphore container cannot resolve github.com
+   - This may be related to systemd-resolved being disabled
+
 ### What's Working
 - **Proxmox Host**: Operational on 192.168.1.10
 - **Management VM**: Successfully deployed at 192.168.1.21
@@ -107,19 +137,49 @@ Public DNS Servers (1.1.1.1, 9.9.9.9)
 
 ## Implementation Phases
 
-### Phase 1: Fix Current Issues (Days 1-3)
+### Phase 0: Prerequisites & Information Gathering (Days 1-2)
+
+#### 0.1 Fix VM Configuration Issues
+- **Fix hostname resolution**: `sudo: unable to resolve host ubuntu` error
+  - Add `127.0.1.1 ubuntu` to `/etc/hosts`
+  - Verify with `hostname -f`
+  
+#### 0.2 Understand AdGuard Container Networking
+- **Current behavior**: Container binds to VM IP (192.168.1.21) not localhost
+- **Investigation needed**:
+  - Review Podman Quadlet network configuration
+  - Understand why health checks fail on 127.0.0.1
+  - Document container network mode (bridge vs host)
+  
+#### 0.3 AdGuard API Documentation
+- **Research automatic setup process**:
+  - Test `/install/get_addresses` endpoint
+  - Document `/install/configure` payload structure
+  - Create example JSON for automatic configuration
+- **Authentication flow**:
+  - Initial setup requires no auth
+  - Post-setup requires username/password
+  
+#### 0.4 Create Supporting Scripts
+- **AdGuard automatic setup script**
+- **DNS validation test suite**
+- **Network connectivity verification**
+
+### Phase 1: Fix Current Issues (Days 3-4)
 
 #### 1.1 Fix AdGuard Container Binding
 - **Problem**: Container binds to specific IP, health check expects localhost
+- **Root Cause**: Podman Quadlet PublishPort directive binds to specific IP
 - **Solution**: 
   - Option A: Modify Quadlet template to bind to 0.0.0.0
-  - Option B: Update health check to use actual IP
+  - Option B: Update health check to use actual IP ✓
   - Option C: Use host networking mode
 - **Decision**: Option B (least invasive, maintains security)
 - **Tasks**:
   - ✓ Update health check in playbook to use `ansible_default_ipv4.address`
-  - Create post-install configuration playbook
-  - Add automatic setup completion via API
+  - Create AdGuard automatic configuration playbook
+  - Handle initial setup state in health checks
+  - Fix DNS port availability check
 
 #### 1.2 Stabilize DNS Service
 - Configure AdGuard for automatic startup
@@ -127,7 +187,7 @@ Public DNS Servers (1.1.1.1, 9.9.9.9)
 - Document manual setup requirements
 - Create recovery procedures
 
-### Phase 2: Network Design & Planning (Days 4-7)
+### Phase 2: Network Design & Planning (Days 5-7)
 
 #### 2.1 Detailed Network Design
 - **IP Addressing Scheme**:
@@ -398,17 +458,19 @@ ping -c 4 10.0.30.1
 
 | Week | Phase | Key Deliverables |
 |------|-------|------------------|
-| 1 | Fix Issues | AdGuard operational |
-| 1-2 | Planning | Network design complete |
-| 2 | OPNsense | VM deployed and configured |
-| 3 | DNS Chain | Full DNS path working |
-| 3-4 | Migration | VLANs active, services migrated |
+| 1 | Phase 0: Prerequisites | Information gathered, issues documented |
+| 1 | Phase 1: Fix Issues | AdGuard operational with automatic setup |
+| 1-2 | Phase 2: Planning | Network design complete |
+| 2 | Phase 3: OPNsense | VM deployed and configured |
+| 3 | Phase 4: DNS Chain | Full DNS path working |
+| 3-4 | Phase 5: Migration | VLANs active, services migrated |
 
 ## Revision History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-07-24 | Claude | Initial plan created |
+| 1.1 | 2025-07-24 | Claude | Added Phase 0 for prerequisites and discoveries |
 
 ---
 
