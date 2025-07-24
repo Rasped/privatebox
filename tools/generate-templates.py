@@ -253,9 +253,13 @@ def parse_playbook(playbook_path):
                     var_info['semaphore_max'] = var_metadata['max']
                 semaphore_vars.append(var_info)
         
+        # Get the hosts to determine which inventory to use
+        hosts = play.get('hosts', 'all')
+        
         # Return playbook info even if no survey vars (for hands-off deployment)
         return {
             'name': play.get('name', 'Unnamed playbook'),
+            'hosts': hosts,
             'vars': semaphore_vars,
             'template_config': {}
         }
@@ -536,7 +540,13 @@ def main():
         config = playbook_info.get('template_config', {})
         
         # Look up resource IDs based on configuration or defaults
-        inventory_name = config.get('semaphore_inventory', 'Default Inventory')
+        # Determine inventory based on playbook hosts
+        hosts = playbook_info.get('hosts', 'all')
+        if hosts in ['proxmox-host', 'proxmox']:
+            inventory_name = config.get('semaphore_inventory', 'Proxmox Inventory')
+        else:
+            inventory_name = config.get('semaphore_inventory', 'VM Inventory')
+        
         repository_name = config.get('semaphore_repository', 'PrivateBox')
         environment_name = config.get('semaphore_environment')
         

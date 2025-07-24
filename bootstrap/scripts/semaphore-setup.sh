@@ -1327,7 +1327,7 @@ ensure_semaphore_tools() {
             dnf install -y jq curl
         elif command -v apt-get &> /dev/null; then
             apt-get update
-            apt-get install -y jq curl
+            apt-get install -y jq curl sshpass
         else
             log_info "ERROR: Package manager not supported. Install jq and curl manually."
             return 1
@@ -1722,13 +1722,50 @@ get_ssh_key_id_by_name() {
 }
 
 # Create default inventory for a project
+create_inventory() {
+    local project_id="$1"
+    local admin_session="$2"
+    local inventory_name="$3"
+    local inventory_content="$4"
+    local ssh_key_id="$5"
+    
+    log_info "Creating inventory: $inventory_name"
+    
+    # Build the inventory payload
+    local inventory_payload=$(jq -n \
+        --arg name "$inventory_name" \
+        --arg type "static" \
+        --argjson pid "$project_id" \
+        --arg inv "$inventory_content" \
+        --argjson ssh_key_id "$ssh_key_id" \
+        '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $ssh_key_id}')
+    
+    local api_result=$(make_api_request "POST" "http://localhost:3000/api/project/$project_id/inventory" "$inventory_payload" "$admin_session" "Creating $inventory_name")
+    if [ $? -ne 0 ]; then
+        log_error "Failed to create $inventory_name"
+        return 1
+    fi
+    
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local inv_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
+        log_info "$inventory_name created successfully (ID: $inv_id)"
+        return 0
+    else
+        log_error "Failed to create $inventory_name. Status: $status_code"
+        return 1
+    fi
+}
+
 create_default_inventory() {
     local project_name="$1"
     local project_id="$2"
     local admin_session="$3"
-    local ssh_key_id="${4:-}"  # Optional SSH key ID
+    local vm_ssh_key_id="${4:-}"  # VM SSH key ID
     
-    log_info "Creating default inventory for project '$project_name'..."
+    log_info "Creating inventories for project '$project_name'..."
     
     # Get the VM IP address dynamically
     local vm_ip=$(hostname -I | awk '{print $1}')
@@ -1738,101 +1775,44 @@ create_default_inventory() {
     fi
     log_info "Using VM IP: $vm_ip"
     
-    # Check if Proxmox host IP was discovered
-    local proxmox_ip=""
-    if [[ -f /etc/privatebox-proxmox-host ]]; then
-        proxmox_ip=$(cat /etc/privatebox-proxmox-host 2>/dev/null)
-        log_info "Found Proxmox host IP: $proxmox_ip"
-    else
-        log_info "No Proxmox host IP found in /etc/privatebox-proxmox-host"
-    fi
-    
-    # Create the inventory content with both hosts
-    local inventory_content="all:
+    # Create VM inventory first
+    if [ -n "$vm_ssh_key_id" ] && [[ "$vm_ssh_key_id" =~ ^[0-9]+$ ]]; then
+        local vm_inventory="all:
   hosts:
     container-host:
       ansible_host: ${vm_ip}
       ansible_user: ubuntuadmin
       ansible_become: true
       ansible_become_method: sudo"
+        
+        create_inventory "$project_id" "$admin_session" "VM Inventory" "$vm_inventory" "$vm_ssh_key_id"
+    else
+        log_warn "No valid VM SSH key ID provided, skipping VM inventory creation"
+    fi
     
-    # Add proxmox-host group with discovered or placeholder IP
-    if [[ -n "$proxmox_ip" ]]; then
-        inventory_content="${inventory_content}
-
-proxmox:
+    # Check if Proxmox host IP was discovered and create Proxmox inventory
+    if [[ -f /etc/privatebox-proxmox-host ]]; then
+        local proxmox_ip=$(cat /etc/privatebox-proxmox-host 2>/dev/null)
+        if [ -n "$proxmox_ip" ]; then
+            log_info "Found Proxmox host IP: $proxmox_ip"
+            
+            # Get the Proxmox SSH key ID (should be key ID 2 based on earlier creation)
+            local proxmox_key_id=$(get_ssh_key_id_by_name "$project_id" "proxmox-host" "$admin_session")
+            
+            if [ -n "$proxmox_key_id" ] && [[ "$proxmox_key_id" =~ ^[0-9]+$ ]]; then
+                local proxmox_inventory="all:
   hosts:
     proxmox-host:
       ansible_host: ${proxmox_ip}
-      ansible_user: root
-      ansible_ssh_private_key_file: /root/.credentials/semaphore_ansible_key
-      # Discovered from network scan during bootstrap"
-    else
-        # Add placeholder entry that can be updated later
-        inventory_content="${inventory_content}
-
-proxmox:
-  hosts:
-    proxmox-host:
-      ansible_host: CHANGE_ME_TO_PROXMOX_IP
-      ansible_user: root
-      ansible_ssh_private_key_file: /root/.credentials/semaphore_ansible_key
-      # IMPORTANT: Update ansible_host with your Proxmox server IP
-      # You can find this by running: cat /etc/privatebox-proxmox-host
-      # Or manually set it to your Proxmox server's IP address"
-    fi
-    
-    # Build the inventory payload
-    local inventory_payload
-    if [ -n "$ssh_key_id" ] && [[ "$ssh_key_id" =~ ^[0-9]+$ ]]; then
-        # Include SSH key ID if provided and valid
-        log_info "Creating inventory payload with SSH key ID: $ssh_key_id" >&2
-        inventory_payload=$(jq -n \
-            --arg name "Default Inventory" \
-            --arg type "static" \
-            --argjson pid "$project_id" \
-            --arg inv "$inventory_content" \
-            --argjson ssh_key_id "$ssh_key_id" \
-            '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $ssh_key_id}')
-    else
-        # Create without SSH key ID
-        if [ -n "$ssh_key_id" ]; then
-            log_info "WARNING: SSH key ID '$ssh_key_id' is not numeric, creating inventory without SSH key" >&2
-        else
-            log_info "Creating inventory without SSH key ID" >&2
-        fi
-        inventory_payload=$(jq -n \
-            --arg name "Default Inventory" \
-            --arg type "static" \
-            --argjson pid "$project_id" \
-            --arg inv "$inventory_content" \
-            '{name: $name, type: $type, project_id: $pid, inventory: $inv}')
-    fi
-        
-    local api_result=$(make_api_request "POST" "http://localhost:3000/api/project/$project_id/inventory" "$inventory_payload" "$admin_session" "Creating inventory for project $project_name")
-    if [ $? -ne 0 ]; then
-        log_info "WARNING: Failed to create default inventory for project '$project_name'."
-        return 0 # Continue even if inventory creation fails
-    fi
-    
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
-    
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
-        local inv_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
-        if [ -n "$inv_id" ] && [ "$inv_id" != "null" ]; then
-            log_info "Default inventory created for project '$project_name' with ID: $inv_id"
-            if [ -n "$ssh_key_id" ]; then
-                log_info "Inventory is associated with SSH key ID: $ssh_key_id"
+      ansible_user: root"
+                
+                create_inventory "$project_id" "$admin_session" "Proxmox Inventory" "$proxmox_inventory" "$proxmox_key_id"
+            else
+                log_warn "No Proxmox SSH key found, cannot create Proxmox inventory"
             fi
-        else
-            log_info "Default inventory created for project '$project_name'"
         fi
     else
-        log_info "WARNING: Failed to create default inventory. Status code: $status_code"
-        if [ -n "$response_body" ]; then
-            log_info "Response details: $response_body"
-        fi
+        log_info "No Proxmox host IP found in /etc/privatebox-proxmox-host, skipping Proxmox inventory"
     fi
 }
 
@@ -2059,27 +2039,52 @@ deploy_ssh_key_to_proxmox() {
     
     log_info "Deploying SSH public key to ${PROXMOX_USER:-root}@$proxmox_host..."
     
-    # First, try to create .ssh directory on Proxmox host
-    if ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$proxmox_host" "mkdir -p ~/.ssh && chmod 700 ~/.ssh" 2>/dev/null; then
-        log_info "Successfully connected to Proxmox host and ensured .ssh directory exists"
+    # Check if we have a password configured for Proxmox
+    local proxmox_password="${PROXMOX_PASSWORD:-}"
+    local ssh_method="key"
+    
+    # First, try key-based auth (in case it's already set up)
+    if ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$proxmox_host" "true" 2>/dev/null; then
+        log_info "SSH key authentication already works - skipping key deployment"
+        return 0
+    fi
+    
+    # If we have sshpass and a password, try password-based deployment
+    if command -v sshpass &> /dev/null && [ -n "$proxmox_password" ]; then
+        log_info "Attempting password-based SSH key deployment..."
+        ssh_method="password"
         
-        # Deploy the public key
-        if echo "$public_key_content" | ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$proxmox_host" "cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys" 2>/dev/null; then
-            log_info "✓ SSH public key successfully deployed to Proxmox host"
-            log_info "✓ Semaphore can now connect to $proxmox_host as ${PROXMOX_USER:-root} using SSH keys"
-            return 0
+        # Create .ssh directory
+        if sshpass -p "$proxmox_password" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$proxmox_host" "mkdir -p ~/.ssh && chmod 700 ~/.ssh" 2>/dev/null; then
+            log_info "Successfully created .ssh directory on Proxmox host"
+            
+            # Deploy the public key
+            if echo "$public_key_content" | sshpass -p "$proxmox_password" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$proxmox_host" "cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys" 2>/dev/null; then
+                log_info "✓ SSH public key successfully deployed to Proxmox host using password authentication"
+                log_info "✓ Semaphore can now connect to $proxmox_host as ${PROXMOX_USER:-root} using SSH keys"
+                return 0
+            else
+                log_info "ERROR: Failed to add SSH public key to authorized_keys on Proxmox host"
+                return 1
+            fi
         else
-            log_info "ERROR: Failed to add SSH public key to authorized_keys on Proxmox host"
-            return 1
+            log_info "WARNING: Password authentication failed or sshpass not available"
         fi
-    else
+    fi
+    
+    # If we get here, neither method worked
+    if [ "$ssh_method" = "key" ]; then
         log_info "WARNING: Could not connect to Proxmox host $proxmox_host"
         log_info "This could be because:"
         log_info "  1. SSH password authentication is disabled"
         log_info "  2. The host is not reachable"
         log_info "  3. SSH keys are already required"
+        log_info "  4. No PROXMOX_PASSWORD configured in privatebox.conf"
         log_info ""
-        log_info "To manually deploy the SSH key, run this command on your Proxmox host:"
+        log_info "For hands-off deployment, add to your config/privatebox.conf:"
+        log_info "  PROXMOX_PASSWORD='your-proxmox-root-password'"
+        log_info ""
+        log_info "Or manually deploy the SSH key by running this on your Proxmox host:"
         log_info "  echo '$public_key_content' >> ~/.ssh/authorized_keys"
         log_info "  chmod 600 ~/.ssh/authorized_keys"
         log_info ""

@@ -604,3 +604,41 @@ curl -I http://10.0.10.23:3000   # Semaphore
 - 
 - 
 - 
+
+## Phase 3 Testing Continuation - Network Discovery
+
+### Template Generation Fix
+**Time**: 18:44-18:48
+**Issue**: Only 2 templates were being generated instead of all playbooks
+**Root Cause**: 
+1. Semaphore clones from GitHub, not local files
+2. 26 playbook files were uncommitted (untracked in git)
+3. YAML parsing error in discover-environment.yml
+
+**Resolution**:
+1. Committed all untracked playbooks to GitHub
+2. Fixed YAML escape issue in regex_replace
+3. Fixed semaphore_* metadata placement in vars_prompt
+4. Successfully generated 15 templates from playbooks with metadata
+
+### Network Discovery Playbook Test
+**Time**: 18:48-ongoing
+**Template ID**: 17 (Deploy: discover-environment)
+**Issue**: Task stuck at "installing static inventory"
+**Root Cause**: SSH connectivity issue to Proxmox host
+- Playbook targets proxmox-host (192.168.1.10)
+- Semaphore inventory has the host defined
+- BUT: SSH key ID 3 is for VM container-host, not Proxmox host
+- No SSH key exists for root@proxmox-host authentication
+
+**Current Status**: BLOCKED - Need to set up SSH key for Proxmox host access
+
+### Critical Finding
+The bootstrap process discovered the Proxmox host and added it to inventory, but did NOT set up SSH authentication. This prevents any Proxmox-targeted playbooks from running through Semaphore.
+
+**Next Steps Required**:
+1. Create SSH key pair for Proxmox authentication
+2. Add public key to Proxmox host's authorized_keys
+3. Add private key to Semaphore as new SSH key
+4. Update inventory to use correct SSH key ID for proxmox-host
+
