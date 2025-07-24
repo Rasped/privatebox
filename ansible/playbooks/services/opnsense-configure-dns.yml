@@ -1,0 +1,422 @@
+---
+- name: Configure DNS resolver on OPNsense
+  hosts: container-host
+  become: true
+  gather_facts: true
+  
+  vars:
+    service_name: "OPNsense DNS Configuration"
+    service_description: "Configure Unbound DNS resolver with forwarding and local domain handling"
+    service_tag: "opnsense-dns"
+    
+    # DNS resolver settings
+    dns_port: 53
+    dnssec_enabled: true
+    dns_cache_size: "50"  # MB
+    
+    # Upstream DNS servers (used if AdGuard not available)
+    upstream_dns_servers:
+      - "1.1.1.1"
+      - "1.0.0.1"
+      - "9.9.9.9"
+      - "149.112.112.112"
+    
+    # Metadata for Semaphore template generation
+    _semaphore_vars_prompt:
+      opnsense_host:
+        semaphore_type: "string"
+        semaphore_required: true
+        semaphore_description: "OPNsense IP address or hostname"
+      adguard_integration:
+        semaphore_type: "boolean"
+        semaphore_required: false
+        semaphore_description: "Enable AdGuard integration"
+        semaphore_default: "false"
+  
+  tasks:
+    - name: Pre-flight checks
+      block:
+        - name: Load API credentials
+          block:
+            - name: Read API key
+              slurp:
+                src: /etc/privatebox-opnsense-api-key
+              register: api_key_content
+              
+            - name: Read API secret
+              slurp:
+                src: /etc/privatebox-opnsense-api-secret
+              register: api_secret_content
+              
+            - name: Set API credentials
+              set_fact:
+                api_key: "{{ api_key_content.content | b64decode | trim }}"
+                api_secret: "{{ api_secret_content.content | b64decode | trim }}"
+                
+        - name: Check AdGuard availability
+          when: adguard_integration | default(false) | bool
+          block:
+            - name: Check AdGuard service
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:8080/control/status"
+                method: GET
+                timeout: 5
+              register: adguard_check
+              failed_when: false
+              
+            - name: Set AdGuard status
+              set_fact:
+                adguard_available: "{{ adguard_check.status == 200 }}"
+                adguard_ip: "{{ ansible_default_ipv4.address if adguard_check.status == 200 else '' }}"
+                
+    - name: Configure Unbound DNS resolver
+      block:
+        - name: Get current Unbound settings
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/get"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: current_unbound
+          
+        - name: Configure basic Unbound settings
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/set"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              unbound:
+                enabled: "1"
+                port: "{{ dns_port }}"
+                dnssec: "{{ '1' if dnssec_enabled else '0' }}"
+                dns64: "0"
+                dns64prefix: ""
+                noarecords: "0"
+                regdhcp: "1"
+                regdhcpstatic: "1"
+                noreglladdr6: "1"
+                noregrecords: "0"
+                txtsupport: "0"
+                cacheflush: "0"
+                local_zone_type: "transparent"
+                outgoing_num_tcp: "10"
+                incoming_num_tcp: "10"
+                edns_buffer_size: "4096"
+                num_queries_per_thread: "4096"
+                jostle_timeout: "200"
+                cache_max_ttl: "86400"
+                cache_min_ttl: "0"
+                infra_host_ttl: "900"
+                infra_cache_numhosts: "10000"
+                unwanted_reply_threshold: "0"
+                log_verbosity: "1"
+                val_log_level: "0"
+                val_log_squelch: "1"
+                val_permissive_mode: "0"
+                key_cache_size: "{{ cache_size | default('50') }}m"
+                msg_cache_size: "{{ cache_size | default('50') }}m"
+                rrset_cache_size: "{{ (cache_size | default('50') | int * 2) }}m"
+                outgoing_range: "4096"
+                prefetch: "1"
+                prefetch_key: "1"
+                hardening_dnssec_stripped: "1"
+                hardening_glue: "1"
+                hardening_below_nxdomain: "1"
+                hardening_algo_downgrade: "1"
+                disable_auto_trust: "0"
+            status_code: 200
+          register: unbound_config_result
+          
+    - name: Configure DNS forwarding
+      block:
+        - name: Clear existing forwarders
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/delForward/{{ item.uuid }}"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body: {}
+            status_code: 200
+          loop: "{{ current_unbound.json.unbound.forwarding | default([]) }}"
+          when: current_unbound.json.unbound.forwarding is defined
+          
+        - name: Configure AdGuard as forwarder
+          when: adguard_integration | default(false) | bool and adguard_available | default(false)
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/addForward"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              forward:
+                enabled: "1"
+                domain: ""
+                server: "{{ adguard_ip }}"
+                port: "{{ adguard_dns_port | default('53') }}"
+                verify: "0"
+            status_code: 200
+          register: adguard_forward_result
+          
+        - name: Configure upstream DNS servers (fallback)
+          when: not (adguard_integration | default(false) | bool and adguard_available | default(false))
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/addForward"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              forward:
+                enabled: "1"
+                domain: ""
+                server: "{{ item }}"
+                port: "53"
+                verify: "0"
+            status_code: 200
+          loop: "{{ upstream_dns_servers }}"
+          register: upstream_forward_results
+          
+    - name: Configure local domain and host overrides
+      block:
+        - name: Add local domain
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/addDomainOverride"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              domain:
+                enabled: "1"
+                domain: "{{ domain_name | default('privatebox.local') }}"
+                server: "{{ lan_ip | default('10.0.0.1') }}"
+                descr: "Local domain"
+            status_code: 200
+          register: local_domain_result
+          
+        - name: Add host overrides for important services
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/addHostOverride"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              host:
+                enabled: "1"
+                hostname: "{{ item.hostname }}"
+                domain: "{{ domain_name | default('privatebox.local') }}"
+                server: "{{ item.ip }}"
+                descr: "{{ item.description }}"
+            status_code: 200
+          loop:
+            - hostname: "opnsense"
+              ip: "{{ lan_ip | default('10.0.0.1') }}"
+              description: "OPNsense Firewall"
+            - hostname: "privatebox"
+              ip: "{{ ansible_default_ipv4.address }}"
+              description: "PrivateBox Management"
+          when: item.ip != ""
+          register: host_override_results
+          
+    - name: Configure DNS access control
+      block:
+        - name: Set access control lists
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/set"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              unbound:
+                acls:
+                  - enabled: "1"
+                    aclname: "LAN Networks"
+                    aclaction: "allow"
+                    description: "Allow LAN networks"
+                    aclnetworks:
+                      - network: "{{ lan_ip | default('10.0.0.1') | regex_replace('\\.[0-9]+$', '.0') }}"
+                        mask: "{{ lan_subnet | default('24') }}"
+                  - enabled: "1"
+                    aclname: "Localhost"
+                    aclaction: "allow"
+                    description: "Allow localhost"
+                    aclnetworks:
+                      - network: "127.0.0.0"
+                        mask: "8"
+            status_code: 200
+          register: acl_result
+          
+    - name: Configure VLAN DNS access
+      when: enable_vlans | default(false)
+      block:
+        - name: Add VLAN networks to access control
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/settings/addAcl"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body:
+              acl:
+                enabled: "1"
+                aclname: "{{ item.name }} Network"
+                aclaction: "allow"
+                description: "Allow {{ item.name }} VLAN"
+                network: "{{ item.ip | regex_replace('\\.[0-9]+$', '.0') }}"
+                mask: "{{ item.subnet | default('24') }}"
+            status_code: 200
+          loop: "{{ vlans | default([]) }}"
+          register: vlan_acl_results
+          
+    - name: Apply DNS configuration
+      block:
+        - name: Reconfigure Unbound
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/service/reconfigure"
+            method: POST
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            body_format: json
+            body: {}
+            status_code: 200
+          register: unbound_reconfigure
+          
+        - name: Wait for Unbound to restart
+          pause:
+            seconds: 10
+            
+        - name: Check Unbound service status
+          uri:
+            url: "https://{{ opnsense_host }}/api/unbound/service/status"
+            method: GET
+            user: "{{ api_key }}"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 200
+          register: unbound_status
+          
+        - name: Display DNS service status
+          debug:
+            msg: "Unbound DNS service status: {{ unbound_status.json.status | default('Unknown') }}"
+            
+    - name: Test DNS resolution
+      block:
+        - name: Test external DNS resolution
+          command: >
+            dig @{{ opnsense_host }} +short google.com
+          register: external_dns_test
+          changed_when: false
+          failed_when: false
+          
+        - name: Test local domain resolution
+          command: >
+            dig @{{ opnsense_host }} +short opnsense.{{ domain_name | default('privatebox.local') }}
+          register: local_dns_test
+          changed_when: false
+          failed_when: false
+          
+        - name: Display DNS test results
+          debug:
+            msg:
+              - "External DNS test (google.com): {{ 'Success' if external_dns_test.stdout else 'Failed' }}"
+              - "Local DNS test (opnsense.{{ domain_name | default('privatebox.local') }}): {{ 'Success' if local_dns_test.stdout else 'Failed' }}"
+              
+    - name: Save DNS configuration summary
+      copy:
+        content: |
+          # OPNsense DNS Configuration
+          # Generated: {{ ansible_date_time.iso8601 }}
+          
+          ## DNS Resolver Settings
+          Port: {{ dns_port }}
+          DNSSEC: {{ 'Enabled' if dnssec_enabled else 'Disabled' }}
+          Cache Size: {{ cache_size | default('50') }}MB
+          
+          ## DNS Forwarding
+          {% if adguard_integration | default(false) | bool and adguard_available | default(false) %}
+          Mode: AdGuard Integration
+          Forwarder: {{ adguard_ip }}:{{ adguard_dns_port | default('53') }}
+          {% else %}
+          Mode: Direct Upstream
+          Forwarders:
+          {% for server in upstream_dns_servers %}
+          - {{ server }}:53
+          {% endfor %}
+          {% endif %}
+          
+          ## Local Domain
+          Domain: {{ domain_name | default('privatebox.local') }}
+          
+          ## Host Overrides
+          - opnsense.{{ domain_name | default('privatebox.local') }} -> {{ lan_ip | default('10.0.0.1') }}
+          - privatebox.{{ domain_name | default('privatebox.local') }} -> {{ ansible_default_ipv4.address }}
+          
+          ## Access Control
+          Allowed Networks:
+          - {{ lan_ip | default('10.0.0.1') | regex_replace('\\.[0-9]+$', '.0') }}/{{ lan_subnet | default('24') }} (LAN)
+          - 127.0.0.0/8 (Localhost)
+          {% if enable_vlans | default(false) %}
+          {% for vlan in vlans | default([]) %}
+          - {{ vlan.ip | regex_replace('\\.[0-9]+$', '.0') }}/{{ vlan.subnet | default('24') }} ({{ vlan.name }})
+          {% endfor %}
+          {% endif %}
+          
+          ## Test Commands
+          # Test external resolution:
+          dig @{{ opnsense_host }} google.com
+          
+          # Test local resolution:
+          dig @{{ opnsense_host }} opnsense.{{ domain_name | default('privatebox.local') }}
+        dest: /opt/privatebox/config/opnsense-dns.conf
+        mode: '0644'
+        
+    - name: Display completion information
+      debug:
+        msg:
+          - "=========================================="
+          - "DNS Configuration Complete!"
+          - "=========================================="
+          - ""
+          - "DNS Resolver: Enabled on port {{ dns_port }}"
+          - "DNSSEC: {{ 'Enabled' if dnssec_enabled else 'Disabled' }}"
+          - ""
+          - "Forwarding Mode: {{ 'AdGuard' if (adguard_integration | default(false) | bool and adguard_available | default(false)) else 'Direct Upstream' }}"
+          - "{% if adguard_integration | default(false) | bool and adguard_available | default(false) %}AdGuard Server: {{ adguard_ip }}:{{ adguard_dns_port | default('53') }}{% endif %}"
+          - ""
+          - "Local Domain: {{ domain_name | default('privatebox.local') }}"
+          - ""
+          - "DNS Test Results:"
+          - "- External: {{ 'Working' if external_dns_test.stdout else 'Failed' }}"
+          - "- Local: {{ 'Working' if local_dns_test.stdout else 'Failed' }}"
+          - ""
+          - "Configuration saved to:"
+          - "/opt/privatebox/config/opnsense-dns.conf"
+          - "=========================================="

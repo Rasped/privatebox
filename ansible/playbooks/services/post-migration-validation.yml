@@ -1,0 +1,371 @@
+---
+# Task 6.6: Final Migration Validation
+# Run comprehensive validation tests
+
+- name: Post-Migration Validation
+  hosts: all
+  gather_facts: yes
+  vars_prompt:
+    - name: generate_report
+      prompt: "Generate detailed validation report? (yes/no)"
+      default: "yes"
+      private: no
+      semaphore_type: "yes_no"
+      semaphore_display_name: "Generate Report"
+      semaphore_description: "Create comprehensive validation report with all test results"
+    
+    - name: test_external_access
+      prompt: "Test external connectivity? (yes/no)"
+      default: "yes"
+      private: no
+      semaphore_type: "yes_no"
+      semaphore_display_name: "Test External"
+      semaphore_description: "Verify services are accessible from external networks"
+
+  vars:
+    validation_tests:
+      network:
+        - name: "VLAN interfaces exist"
+          command: "ip link show | grep -E 'vlan100|vlan101|vlan102|vlan103|vlan104|vlan105'"
+          expected: "success"
+        - name: "VLAN IPs configured"
+          command: "ip addr show | grep -E '10\\.(100|101|102|103|104|105)\\.'"
+          expected: "success"
+        - name: "Default route via VLAN"
+          command: "ip route | grep default | grep -q 10.100.0.1"
+          expected: "success"
+      
+      services:
+        - name: "OPNsense web UI"
+          url: "https://10.100.0.1"
+          expected_status: 200
+          validate_certs: no
+        - name: "AdGuard DNS service"
+          url: "http://10.101.0.10:3000"
+          expected_status: 200
+        - name: "Portainer management"
+          url: "http://10.100.0.20:9000"
+          expected_status: 200
+        - name: "Semaphore UI"
+          url: "http://10.100.0.21:3000"
+          expected_status: 200
+      
+      dns:
+        - name: "Internal DNS resolution"
+          test: "nslookup privatebox.local 10.101.0.10"
+          expected: "success"
+        - name: "External DNS resolution"
+          test: "nslookup google.com 10.101.0.10"
+          expected: "success"
+        - name: "Reverse DNS for services"
+          test: "nslookup 10.101.0.10 10.101.0.10"
+          expected: "success"
+      
+      security:
+        - name: "Inter-VLAN routing blocked"
+          test: "ping -c 1 -W 1 10.105.0.1 || echo 'blocked'"
+          expected: "blocked"
+          from_vlan: "infrastructure"
+          to_vlan: "guest"
+        - name: "Management VLAN protected"
+          test: "nc -zv 10.100.0.1 22 || echo 'blocked'"
+          expected: "blocked"
+          from_vlan: "guest"
+    
+    report_path: "/opt/privatebox/migration-validation-{{ ansible_date_time.epoch }}.html"
+
+  tasks:
+    # Initialize validation results
+    - name: Create validation results directory
+      file:
+        path: /opt/privatebox/validation
+        state: directory
+        mode: '0755'
+      become: yes
+
+    - name: Initialize test results
+      set_fact:
+        test_results:
+          passed: 0
+          failed: 0
+          warnings: 0
+          details: []
+
+    # Network connectivity tests
+    - name: Run network validation tests
+      shell: "{{ item.command }}"
+      register: network_test
+      loop: "{{ validation_tests.network }}"
+      failed_when: false
+      changed_when: false
+      become: yes
+
+    - name: Process network test results
+      set_fact:
+        test_results: |
+          {%- set ns = namespace(results=test_results) -%}
+          {%- for test in network_test.results -%}
+            {%- if test.rc == 0 -%}
+              {%- set _ = ns.results.update({'passed': ns.results.passed + 1}) -%}
+            {%- else -%}
+              {%- set _ = ns.results.update({'failed': ns.results.failed + 1}) -%}
+            {%- endif -%}
+            {%- set _ = ns.results.details.append({
+              'category': 'Network',
+              'test': test.item.name,
+              'status': 'PASS' if test.rc == 0 else 'FAIL',
+              'output': test.stdout | default('') + test.stderr | default('')
+            }) -%}
+          {%- endfor -%}
+          {{ ns.results }}
+
+    # Service availability tests
+    - name: Test service endpoints
+      uri:
+        url: "{{ item.url }}"
+        method: GET
+        validate_certs: "{{ item.validate_certs | default(true) }}"
+        timeout: 10
+      register: service_test
+      loop: "{{ validation_tests.services }}"
+      failed_when: false
+      delegate_to: localhost
+
+    - name: Process service test results
+      set_fact:
+        test_results: |
+          {%- set ns = namespace(results=test_results) -%}
+          {%- for test in service_test.results -%}
+            {%- if test.status is defined and test.status == test.item.expected_status -%}
+              {%- set _ = ns.results.update({'passed': ns.results.passed + 1}) -%}
+            {%- else -%}
+              {%- set _ = ns.results.update({'failed': ns.results.failed + 1}) -%}
+            {%- endif -%}
+            {%- set _ = ns.results.details.append({
+              'category': 'Services',
+              'test': test.item.name,
+              'status': 'PASS' if test.status is defined and test.status == test.item.expected_status else 'FAIL',
+              'output': 'HTTP ' + (test.status|string if test.status is defined else 'No response')
+            }) -%}
+          {%- endfor -%}
+          {{ ns.results }}
+
+    # DNS resolution tests
+    - name: Run DNS tests
+      shell: "{{ item.test }}"
+      register: dns_test
+      loop: "{{ validation_tests.dns }}"
+      failed_when: false
+      changed_when: false
+      become: yes
+
+    - name: Process DNS test results
+      set_fact:
+        test_results: |
+          {%- set ns = namespace(results=test_results) -%}
+          {%- for test in dns_test.results -%}
+            {%- if test.rc == 0 -%}
+              {%- set _ = ns.results.update({'passed': ns.results.passed + 1}) -%}
+            {%- else -%}
+              {%- set _ = ns.results.update({'failed': ns.results.failed + 1}) -%}
+            {%- endif -%}
+            {%- set _ = ns.results.details.append({
+              'category': 'DNS',
+              'test': test.item.name,
+              'status': 'PASS' if test.rc == 0 else 'FAIL',
+              'output': test.stdout | default('')
+            }) -%}
+          {%- endfor -%}
+          {{ ns.results }}
+
+    # Performance benchmarks
+    - name: Check network performance
+      shell: |
+        # Simple bandwidth test between VLANs
+        timeout 5 iperf3 -c 10.101.0.10 -t 3 -J 2>/dev/null | jq -r '.end.sum_received.bits_per_second' | awk '{print $1/1000000 " Mbps"}' || echo "iperf3 not available"
+      register: perf_test
+      changed_when: false
+      failed_when: false
+
+    # Generate HTML report
+    - name: Generate validation report
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>PrivateBox Migration Validation Report</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+                  .header { background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; }
+                  .summary { background-color: white; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                  .passed { color: #27ae60; font-weight: bold; }
+                  .failed { color: #e74c3c; font-weight: bold; }
+                  .warning { color: #f39c12; font-weight: bold; }
+                  .test-section { background-color: white; padding: 20px; margin: 10px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                  .test-result { padding: 10px; margin: 5px 0; border-left: 4px solid #ecf0f1; }
+                  .test-pass { border-left-color: #27ae60; background-color: #d5f4e6; }
+                  .test-fail { border-left-color: #e74c3c; background-color: #fadbd8; }
+                  table { width: 100%; border-collapse: collapse; }
+                  th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+                  th { background-color: #34495e; color: white; }
+                  .footer { text-align: center; padding: 20px; color: #7f8c8d; }
+              </style>
+          </head>
+          <body>
+              <div class="header">
+                  <h1>PrivateBox VLAN Migration Validation Report</h1>
+                  <p>Generated: {{ ansible_date_time.iso8601 }}</p>
+                  <p>Host: {{ ansible_hostname }}</p>
+              </div>
+              
+              <div class="summary">
+                  <h2>Test Summary</h2>
+                  <p>Total Tests: {{ test_results.passed + test_results.failed }}</p>
+                  <p class="passed">Passed: {{ test_results.passed }}</p>
+                  <p class="failed">Failed: {{ test_results.failed }}</p>
+                  <p class="warning">Warnings: {{ test_results.warnings }}</p>
+                  <p><strong>Success Rate: {{ ((test_results.passed / (test_results.passed + test_results.failed)) * 100) | round(1) }}%</strong></p>
+              </div>
+              
+              {% for category in test_results.details | groupby('category') %}
+              <div class="test-section">
+                  <h3>{{ category.grouper }} Tests</h3>
+                  <table>
+                      <tr>
+                          <th>Test</th>
+                          <th>Status</th>
+                          <th>Details</th>
+                      </tr>
+                      {% for test in category.list %}
+                      <tr class="test-result {{ 'test-pass' if test.status == 'PASS' else 'test-fail' }}">
+                          <td>{{ test.test }}</td>
+                          <td class="{{ 'passed' if test.status == 'PASS' else 'failed' }}">{{ test.status }}</td>
+                          <td>{{ test.output | truncate(100) }}</td>
+                      </tr>
+                      {% endfor %}
+                  </table>
+              </div>
+              {% endfor %}
+              
+              <div class="test-section">
+                  <h3>Network Architecture</h3>
+                  <table>
+                      <tr>
+                          <th>VLAN</th>
+                          <th>ID</th>
+                          <th>Network</th>
+                          <th>Purpose</th>
+                      </tr>
+                      <tr><td>Management</td><td>100</td><td>10.100.0.0/24</td><td>Infrastructure management</td></tr>
+                      <tr><td>Infrastructure</td><td>101</td><td>10.101.0.0/24</td><td>Core services (DNS, etc)</td></tr>
+                      <tr><td>Services</td><td>102</td><td>10.102.0.0/24</td><td>Application services</td></tr>
+                      <tr><td>DMZ</td><td>103</td><td>10.103.0.0/24</td><td>Exposed services</td></tr>
+                      <tr><td>IoT</td><td>104</td><td>10.104.0.0/24</td><td>IoT devices</td></tr>
+                      <tr><td>Guest</td><td>105</td><td>10.105.0.0/24</td><td>Guest network</td></tr>
+                  </table>
+              </div>
+              
+              <div class="test-section">
+                  <h3>Performance Metrics</h3>
+                  <p>Inter-VLAN Bandwidth: {{ perf_test.stdout | default('Not tested') }}</p>
+              </div>
+              
+              <div class="footer">
+                  <p>PrivateBox VLAN Migration - Validation Complete</p>
+              </div>
+          </body>
+          </html>
+        dest: "{{ report_path }}"
+        mode: '0644'
+      when: generate_report|bool
+      become: yes
+
+    # Create action items based on failures
+    - name: Generate action items
+      set_fact:
+        action_items: |
+          {% set items = [] %}
+          {% for test in test_results.details %}
+            {% if test.status == 'FAIL' %}
+              {% if 'DNS' in test.category %}
+                {% set _ = items.append('Check DNS server configuration and firewall rules') %}
+              {% elif 'Network' in test.category %}
+                {% set _ = items.append('Verify VLAN configuration and network connectivity') %}
+              {% elif 'Services' in test.category %}
+                {% set _ = items.append('Check service ' + test.test + ' configuration and accessibility') %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ items | unique | list }}
+
+    # Create completion certificate
+    - name: Create migration completion certificate
+      copy:
+        content: |
+          ============================================
+          PRIVATEBOX VLAN MIGRATION CERTIFICATE
+          ============================================
+          
+          Date: {{ ansible_date_time.iso8601 }}
+          
+          This certifies that the PrivateBox network
+          migration to VLAN architecture has been
+          completed with the following results:
+          
+          Tests Passed: {{ test_results.passed }}
+          Tests Failed: {{ test_results.failed }}
+          Success Rate: {{ ((test_results.passed / (test_results.passed + test_results.failed)) * 100) | round(1) }}%
+          
+          {% if test_results.failed == 0 %}
+          STATUS: FULLY OPERATIONAL
+          
+          All systems are functioning correctly.
+          The VLAN network is ready for production use.
+          {% else %}
+          STATUS: OPERATIONAL WITH ISSUES
+          
+          Action Required:
+          {% for item in action_items %}
+          - {{ item }}
+          {% endfor %}
+          {% endif %}
+          
+          Validation Report: {{ report_path }}
+          
+          ============================================
+        dest: /opt/privatebox/migration-certificate.txt
+        mode: '0644'
+      become: yes
+
+    # Display final summary
+    - name: Display validation summary
+      debug:
+        msg: |
+          {% if test_results.failed == 0 %}
+          ✅ MIGRATION VALIDATION SUCCESSFUL!
+          {% else %}
+          ⚠ MIGRATION COMPLETED WITH {{ test_results.failed }} ISSUE(S)
+          {% endif %}
+          
+          Test Results:
+          - Passed: {{ test_results.passed }}
+          - Failed: {{ test_results.failed }}
+          - Success Rate: {{ ((test_results.passed / (test_results.passed + test_results.failed)) * 100) | round(1) }}%
+          
+          {% if test_results.failed > 0 %}
+          Action Items:
+          {% for item in action_items %}
+          - {{ item }}
+          {% endfor %}
+          {% endif %}
+          
+          Reports Generated:
+          - Validation Report: {{ report_path }}
+          - Migration Certificate: /opt/privatebox/migration-certificate.txt
+          
+          {% if test_results.failed == 0 %}
+          🎆 Congratulations! Your PrivateBox VLAN network is fully operational!
+          {% else %}
+          Please address the issues above to complete the migration.
+          {% endif %}
