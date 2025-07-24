@@ -1730,15 +1730,57 @@ create_default_inventory() {
     
     log_info "Creating default inventory for project '$project_name'..."
     
-    # Get the IP address from the configuration
-    local vm_ip="${STATIC_IP:-192.168.1.20}"
+    # Get the VM IP address dynamically
+    local vm_ip=$(hostname -I | awk '{print $1}')
+    if [[ -z "$vm_ip" ]]; then
+        # Fallback to configured IP if hostname -I fails
+        vm_ip="${STATIC_IP:-192.168.1.20}"
+    fi
+    log_info "Using VM IP: $vm_ip"
     
-    # Create the inventory content with the container-host
+    # Check if Proxmox host IP was discovered
+    local proxmox_ip=""
+    if [[ -f /etc/privatebox-proxmox-host ]]; then
+        proxmox_ip=$(cat /etc/privatebox-proxmox-host 2>/dev/null)
+        log_info "Found Proxmox host IP: $proxmox_ip"
+    else
+        log_info "No Proxmox host IP found in /etc/privatebox-proxmox-host"
+    fi
+    
+    # Create the inventory content with both hosts
     local inventory_content="all:
   hosts:
     container-host:
       ansible_host: ${vm_ip}
-      ansible_user: ubuntuadmin"
+      ansible_user: ubuntuadmin
+      ansible_become: true
+      ansible_become_method: sudo"
+    
+    # Add proxmox-host group with discovered or placeholder IP
+    if [[ -n "$proxmox_ip" ]]; then
+        inventory_content="${inventory_content}
+
+proxmox:
+  hosts:
+    proxmox-host:
+      ansible_host: ${proxmox_ip}
+      ansible_user: root
+      ansible_ssh_private_key_file: /root/.credentials/semaphore_ansible_key
+      # Discovered from network scan during bootstrap"
+    else
+        # Add placeholder entry that can be updated later
+        inventory_content="${inventory_content}
+
+proxmox:
+  hosts:
+    proxmox-host:
+      ansible_host: CHANGE_ME_TO_PROXMOX_IP
+      ansible_user: root
+      ansible_ssh_private_key_file: /root/.credentials/semaphore_ansible_key
+      # IMPORTANT: Update ansible_host with your Proxmox server IP
+      # You can find this by running: cat /etc/privatebox-proxmox-host
+      # Or manually set it to your Proxmox server's IP address"
+    fi
     
     # Build the inventory payload
     local inventory_payload
@@ -1933,10 +1975,20 @@ create_infrastructure_project_with_ssh_key() {
             log_info "PrivateBox project created with ID: $project_id"
             
             # Create SSH key for this project first (before inventory)
-            local proxmox_key_id=$(create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session")
+            local proxmox_key_id=""
+            if [ -f "$SSH_PRIVATE_KEY_PATH" ]; then
+                proxmox_key_id=$(create_semaphore_ssh_key "$project_id" "proxmox-host" "ssh" "$admin_session")
+            else
+                log_info "WARNING: SSH key not found at $SSH_PRIVATE_KEY_PATH - skipping Proxmox SSH key creation"
+            fi
             
             # Create SSH key for VM self-management (with ubuntuadmin as the SSH user)
-            local vm_key_id=$(create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "ubuntuadmin")
+            local vm_key_id=""
+            if [ -f "/root/.credentials/semaphore_vm_key" ]; then
+                vm_key_id=$(create_semaphore_ssh_key "$project_id" "vm-container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "ubuntuadmin")
+            else
+                log_info "WARNING: VM SSH key not found at /root/.credentials/semaphore_vm_key - skipping VM SSH key creation"
+            fi
             
             # Debug: Log the captured key ID
             log_info "DEBUG: Captured VM SSH key ID: '$vm_key_id'" >&2
@@ -1976,9 +2028,21 @@ deploy_ssh_key_to_proxmox() {
     log_info "Attempting to deploy SSH public key to Proxmox host..."
     
     # Check if we have the necessary configuration
-    if [ -z "${PROXMOX_HOST:-}" ]; then
-        log_info "WARNING: PROXMOX_HOST not configured. Skipping SSH key deployment."
-        log_info "To enable automatic SSH key deployment, set PROXMOX_HOST in config/privatebox.conf"
+    local proxmox_host="${PROXMOX_HOST:-}"
+    
+    # If PROXMOX_HOST not set, try to use discovered IP
+    if [ -z "$proxmox_host" ] && [ -f /etc/privatebox-proxmox-host ]; then
+        proxmox_host=$(cat /etc/privatebox-proxmox-host 2>/dev/null)
+        if [ -n "$proxmox_host" ]; then
+            log_info "Using discovered Proxmox host IP: $proxmox_host"
+        fi
+    fi
+    
+    if [ -z "$proxmox_host" ]; then
+        log_info "WARNING: No Proxmox host IP available. Skipping SSH key deployment."
+        log_info "To enable automatic SSH key deployment, either:"
+        log_info "  - Set PROXMOX_HOST in config/privatebox.conf"
+        log_info "  - Or ensure Proxmox discovery succeeded (check /etc/privatebox-proxmox-host)"
         return 0
     fi
     
@@ -1993,23 +2057,23 @@ deploy_ssh_key_to_proxmox() {
         return 1
     fi
     
-    log_info "Deploying SSH public key to ${PROXMOX_USER:-root}@$PROXMOX_HOST..."
+    log_info "Deploying SSH public key to ${PROXMOX_USER:-root}@$proxmox_host..."
     
     # First, try to create .ssh directory on Proxmox host
-    if ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$PROXMOX_HOST" "mkdir -p ~/.ssh && chmod 700 ~/.ssh" 2>/dev/null; then
+    if ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$proxmox_host" "mkdir -p ~/.ssh && chmod 700 ~/.ssh" 2>/dev/null; then
         log_info "Successfully connected to Proxmox host and ensured .ssh directory exists"
         
         # Deploy the public key
-        if echo "$public_key_content" | ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$PROXMOX_HOST" "cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys" 2>/dev/null; then
+        if echo "$public_key_content" | ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${PROXMOX_SSH_PORT:-22}" "${PROXMOX_USER:-root}@$proxmox_host" "cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys" 2>/dev/null; then
             log_info "✓ SSH public key successfully deployed to Proxmox host"
-            log_info "✓ Semaphore can now connect to $PROXMOX_HOST as ${PROXMOX_USER:-root} using SSH keys"
+            log_info "✓ Semaphore can now connect to $proxmox_host as ${PROXMOX_USER:-root} using SSH keys"
             return 0
         else
             log_info "ERROR: Failed to add SSH public key to authorized_keys on Proxmox host"
             return 1
         fi
     else
-        log_info "WARNING: Could not connect to Proxmox host $PROXMOX_HOST"
+        log_info "WARNING: Could not connect to Proxmox host $proxmox_host"
         log_info "This could be because:"
         log_info "  1. SSH password authentication is disabled"
         log_info "  2. The host is not reachable"
