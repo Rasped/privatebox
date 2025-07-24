@@ -217,10 +217,14 @@
           register: service_start
           
         - name: Wait for AdGuard Home to be ready
-          wait_for:
-            port: "{{ custom_web_port }}"
-            delay: 5
-            timeout: 60
+          uri:
+            url: "http://127.0.0.1:{{ custom_web_port }}/"
+            status_code: [200, 302]  # 302 is expected for initial setup redirect
+            timeout: 10
+          register: adguard_ready
+          until: adguard_ready.status in [200, 302]
+          retries: 6
+          delay: 10
           when: service_start.changed
 
         - name: Configure firewall for AdGuard
