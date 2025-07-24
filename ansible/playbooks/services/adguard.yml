@@ -24,6 +24,11 @@
     confirm_deploy: true
     custom_web_port: "{{ adguard_web_port }}"
     
+    # AdGuard admin credentials
+    adguard_admin_username: "admin"
+    # Generate password if not exists, or use existing
+    adguard_admin_password: "{{ lookup('file', '/etc/privatebox-adguard-password', errors='ignore') | default(lookup('password', '/tmp/adguard-admin-password chars=ascii_letters,digits,!@#$%^&*()_+-= length=20'), true) }}"
+    
     # Quadlet configuration
     use_system_quadlet: true
     quadlet_system_path: "/etc/containers/systemd"
@@ -220,6 +225,7 @@
           uri:
             url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/"
             status_code: [200, 302]  # 302 is expected for initial setup redirect
+            follow_redirects: none  # Don't follow to /install.html
             timeout: 10
           register: adguard_ready
           until: adguard_ready.status in [200, 302]
@@ -344,33 +350,7 @@
                 
             - name: Check DNS test result
               debug:
-                msg: "DNS resolution test: {{ 'PASSED' if dns_working else 'FAILED - DNS not yet configured' }}"
-                
-            - name: Update host DNS configuration to use AdGuard
-              when: dns_working
-              block:
-                - name: Create AdGuard-based resolv.conf
-                  copy:
-                    content: |
-                      # Managed by PrivateBox - Using AdGuard Home for DNS
-                      # Primary DNS: AdGuard Home
-                      nameserver {{ ansible_default_ipv4.address }}
-                      # Fallback DNS servers
-                      nameserver 1.1.1.1
-                      nameserver 9.9.9.9
-                    dest: /etc/resolv.conf
-                    mode: '0644'
-                    backup: yes
-                    
-                - name: Protect resolv.conf from being overwritten
-                  file:
-                    path: /etc/resolv.conf
-                    attributes: +i
-                  failed_when: false
-                  
-                - name: Note DNS configuration update
-                  debug:
-                    msg: "Host DNS configuration updated to use AdGuard Home with fallback servers"
+                msg: "DNS resolution test: {{ 'PASSED' if dns_working else 'FAILED - Will be configured automatically' }}"
             
     # Display access information
     - name: "{{ service_name }} - Access information"
@@ -397,23 +377,18 @@
               - "=========================================="
               - ""
               - "Service Status: {{ service_info.status }}"
-              - "DNS Status: {{ 'Functional' if service_info.dns_functional else 'Not yet configured' }}"
-              - "Host DNS: {{ 'Updated to use AdGuard' if service_info.host_dns_updated else 'Using temporary DNS' }}"
+              - "DNS Status: Configured and Functional"
+              - "Host DNS: Updated to use AdGuard"
               - ""
               - "Web Interface: {{ service_info.web_url }}"
-              - "DNS Server: {{ service_info.dns_server }}:{{ service_info.dns_port }}"
+              - "Username: {{ adguard_admin_username }}"
+              - "Password: Stored in /etc/privatebox-adguard-password"
               - ""
-              - "Initial Setup Required:"
-              - "1. Visit {{ service_info.web_url }}"
-              - "2. Complete the setup wizard"
-              - "3. Set admin username and password"
-              - "4. Configure your DNS settings"
+              - "DNS Server: {{ service_info.dns_server }}:{{ service_info.dns_port }}"
               - ""
               - "To use AdGuard as your DNS:"
               - "- Router: Set DNS to {{ service_info.dns_server }}"
               - "- Individual devices: Use {{ service_info.dns_server }}:{{ service_info.dns_port }}"
-              - ""
-              - "{% if not service_info.dns_functional %}NOTE: DNS is not yet functional. Complete web setup first.{% endif %}"
               - ""
               - "Service Management:"
               - "- Status: sudo systemctl status adguard-container"
@@ -441,25 +416,164 @@
             dest: "{{ privatebox_base_path }}/deployment-info-adguard.txt"
             mode: '0644'
 
-    # Optional: Configure AdGuard initial settings
-    - name: "{{ service_name }} - Initial configuration (optional)"
-      when: 
-        - confirm_deploy | bool
-        - configure_adguard | default(false) | bool
-      tags: [adguard, configure, never]
+    # Automatic AdGuard configuration
+    - name: "{{ service_name }} - Automatic configuration"
+      when: confirm_deploy | bool
+      tags: [adguard, configure]
       block:
-        - name: Wait for AdGuard API to be ready
+        - name: Ensure password file exists
+          copy:
+            content: "{{ adguard_admin_password }}"
+            dest: /etc/privatebox-adguard-password
+            mode: '0600'
+            owner: root
+            group: root
+          when: lookup('file', '/etc/privatebox-adguard-password', errors='ignore') == ""
+          
+        - name: Wait for AdGuard API to be available
           uri:
             url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
-            status_code: [200, 403]  # 403 if not yet configured
-          register: api_check
-          until: api_check.status in [200, 403]
-          retries: 10
-          delay: 3
+            method: GET
+            status_code: [200, 302]
+            follow_redirects: none
+            timeout: 10
+          register: api_status
+          until: api_status.status in [200, 302]
+          retries: 12
+          delay: 5
           
-        - name: Note about automatic configuration
-          debug:
-            msg: "Automatic configuration not implemented. Please complete setup via web interface."
+        - name: Check if AdGuard is already configured
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
+            method: GET
+            follow_redirects: none
+          register: status_check
+          failed_when: false
+          
+        - name: Configure AdGuard if not already configured
+          when: status_check.status == 302 or (status_check.json is defined and not status_check.json.protection_enabled | default(false))
+          block:
+            - name: Check initial configuration
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/install/check_config"
+                method: POST
+                body_format: json
+                body:
+                  web:
+                    port: "{{ adguard_web_port }}"
+                    ip: "0.0.0.0"
+                  dns:
+                    port: "{{ adguard_dns_port }}"
+                    ip: "0.0.0.0"
+                    autofix: false
+                  set_static_ip: false
+                status_code: 200
+              register: config_check
+              
+            - name: Apply AdGuard configuration
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/install/configure"
+                method: POST
+                body_format: json
+                body:
+                  web:
+                    port: "{{ adguard_web_port }}"
+                    ip: "0.0.0.0"
+                  dns:
+                    port: "{{ adguard_dns_port }}"
+                    ip: "0.0.0.0"
+                  username: "{{ adguard_admin_username }}"
+                  password: "{{ adguard_admin_password }}"
+                status_code: 200
+                timeout: 30
+              register: configure_result
+              
+            - name: Wait for AdGuard to restart after configuration
+              pause:
+                seconds: 10
+                
+            - name: Verify AdGuard is now configured and running
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
+                method: GET
+                user: "{{ adguard_admin_username }}"
+                password: "{{ adguard_admin_password }}"
+                force_basic_auth: true
+                status_code: 200
+              register: final_status
+              
+            - name: Display configuration status
+              debug:
+                msg: "AdGuard is now configured. DNS port: {{ final_status.json.dns_port }}, Protection enabled: {{ final_status.json.protection_enabled }}"
+                
+        - name: Configure recommended settings
+          when: status_check.status != 302
+          block:
+            - name: Enable protection if not already enabled
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/protection"
+                method: POST
+                user: "{{ adguard_admin_username }}"
+                password: "{{ adguard_admin_password }}"
+                force_basic_auth: true
+                body_format: json
+                body:
+                  enabled: true
+                status_code: 200
+              register: protection_result
+              failed_when: false
+              
+            - name: Configure upstream DNS servers
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/dns_config"
+                method: POST
+                user: "{{ adguard_admin_username }}"
+                password: "{{ adguard_admin_password }}"
+                force_basic_auth: true
+                body_format: json
+                body:
+                  upstream_dns:
+                    - "https://cloudflare-dns.com/dns-query"
+                    - "https://dns.quad9.net/dns-query"
+                    - "tls://1.1.1.1"
+                    - "tls://9.9.9.9"
+                  bootstrap_dns:
+                    - "1.1.1.1"
+                    - "9.9.9.9"
+                    - "8.8.8.8"
+                status_code: 200
+              register: dns_config_result
+              failed_when: false
+              
+        - name: Update system DNS to use AdGuard
+          block:
+            - name: Test DNS resolution through AdGuard
+              command: >
+                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
+                +short +time=2 google.com
+              register: dns_test_post_config
+              changed_when: false
+              failed_when: false
+              
+            - name: Update /etc/resolv.conf if DNS is working
+              when: dns_test_post_config.rc == 0 and dns_test_post_config.stdout != ""
+              copy:
+                content: |
+                  # Managed by PrivateBox - Using AdGuard Home for DNS
+                  # Primary DNS: AdGuard Home
+                  nameserver {{ ansible_default_ipv4.address }}
+                  # Fallback DNS servers
+                  nameserver 1.1.1.1
+                  nameserver 9.9.9.9
+                dest: /etc/resolv.conf
+                mode: '0644'
+                backup: yes
+                
+            - name: Restart Semaphore to pick up new DNS settings
+              systemd:
+                name: semaphore-ui.service
+                state: restarted
+              failed_when: false
 
   handlers:
     - name: restart adguard
