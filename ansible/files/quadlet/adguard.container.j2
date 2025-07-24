@@ -57,7 +57,7 @@ UserNS={{ container_user_namespace }}
 {% endif %}
 
 # Health check
-HealthCmd=/bin/sh -c "wget -q --spider http://localhost:3000 || exit 1"
+HealthCmd=/bin/sh -c "wget -q --spider http://{{ ansible_default_ipv4.address }}:3000 || exit 1"
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}

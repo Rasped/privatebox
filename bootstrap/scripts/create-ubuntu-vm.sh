@@ -426,6 +426,8 @@ function generate_cloud_init() {
     
     cat > "${USER_DATA_FILE}" <<EOF
 #cloud-config
+hostname: ubuntu
+manage_etc_hosts: true
 locale: en_US.UTF-8
 locale_configfile: /etc/default/locale
 shell: ['/bin/bash', '-c']
