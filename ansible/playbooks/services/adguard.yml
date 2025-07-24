@@ -541,12 +541,6 @@
                 dest: /etc/resolv.conf
                 mode: '0644'
                 backup: yes
-                
-            - name: Restart Semaphore to pick up new DNS settings
-              systemd:
-                name: semaphore-ui.service
-                state: restarted
-              failed_when: false
 
   handlers:
     - name: restart adguard
