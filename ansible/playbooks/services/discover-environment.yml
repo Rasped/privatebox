@@ -178,7 +178,7 @@
     - name: Parse CPU usage
       set_fact:
         cpu_usage:
-          stdout: "{{ top_output.stdout_lines | select('match', '^%Cpu') | first | regex_replace('^%Cpu.*:\s+([0-9.]+)\s+us.*', '\\1') | default('0') }}"
+          stdout: "{{ top_output.stdout_lines | select('match', '^%Cpu') | first | regex_replace('^%Cpu.*:\\s+([0-9.]+)\\s+us.*', '\\\\1') | default('0') }}"
       when: top_output.rc == 0
       
     - name: Calculate available CPUs
