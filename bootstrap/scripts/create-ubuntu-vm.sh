@@ -319,6 +319,17 @@ function ensure_ssh_key() {
     
     # Export for use in cloud-init
     export SSH_PUBLIC_KEY
+    
+    # Also read the private key for passing to VM
+    local SSH_KEY_PATH="/root/.ssh/id_rsa"
+    if [ -f "${SSH_KEY_PATH}" ]; then
+        # Read and indent the private key content for YAML
+        PROXMOX_PRIVATE_KEY_CONTENT=$(cat "${SSH_KEY_PATH}" | sed 's/^/      /')
+        export PROXMOX_PRIVATE_KEY_CONTENT
+    else
+        log_error "Private key not found at ${SSH_KEY_PATH}"
+        exit 1
+    fi
 }
 
 # --- generate_cloud_init ---
@@ -465,6 +476,11 @@ write_files:
     permissions: '0600'
     content: |
       SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
+  - path: /root/.credentials/proxmox_ssh_key
+    permissions: '0600'
+    owner: root:root
+    content: |
+${PROXMOX_PRIVATE_KEY_CONTENT}
   - path: /usr/local/lib/constants.sh
     permissions: '0644'
     content: |

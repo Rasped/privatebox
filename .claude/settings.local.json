@@ -54,7 +54,8 @@
       "WebFetch(domain:docs.anthropic.com)",
       "Bash(chmod:*)",
       "Bash(tree:*)",
-      "Bash(./fix-semaphore-keys.sh:*)"
+      "Bash(./fix-semaphore-keys.sh:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }
