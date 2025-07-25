@@ -1118,6 +1118,15 @@ create_infrastructure_project_with_ssh_key() {
             local proxmox_key_id=""
             if [ -f "/root/.credentials/proxmox_ssh_key" ]; then
                 proxmox_key_id=$(create_semaphore_ssh_key "$project_id" "proxmox" "ssh" "$admin_session" "/root/.credentials/proxmox_ssh_key" "root")
+                
+                # Delete the Proxmox SSH key from VM for security after uploading to Semaphore
+                if [ -n "$proxmox_key_id" ] && [ "$proxmox_key_id" != "null" ]; then
+                    log_info "Removing Proxmox SSH key from filesystem for security..."
+                    rm -f /root/.credentials/proxmox_ssh_key
+                    log_info "✓ Proxmox SSH key removed from VM filesystem"
+                else
+                    log_info "WARNING: Failed to upload Proxmox key to Semaphore, keeping key file"
+                fi
             else
                 log_info "WARNING: Proxmox SSH key not found at /root/.credentials/proxmox_ssh_key - skipping Proxmox SSH key creation"
             fi
