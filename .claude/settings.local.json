@@ -51,7 +51,10 @@
       "Bash(done)",
       "Bash(dig:*)",
       "Bash(ansible-playbook:*)",
-      "WebFetch(domain:docs.anthropic.com)"
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(chmod:*)",
+      "Bash(tree:*)",
+      "Bash(./fix-semaphore-keys.sh:*)"
     ],
     "deny": []
   }

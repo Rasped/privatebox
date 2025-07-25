@@ -23,17 +23,10 @@
     - name: opnsense_host
       prompt: "OPNsense IP address or hostname"
       private: no
-      semaphore_type: "string"
-      semaphore_required: true
-      semaphore_description: "OPNsense IP address or hostname"
     - name: confirm_firewall_changes
       prompt: "Confirm firewall rule changes (can lock you out if misconfigured)"
       private: no
       default: "false"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: false
-      semaphore_description: "Confirm firewall rule changes (can lock you out if misconfigured)"
   
   tasks:
     - name: Pre-flight checks

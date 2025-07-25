@@ -27,17 +27,11 @@
       prompt: "Proceed with network planning?"
       default: "yes"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_description: "Confirm network planning generation"
-      semaphore_required: false
       
     - name: auto_resolve_conflicts
       prompt: "Automatically resolve VLAN ID conflicts?"
       default: "yes"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_description: "Auto-assign alternative VLAN IDs if conflicts detected"
-      semaphore_required: false
       
   tasks:
     # Pre-planning validation

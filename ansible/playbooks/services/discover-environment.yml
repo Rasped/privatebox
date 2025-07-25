@@ -19,10 +19,6 @@
       prompt: "Proceed with Proxmox environment discovery?"
       default: "yes"
       private: no
-      semaphore_type: "boolean"
-      semaphore_required: false
-      semaphore_default: true
-      semaphore_description: "Confirm environment discovery"
       
   tasks:
     # Pre-discovery validation
