@@ -1,7 +1,7 @@
 ---
 # Task 5.5: Create Security Monitoring Rules
 # Implement comprehensive logging, IDS/IPS, and alerting
-- name: OPNsense: Configure Security Monitoring
+- name: "OPNsense: Configure Security Monitoring"
   hosts: container-host
   become: true
   gather_facts: true

@@ -3,7 +3,7 @@
 # This playbook configures OPNsense VM boot settings, serial console,
 # and prepares for automated configuration
 
-- name: OPNsense: Configure Boot Settings
+- name: "OPNsense: Configure Boot Settings"
   hosts: proxmox
   gather_facts: false
   

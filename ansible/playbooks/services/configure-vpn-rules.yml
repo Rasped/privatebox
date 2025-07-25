@@ -1,7 +1,7 @@
 ---
 # Task 5.4: Configure VPN Access Rules
 # Set up secure remote access with WireGuard VPN
-- name: OPNsense: Configure VPN Rules
+- name: "OPNsense: Configure VPN Rules"
   hosts: container-host
   become: true
   gather_facts: true

@@ -1,7 +1,7 @@
 ---
 # Task 5.1: Create Base Firewall Rules Template
 # Implements foundational security rules for OPNsense based on Phase 3 planning
-- name: OPNsense: Configure Base Firewall
+- name: "OPNsense: Configure Base Firewall"
   hosts: container-host
   become: true
   gather_facts: true
