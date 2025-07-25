@@ -13,10 +13,15 @@
     api_username: "ansible-api"
     api_full_name: "Ansible API User"
     api_key_file: "/etc/privatebox-opnsense-api-key"
-    api_secret_file: "/etc/privatebox-opnsense-api-secret"      opnsense_host:
-        semaphore_type: "string"
-        semaphore_required: true
-        semaphore_description: "OPNsense IP address or hostname"
+    api_secret_file: "/etc/privatebox-opnsense-api-secret"
+  
+  vars_prompt:
+    - name: opnsense_host
+      prompt: "OPNsense IP address or hostname"
+      private: no
+      semaphore_type: "string"
+      semaphore_required: true
+      semaphore_description: "OPNsense IP address or hostname"
   
   tasks:
     - name: Pre-flight checks

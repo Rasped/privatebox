@@ -156,14 +156,11 @@
         vlan_netplan:
           network:
             version: 2
-            ethernets:
-              {{ primary_interface }}:  # Primary interface
-                dhcp4: false
-                dhcp6: false
+            ethernets: "{{ {primary_interface: {'dhcp4': false, 'dhcp6': false}} }}"
             vlans:
               vlan100:
                 id: 100
-                link: {{ primary_interface }}
+                link: "{{ primary_interface }}"
                 addresses: ["10.100.0.2/24"]
                 routes:
                   - to: default
@@ -172,7 +169,7 @@
                   addresses: ["10.101.0.10", "1.1.1.1"]
               vlan101:
                 id: 101
-                link: {{ primary_interface }}
+                link: "{{ primary_interface }}"
                 addresses: ["10.101.0.2/24"]
 
     - name: Show planned network configuration

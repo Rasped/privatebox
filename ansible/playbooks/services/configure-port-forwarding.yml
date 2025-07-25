@@ -23,20 +23,31 @@
       #   internal_ip: "10.0.20.50"
       #   internal_port: "80"
       #   protocol: "tcp"
-      #   description: "Forward HTTP to internal web server"      opnsense_host:
-        semaphore_type: "string"
-        semaphore_required: true
-        semaphore_description: "OPNsense IP address or hostname"
-      port_forwards_json:
-        semaphore_type: "text"
-        semaphore_required: false
-        semaphore_description: "JSON array of port forwards (leave empty for none)"
-        semaphore_default: "[]"
-      confirm_port_forward:
-        semaphore_type: "boolean"
-        semaphore_required: true
-        semaphore_default: false
-        semaphore_description: "Confirm port forwarding configuration"
+      #   description: "Forward HTTP to internal web server"
+      
+  vars_prompt:
+    - name: opnsense_host
+      prompt: "OPNsense IP address or hostname"
+      private: no
+      semaphore_type: "string"
+      semaphore_required: true
+      semaphore_description: "OPNsense IP address or hostname"
+    - name: port_forwards_json
+      prompt: "JSON array of port forwards (leave empty for none)"
+      private: no
+      default: "[]"
+      semaphore_type: "text"
+      semaphore_required: false
+      semaphore_description: "JSON array of port forwards (leave empty for none)"
+      semaphore_default: "[]"
+    - name: confirm_port_forward
+      prompt: "Confirm port forwarding configuration"
+      private: no
+      default: "false"
+      semaphore_type: "boolean"
+      semaphore_required: true
+      semaphore_default: false
+      semaphore_description: "Confirm port forwarding configuration"
   
   tasks:
     - name: Pre-flight checks

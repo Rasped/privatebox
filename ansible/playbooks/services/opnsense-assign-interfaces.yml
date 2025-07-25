@@ -11,10 +11,15 @@
     
     # Default interface mappings
     default_wan_interface: "vtnet0"
-    default_lan_interface: "vtnet1"      opnsense_host:
-        semaphore_type: "string"
-        semaphore_required: true
-        semaphore_description: "OPNsense IP address or hostname"
+    default_lan_interface: "vtnet1"
+    
+  vars_prompt:
+    - name: opnsense_host
+      prompt: "OPNsense IP address or hostname"
+      private: no
+      semaphore_type: "string"
+      semaphore_required: true
+      semaphore_description: "OPNsense IP address or hostname"
   
   tasks:
     - name: Load discovery data

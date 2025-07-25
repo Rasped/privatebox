@@ -7,23 +7,35 @@
   vars:
     service_name: "OPNsense Complete Setup"
     service_description: "Run all OPNsense configuration playbooks in sequence"
-    service_tag: "opnsense-complete"      opnsense_vm_id:
-        semaphore_type: "integer"
-        semaphore_required: true
-        semaphore_description: "OPNsense VM ID"
-      proxmox_host:
-        semaphore_type: "string"
-        semaphore_required: true
-        semaphore_description: "Proxmox host IP address"
-      opnsense_host:
-        semaphore_type: "string"
-        semaphore_required: true
-        semaphore_description: "OPNsense IP address (after VM creation)"
-      enable_adguard:
-        semaphore_type: "boolean"
-        semaphore_required: false
-        semaphore_description: "Enable AdGuard DNS integration"
-        semaphore_default: "true"
+    service_tag: "opnsense-complete"
+    
+  vars_prompt:
+    - name: opnsense_vm_id
+      prompt: "OPNsense VM ID"
+      private: no
+      semaphore_type: "integer"
+      semaphore_required: true
+      semaphore_description: "OPNsense VM ID"
+    - name: proxmox_host
+      prompt: "Proxmox host IP address"
+      private: no
+      semaphore_type: "string"
+      semaphore_required: true
+      semaphore_description: "Proxmox host IP address"
+    - name: opnsense_host
+      prompt: "OPNsense IP address (after VM creation)"
+      private: no
+      semaphore_type: "string"
+      semaphore_required: true
+      semaphore_description: "OPNsense IP address (after VM creation)"
+    - name: enable_adguard
+      prompt: "Enable AdGuard DNS integration"
+      private: no
+      default: "true"
+      semaphore_type: "boolean"
+      semaphore_required: false
+      semaphore_description: "Enable AdGuard DNS integration"
+      semaphore_default: "true"
   
   tasks:
     - name: Display configuration plan
