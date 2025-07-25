@@ -19,15 +19,23 @@
       - "1.1.1.1"
       - "1.0.0.1"
       - "9.9.9.9"
-      - "149.112.112.112"      opnsense_host:
-        semaphore_type: "string"
-        semaphore_required: true
-        semaphore_description: "OPNsense IP address or hostname"
-      adguard_integration:
-        semaphore_type: "boolean"
-        semaphore_required: false
-        semaphore_description: "Enable AdGuard integration"
-        semaphore_default: "false"
+      - "149.112.112.112"
+  
+  vars_prompt:
+    - name: opnsense_host
+      prompt: "OPNsense IP address or hostname"
+      private: no
+      semaphore_type: "string"
+      semaphore_required: true
+      semaphore_description: "OPNsense IP address or hostname"
+    - name: adguard_integration
+      prompt: "Enable AdGuard integration?"
+      default: "false"
+      private: no
+      semaphore_type: "boolean"
+      semaphore_required: false
+      semaphore_description: "Enable AdGuard integration"
+      semaphore_default: "false"
   
   tasks:
     - name: Pre-flight checks
