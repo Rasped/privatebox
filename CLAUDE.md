@@ -707,3 +707,101 @@ The bootstrap now runs completely hands-off in ~3 minutes.
 3. **Handle API State Changes**: Services may behave differently during/after setup
 4. **Check File Existence Explicitly**: Don't rely on lookup error handling
 5. **Consider Execution Context**: Automation running inside services it manages needs special handling
+
+## Agent Architecture
+
+### Overview
+PrivateBox uses a 3-agent architecture to maintain clear separation of concerns and ensure high-quality automation. Each agent has specific responsibilities and tool access.
+
+### The Three Agents
+
+#### 1. privatebox-orchestrator
+- **Purpose**: Project management, planning, and delegation
+- **Key Responsibilities**:
+  - Analyze and understand user requirements
+  - Create detailed task breakdowns with TodoWrite
+  - Write comprehensive handover documentation
+  - Delegate work to specialized agents
+  - Track progress and coordinate workflows
+- **Tool Access**: TodoWrite, Task, Write (only .md files), Read
+- **Never**: Writes code or modifies system files
+- **Invocation**: Main/default agent for all planning tasks
+
+#### 2. automation-engineer
+- **Purpose**: Implement all automation and infrastructure as code
+- **Key Responsibilities**:
+  - Review handover documents from orchestrator
+  - Design and implement technical solutions
+  - Write Ansible playbooks, Bash scripts, configurations
+  - Create Proxmox automation via SSH commands
+  - Test implementations on actual infrastructure
+- **Tool Access**: Full access to all development tools
+- **Context7**: Must load relevant docs (Ansible, Bash, Podman, etc.)
+- **Philosophy**: 100% automation - no manual steps
+
+#### 3. system-debugger
+- **Purpose**: Diagnose and troubleshoot issues
+- **Key Responsibilities**:
+  - Perform root cause analysis of failures
+  - Gather logs and system state information
+  - Test debugging hypotheses systematically
+  - Create detailed diagnostic reports
+  - Recommend fixes (but not implement them)
+- **Tool Access**: Read-only and diagnostic tools only
+- **Output**: Diagnostic reports and fix recommendations
+
+### Agent Workflow Example
+
+```
+User: "Deploy OPNsense with VLAN support"
+    ↓
+orchestratorr:
+1. Analyzes requirements
+2. Creates handover: documentation/handovers/active/opnsense-vlan.md
+3. Delegates to automation-engineer
+    ↓
+automation-engineer:
+1. Reviews handover document
+2. Loads Context7 docs (Proxmox, networking)
+3. Implements VM creation scripts
+4. Creates deployment automation
+5. Tests on actual infrastructure
+    ↓
+[If issues arise]
+    ↓
+system-debugger:
+1. Investigates failure
+2. Performs root cause analysis
+3. Provides fix recommendations
+    ↓
+Back to orchestrator for fix planning
+```
+
+### Using Agents
+
+1. **For new features/tasks**: Start with privatebox-orchestrator
+   ```
+   use the privatebox-orchestrator agent to plan deployment of Unbound DNS
+   ```
+
+2. **For implementation**: automation-engineer receives handover
+   ```
+   use the automation-engineer agent to implement the Unbound deployment from the handover document
+   ```
+
+3. **For issues**: system-debugger investigates
+   ```
+   use the system-debugger agent to debug why Semaphore cannot connect to hosts
+   ```
+
+### Agent Files
+The agent definitions are located in `.claude/agents/`:
+- `privatebox-orchestrator.md` - Project planning and delegation
+- `automation-engineer.md` - Implementation and automation
+- `system-debugger.md` - Debugging and root cause analysis
+
+### Handover Documents
+- Location: `documentation/handovers/`
+- Templates: `documentation/handovers/templates/`
+- Active tasks: `documentation/handovers/active/`
+- Completed: `documentation/handovers/completed/`
