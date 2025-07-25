@@ -1,7 +1,7 @@
 ---
 # Task 5.3: Create Port Forwarding Rules
 # Configure external service access through NAT/port forwarding
-- name: Configure OPNsense Port Forwarding Rules
+- name: OPNsense: Configure Port Forwarding
   hosts: container-host
   become: true
   gather_facts: true
@@ -23,11 +23,7 @@
       #   internal_ip: "10.0.20.50"
       #   internal_port: "80"
       #   protocol: "tcp"
-      #   description: "Forward HTTP to internal web server"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_host:
+      #   description: "Forward HTTP to internal web server"      opnsense_host:
         semaphore_type: "string"
         semaphore_required: true
         semaphore_description: "OPNsense IP address or hostname"

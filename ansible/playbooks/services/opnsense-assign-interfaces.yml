@@ -1,5 +1,5 @@
 ---
-- name: Dynamically assign network interfaces in OPNsense
+- name: OPNsense: Assign Interfaces
   hosts: container-host
   become: true
   gather_facts: true
@@ -11,11 +11,7 @@
     
     # Default interface mappings
     default_wan_interface: "vtnet0"
-    default_lan_interface: "vtnet1"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_host:
+    default_lan_interface: "vtnet1"      opnsense_host:
         semaphore_type: "string"
         semaphore_required: true
         semaphore_description: "OPNsense IP address or hostname"

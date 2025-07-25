@@ -3,19 +3,14 @@
 # This playbook configures OPNsense VM boot settings, serial console,
 # and prepares for automated configuration
 
-- name: Configure OPNsense VM Boot Settings
+- name: OPNsense: Configure Boot Settings
   hosts: proxmox
   gather_facts: false
   
   vars:
     vm_id: 100
     vm_name: "opnsense"
-    serial_port: 0
-    
-    # Metadata for Semaphore template generation
-    # Empty dict means generate template without survey variables (hands-off deployment)
-    _semaphore_vars_prompt: {}
-    
+    serial_port: 0    
   tasks:
     - name: Verify VM exists
       shell: |

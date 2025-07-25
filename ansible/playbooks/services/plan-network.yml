@@ -1,5 +1,5 @@
 ---
-- name: Network Planning and Validation
+- name: Network: Plan Architecture
   hosts: all
   gather_facts: true
   
@@ -20,11 +20,7 @@
       
     # Default values for hands-off deployment
     confirm_planning: true
-    auto_resolve_conflicts: true
-    
-    # Empty vars_prompt for Semaphore template generation
-    _semaphore_vars_prompt: {}
-      
+    auto_resolve_conflicts: true      
   # Metadata for Semaphore template generation
   vars_prompt:
     - name: confirm_planning
