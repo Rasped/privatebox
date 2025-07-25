@@ -108,48 +108,8 @@
           debug:
             msg: "Podman version: {{ podman_version.stdout }}"
             
-        - name: Handle systemd-resolved DNS conflict
-          block:
-            - name: Check if systemd-resolved is using port 53
-              shell: ss -tlnp | grep ':53 ' | grep systemd-resolve || true
-              register: resolved_check
-              changed_when: false
-              
-            - name: Display systemd-resolved status
-              debug:
-                msg: "systemd-resolved is {{ 'using port 53' if resolved_check.stdout else 'not using port 53' }}"
-                
-            - name: Disable systemd-resolved if using port 53
-              when: resolved_check.stdout != ""
-              block:
-                - name: Stop and disable systemd-resolved
-                  systemd:
-                    name: systemd-resolved
-                    state: stopped
-                    enabled: no
-                    
-                - name: Remove existing resolv.conf symlink
-                  file:
-                    path: /etc/resolv.conf
-                    state: absent
-                  when: ansible_os_family == "Debian"
-                    
-                - name: Create temporary static resolv.conf
-                  copy:
-                    content: |
-                      # Temporary DNS servers until AdGuard is running
-                      # These will be replaced after AdGuard deployment
-                      nameserver 1.1.1.1
-                      nameserver 8.8.8.8
-                      nameserver 9.9.9.9
-                    dest: /etc/resolv.conf
-                    mode: '0644'
-                    backup: yes
-                    
-                - name: Note DNS changes for user
-                  debug:
-                    msg: "systemd-resolved disabled. Temporary DNS servers configured. Will update to use AdGuard after deployment."
-            
+        # Note: systemd-resolved handling moved to activate-adguard-dns.yml
+        # This keeps the VM's DNS independent during deployment
         - name: Check for port conflicts
           wait_for:
             port: "{{ item }}"
@@ -342,8 +302,8 @@
               - "=========================================="
               - ""
               - "Service Status: {{ service_info.status }}"
-              - "DNS Status: Configured and Functional"
-              - "Host DNS: Updated to use AdGuard"
+              - "DNS Status: Running on port {{ adguard_dns_port }}"
+              - "System DNS: Not modified (run activate-adguard-dns.yml to activate)"
               - ""
               - "Web Interface: {{ service_info.web_url }}"
               - "Username: {{ adguard_admin_username }}"
@@ -528,19 +488,8 @@
               changed_when: false
               failed_when: false
               
-            - name: Update /etc/resolv.conf if DNS is working
-              when: dns_test_post_config.rc == 0 and dns_test_post_config.stdout != ""
-              copy:
-                content: |
-                  # Managed by PrivateBox - Using AdGuard Home for DNS
-                  # Primary DNS: AdGuard Home
-                  nameserver {{ ansible_default_ipv4.address }}
-                  # Fallback DNS servers
-                  nameserver 1.1.1.1
-                  nameserver 9.9.9.9
-                dest: /etc/resolv.conf
-                mode: '0644'
-                backup: yes
+            # Note: System DNS configuration moved to activate-adguard-dns.yml
+            # This keeps deployment independent of DNS changes
 
   handlers:
     - name: restart adguard

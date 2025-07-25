@@ -48,7 +48,8 @@
       "Bash(for file in deploy-opnsense-vlans.yml opnsense-deploy.yml configure-opnsense-boot.yml download-opnsense.yml create-opnsense-vm.yml)",
       "Bash(do sed -i 's/hosts: proxmox-host/hosts: proxmox/g' \"$file\")",
       "Bash(echo:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(dig:*)"
     ],
     "deny": []
   }
