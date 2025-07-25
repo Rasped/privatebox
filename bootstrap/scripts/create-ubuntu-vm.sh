@@ -355,6 +355,9 @@ function generate_cloud_init() {
     local service_manager_content
     local ssh_manager_content
     local config_manager_content
+    local semaphore_credentials_content
+    local semaphore_containers_content
+    local semaphore_api_content
     
     # Read lib files
     if [[ -f "${SCRIPT_DIR}/../lib/common.sh" ]]; then
@@ -410,6 +413,28 @@ function generate_cloud_init() {
         config_manager_content=$(cat "${SCRIPT_DIR}/../lib/config_manager.sh" | sed 's/^/      /')
     else
         log_error "Cannot find config_manager.sh"
+        return 1
+    fi
+    
+    # Read semaphore lib files
+    if [[ -f "${SCRIPT_DIR}/../lib/semaphore-credentials.sh" ]]; then
+        semaphore_credentials_content=$(cat "${SCRIPT_DIR}/../lib/semaphore-credentials.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find semaphore-credentials.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/semaphore-containers.sh" ]]; then
+        semaphore_containers_content=$(cat "${SCRIPT_DIR}/../lib/semaphore-containers.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find semaphore-containers.sh"
+        return 1
+    fi
+    
+    if [[ -f "${SCRIPT_DIR}/../lib/semaphore-api.sh" ]]; then
+        semaphore_api_content=$(cat "${SCRIPT_DIR}/../lib/semaphore-api.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find semaphore-api.sh"
         return 1
     fi
     
@@ -513,6 +538,18 @@ ${ssh_manager_content}
     permissions: '0644'
     content: |
 ${config_manager_content}
+  - path: /usr/local/lib/semaphore-credentials.sh
+    permissions: '0644'
+    content: |
+${semaphore_credentials_content}
+  - path: /usr/local/lib/semaphore-containers.sh
+    permissions: '0644'
+    content: |
+${semaphore_containers_content}
+  - path: /usr/local/lib/semaphore-api.sh
+    permissions: '0644'
+    content: |
+${semaphore_api_content}
   # WARNING: initial-setup.sh must NOT use ERR traps or 'set -e'
   # See the script header for detailed explanation
   - path: /usr/local/bin/initial-setup.sh
