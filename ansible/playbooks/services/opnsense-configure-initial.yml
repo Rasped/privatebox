@@ -1,0 +1,381 @@
+---
+- name: "OPNsense: Initial Configuration and API Setup"
+  hosts: localhost
+  gather_facts: false
+  
+  vars:
+    # OPNsense default connection details
+    opnsense_host: "192.168.1.1"
+    opnsense_port: 443
+    opnsense_default_user: "root"
+    opnsense_default_password: "opnsense"
+    
+    # API credentials storage
+    api_key_file: "/opt/privatebox/secrets/opnsense-api-key"
+    api_secret_file: "/opt/privatebox/secrets/opnsense-api-secret"
+    vault_password_file: "/opt/privatebox/secrets/vault-password"
+    
+    # Timeouts and retries
+    boot_wait_time: 60
+    boot_max_retries: 10
+    api_timeout: 30
+    
+  tasks:
+    # Pre-flight checks
+    - name: "OPNsense Initial Config - Pre-flight checks"
+      tags: [opnsense, preflight]
+      block:
+        - name: Check if ansibleguy.opnsense collection is installed
+          command: ansible-galaxy collection list ansibleguy.opnsense
+          register: collection_check
+          changed_when: false
+          failed_when: false
+          
+        - name: Install ansibleguy.opnsense collection if needed
+          command: ansible-galaxy collection install ansibleguy.opnsense
+          when: collection_check.rc != 0 or 'ansibleguy.opnsense' not in collection_check.stdout
+          
+        - name: Install required Python packages
+          pip:
+            name:
+              - httpx
+              - netaddr
+            state: present
+            
+        - name: Create secrets directory
+          file:
+            path: /opt/privatebox/secrets
+            state: directory
+            mode: '0700'
+            owner: root
+            group: root
+            
+        - name: Check if API credentials already exist
+          stat:
+            path: "{{ item }}"
+          loop:
+            - "{{ api_key_file }}"
+            - "{{ api_secret_file }}"
+          register: existing_creds
+          
+        - name: Set fact for existing credentials
+          set_fact:
+            credentials_exist: "{{ existing_creds.results | selectattr('stat.exists', 'equalto', true) | list | length == 2 }}"
+
+    # Wait for OPNsense to boot
+    - name: "OPNsense Initial Config - Wait for boot"
+      tags: [opnsense, boot]
+      block:
+        - name: Wait for OPNsense HTTPS interface
+          wait_for:
+            host: "{{ opnsense_host }}"
+            port: "{{ opnsense_port }}"
+            delay: "{{ boot_wait_time }}"
+            timeout: 300
+            msg: "OPNsense HTTPS interface not available after 5 minutes"
+            
+        - name: Wait for OPNsense web interface to be fully ready
+          uri:
+            url: "https://{{ opnsense_host }}:{{ opnsense_port }}/"
+            method: GET
+            validate_certs: false
+            status_code: [200, 302, 401]
+            timeout: "{{ api_timeout }}"
+          register: web_ready
+          until: web_ready.status in [200, 302, 401]
+          retries: "{{ boot_max_retries }}"
+          delay: 10
+          
+        - name: Test initial authentication
+          uri:
+            url: "https://{{ opnsense_host }}:{{ opnsense_port }}/api/core/system/status"
+            method: GET
+            validate_certs: false
+            user: "{{ opnsense_default_user }}"
+            password: "{{ opnsense_default_password }}"
+            force_basic_auth: true
+            status_code: [200, 401]
+            timeout: "{{ api_timeout }}"
+          register: auth_test
+          failed_when: false
+          
+        - name: Check if default credentials work
+          set_fact:
+            default_creds_valid: "{{ auth_test.status == 200 }}"
+
+    # Generate API credentials if they don't exist
+    - name: "OPNsense Initial Config - Generate API credentials"
+      when: not credentials_exist
+      tags: [opnsense, api]
+      block:
+        - name: Generate API key
+          set_fact:
+            api_key: "{{ lookup('password', '/tmp/opnsense-api-key chars=ascii_letters,digits length=40') }}"
+            
+        - name: Generate API secret
+          set_fact:
+            api_secret: "{{ lookup('password', '/tmp/opnsense-api-secret chars=ascii_letters,digits length=80') }}"
+            
+        - name: Create API user via REST API
+          uri:
+            url: "https://{{ opnsense_host }}:{{ opnsense_port }}/api/core/user/addUser"
+            method: POST
+            validate_certs: false
+            user: "{{ opnsense_default_user }}"
+            password: "{{ opnsense_default_password }}"
+            force_basic_auth: true
+            body_format: json
+            body:
+              user:
+                username: "ansible-api"
+                password: "{{ api_secret }}"
+                full_name: "Ansible API User"
+                email: "ansible@privatebox.local"
+                comment: "Automated API user for Ansible"
+                disabled: "0"
+                expires: ""
+                groups: ["admins"]
+                apikeys:
+                  - key: "{{ api_key }}"
+                    secret: "{{ api_secret }}"
+            status_code: 200
+            timeout: "{{ api_timeout }}"
+          register: api_user_result
+          when: default_creds_valid
+          
+        - name: Alternative - Use ansibleguy.opnsense modules
+          when: not default_creds_valid or api_user_result is failed
+          block:
+            - name: Note about manual API key generation
+              debug:
+                msg:
+                  - "Default credentials not working or API creation failed."
+                  - "Attempting to use ansibleguy.opnsense connection..."
+                  
+            - name: Create temporary inventory for OPNsense
+              copy:
+                content: |
+                  [opnsense]
+                  opnsense-router ansible_host={{ opnsense_host }} ansible_user={{ opnsense_default_user }} ansible_password={{ opnsense_default_password }}
+                dest: /tmp/opnsense-inventory.ini
+                mode: '0600'
+                
+            - name: Test ansibleguy.opnsense connection
+              ansibleguy.opnsense.system:
+                hostname: "{{ opnsense_hostname | default('opnsense') }}"
+                domain: "{{ domain_name | default('privatebox.local') }}"
+              delegate_to: opnsense-router
+              vars:
+                ansible_connection: ansibleguy.opnsense.api
+                ansible_host: "{{ opnsense_host }}"
+                ansible_user: "{{ opnsense_default_user }}"
+                ansible_password: "{{ opnsense_default_password }}"
+                ansible_opnsense_api_url: "https://{{ opnsense_host }}:{{ opnsense_port }}/api"
+                ansible_opnsense_api_ssl_verify: false
+              register: opnsense_test
+              failed_when: false
+              
+            - name: Generate API credentials via module
+              ansibleguy.opnsense.user:
+                username: "ansible-api"
+                password: "{{ api_secret }}"
+                full_name: "Ansible API User"
+                email: "ansible@privatebox.local"
+                comment: "Automated API user for Ansible"
+                groups: ["admins"]
+                api_keys:
+                  - description: "Ansible automation key"
+              delegate_to: opnsense-router
+              vars:
+                ansible_connection: ansibleguy.opnsense.api
+                ansible_host: "{{ opnsense_host }}"
+                ansible_user: "{{ opnsense_default_user }}"
+                ansible_password: "{{ opnsense_default_password }}"
+                ansible_opnsense_api_url: "https://{{ opnsense_host }}:{{ opnsense_port }}/api"
+                ansible_opnsense_api_ssl_verify: false
+              when: opnsense_test is succeeded
+              register: api_key_result
+
+        - name: Save API credentials
+          block:
+            - name: Save API key
+              copy:
+                content: "{{ api_key }}"
+                dest: "{{ api_key_file }}"
+                mode: '0600'
+                owner: root
+                group: root
+                
+            - name: Save API secret
+              copy:
+                content: "{{ api_secret }}"
+                dest: "{{ api_secret_file }}"
+                mode: '0600'
+                owner: root
+                group: root
+                
+            - name: Create ansible-vault password if not exists
+              copy:
+                content: "{{ lookup('password', '/tmp/vault-password chars=ascii_letters,digits,!@#$%^&*()_+-= length=32') }}"
+                dest: "{{ vault_password_file }}"
+                mode: '0600'
+                owner: root
+                group: root
+              when: not ansible_check_mode
+              
+            - name: Encrypt API credentials with ansible-vault
+              command: >
+                ansible-vault encrypt
+                --vault-password-file {{ vault_password_file }}
+                {{ item }}
+              loop:
+                - "{{ api_key_file }}"
+                - "{{ api_secret_file }}"
+              changed_when: true
+
+    # Test API access
+    - name: "OPNsense Initial Config - Test API access"
+      tags: [opnsense, validate]
+      block:
+        - name: Read API credentials if they exist
+          when: credentials_exist
+          block:
+            - name: Read encrypted API key
+              command: >
+                ansible-vault view
+                --vault-password-file {{ vault_password_file }}
+                {{ api_key_file }}
+              register: stored_api_key
+              changed_when: false
+              no_log: true
+              
+            - name: Read encrypted API secret
+              command: >
+                ansible-vault view
+                --vault-password-file {{ vault_password_file }}
+                {{ api_secret_file }}
+              register: stored_api_secret
+              changed_when: false
+              no_log: true
+              
+            - name: Set API credentials from storage
+              set_fact:
+                api_key: "{{ stored_api_key.stdout | trim }}"
+                api_secret: "{{ stored_api_secret.stdout | trim }}"
+                
+        - name: Test API access with generated/stored credentials
+          uri:
+            url: "https://{{ opnsense_host }}:{{ opnsense_port }}/api/core/system/status"
+            method: GET
+            validate_certs: false
+            headers:
+              Authorization: "Bearer {{ api_key }}:{{ api_secret }}"
+            status_code: 200
+            timeout: "{{ api_timeout }}"
+          register: api_test
+          failed_when: false
+          
+        - name: Alternative test with basic auth
+          uri:
+            url: "https://{{ opnsense_host }}:{{ opnsense_port }}/api/core/system/status"
+            method: GET
+            validate_certs: false
+            user: "ansible-api"
+            password: "{{ api_secret }}"
+            force_basic_auth: true
+            status_code: 200
+            timeout: "{{ api_timeout }}"
+          register: basic_auth_test
+          when: api_test.status != 200
+          failed_when: false
+          
+        - name: Verify API access
+          assert:
+            that:
+              - api_test.status == 200 or basic_auth_test.status == 200
+            fail_msg: "Failed to access OPNsense API with generated credentials"
+            success_msg: "Successfully connected to OPNsense API"
+
+    # Display results
+    - name: "OPNsense Initial Config - Summary"
+      tags: [opnsense, summary]
+      block:
+        - name: Create inventory entry for OPNsense
+          blockinfile:
+            path: /opt/privatebox/ansible/inventory/opnsense.yml
+            create: true
+            mode: '0644'
+            block: |
+              ---
+              all:
+                children:
+                  opnsense:
+                    hosts:
+                      opnsense-router:
+                        ansible_host: {{ opnsense_host }}
+                        ansible_connection: ansibleguy.opnsense.api
+                        ansible_opnsense_api_url: https://{{ opnsense_host }}:{{ opnsense_port }}/api
+                        ansible_opnsense_api_ssl_verify: false
+                        ansible_opnsense_api_key: "{{ api_key }}"
+                        ansible_opnsense_api_secret: "{{ api_secret }}"
+                        # Alternative: use vault
+                        # ansible_opnsense_api_key: "{{ lookup('file', api_key_file) | vault }}"
+                        # ansible_opnsense_api_secret: "{{ lookup('file', api_secret_file) | vault }}"
+            marker: "# {mark} ANSIBLE MANAGED BLOCK - OPNsense API Configuration"
+            
+        - name: Display configuration summary
+          debug:
+            msg:
+              - "=========================================="
+              - "OPNsense Initial Configuration Complete!"
+              - "=========================================="
+              - ""
+              - "API Endpoint: https://{{ opnsense_host }}:{{ opnsense_port }}/api"
+              - "API User: ansible-api"
+              - "API Credentials: Stored in {{ api_key_file }} and {{ api_secret_file }}"
+              - "Vault Password: {{ vault_password_file }}"
+              - ""
+              - "Inventory file created: /opt/privatebox/ansible/inventory/opnsense.yml"
+              - ""
+              - "Next steps:"
+              - "1. Use the inventory file for OPNsense playbooks"
+              - "2. Run configuration playbooks to set up VLANs, firewall rules, etc."
+              - ""
+              - "Example usage:"
+              - "ansible-playbook -i /opt/privatebox/ansible/inventory/opnsense.yml configure-opnsense-vlans.yml"
+              - "=========================================="
+              
+        - name: Save configuration summary
+          copy:
+            content: |
+              OPNsense Initial Configuration
+              ==============================
+              Configured: {{ ansible_date_time.iso8601 }}
+              
+              API Configuration:
+              - Host: {{ opnsense_host }}
+              - Port: {{ opnsense_port }}
+              - API User: ansible-api
+              - API Key File: {{ api_key_file }}
+              - API Secret File: {{ api_secret_file }}
+              - Vault Password: {{ vault_password_file }}
+              
+              Inventory Location:
+              /opt/privatebox/ansible/inventory/opnsense.yml
+              
+              Test Command:
+              ansible -i /opt/privatebox/ansible/inventory/opnsense.yml opnsense -m ansibleguy.opnsense.system -a "hostname={{ opnsense_hostname | default('opnsense') }}"
+            dest: /opt/privatebox/opnsense-api-config.txt
+            mode: '0600'
+
+  handlers:
+    - name: cleanup temp files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/opnsense-api-key
+        - /tmp/opnsense-api-secret
+        - /tmp/vault-password
+        - /tmp/opnsense-inventory.ini
+      listen: cleanup

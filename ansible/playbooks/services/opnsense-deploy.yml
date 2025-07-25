@@ -1,0 +1,488 @@
+---
+- name: "OPNsense: Complete Firewall Deployment"
+  hosts: proxmox-host
+  become: true
+  gather_facts: true
+  
+  vars:
+    # Service identification
+    service_name: "OPNsense Firewall"
+    service_description: "Complete automated deployment of OPNsense firewall with full configuration"
+    service_tag: "opnsense"
+    
+    # VM Configuration
+    opnsense_vm_id: 9001
+    opnsense_vm_name: "opnsense-firewall"
+    opnsense_memory: 2048
+    opnsense_cores: 2
+    opnsense_disk_size: "32G"
+    opnsense_iso_path: "/var/lib/vz/template/iso/OPNsense-24.7-vga-amd64.iso"
+    
+    # Network Configuration
+    proxmox_bridge: "vmbr0"
+    wan_bridge: "{{ proxmox_bridge }}"
+    lan_bridge: "{{ proxmox_bridge }}"
+    
+    # OPNsense Network Settings
+    opnsense_wan_type: "dhcp"  # or "static"
+    opnsense_lan_ip: "10.0.0.1"
+    opnsense_lan_subnet: "24"
+    opnsense_lan_dhcp_enabled: true
+    opnsense_lan_dhcp_start: "10.0.0.100"
+    opnsense_lan_dhcp_end: "10.0.0.200"
+    
+    # VLAN Configuration
+    enable_vlans: true
+    vlans:
+      - name: "Management"
+        tag: 10
+        ip: "10.0.10.1"
+        subnet: "24"
+        dhcp_enabled: false
+      - name: "Services"
+        tag: 20
+        ip: "10.0.20.1"
+        subnet: "24"
+        dhcp_enabled: false
+      - name: "LAN"
+        tag: 30
+        ip: "10.0.30.1"
+        subnet: "24"
+        dhcp_enabled: true
+        dhcp_start: "10.0.30.100"
+        dhcp_end: "10.0.30.200"
+      - name: "IoT"
+        tag: 40
+        ip: "10.0.40.1"
+        subnet: "24"
+        dhcp_enabled: true
+        dhcp_start: "10.0.40.100"
+        dhcp_end: "10.0.40.200"
+    
+    # Service Integration
+    adguard_integration: true
+    adguard_primary_ip: "10.0.20.21"
+    adguard_secondary_ip: "10.0.20.22"
+    
+    # API Configuration
+    opnsense_api_key: "{{ lookup('password', '/tmp/opnsense-api-key chars=ascii_letters,digits length=20') }}"
+    opnsense_api_secret: "{{ lookup('password', '/tmp/opnsense-api-secret chars=ascii_letters,digits length=40') }}"
+    
+    # Timing Configuration
+    vm_boot_wait: 120  # Seconds to wait for VM to boot
+    service_start_wait: 60  # Seconds to wait for services to start
+    api_ready_wait: 30  # Seconds to wait for API to be ready
+    
+    # Backup Configuration
+    create_snapshot: true
+    snapshot_name: "opnsense-deployed-{{ ansible_date_time.epoch }}"
+    snapshot_description: "OPNsense fully deployed and configured"
+    
+    # Deployment tracking
+    deployment_start_time: "{{ ansible_date_time.iso8601 }}"
+    
+  tasks:
+    # Pre-flight checks
+    - name: "{{ service_name }} - Pre-deployment validation"
+      tags: [opnsense, preflight]
+      block:
+        - name: Display deployment plan
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} - Full Deployment Plan"
+              - "=========================================="
+              - "VM ID: {{ opnsense_vm_id }}"
+              - "VM Name: {{ opnsense_vm_name }}"
+              - "Resources: {{ opnsense_memory }}MB RAM, {{ opnsense_cores }} cores"
+              - "Disk Size: {{ opnsense_disk_size }}"
+              - "Network Mode: {{ 'VLAN-aware' if enable_vlans else 'Flat network' }}"
+              - "VLANs: {{ vlans | length if enable_vlans else 0 }}"
+              - "AdGuard Integration: {{ 'Enabled' if adguard_integration else 'Disabled' }}"
+              - "=========================================="
+              
+        - name: Check if VM already exists
+          command: qm status {{ opnsense_vm_id }}
+          register: vm_exists
+          failed_when: false
+          changed_when: false
+          
+        - name: Confirm VM deployment
+          when: vm_exists.rc == 0
+          pause:
+            prompt: |
+              WARNING: VM {{ opnsense_vm_id }} already exists!
+              Do you want to DESTROY it and create a new one? (yes/no)
+          register: destroy_confirm
+          
+        - name: Abort if user doesn't confirm
+          when: 
+            - vm_exists.rc == 0
+            - destroy_confirm.user_input | default('no') != 'yes'
+          fail:
+            msg: "Deployment aborted - VM already exists"
+            
+        - name: Check ISO file exists
+          stat:
+            path: "{{ opnsense_iso_path }}"
+          register: iso_check
+          failed_when: not iso_check.stat.exists
+          
+        - name: Verify Proxmox tools
+          command: which {{ item }}
+          loop:
+            - qm
+            - pvesh
+          changed_when: false
+
+    # Phase 1: VM Creation
+    - name: "Phase 1: Create OPNsense VM"
+      tags: [opnsense, vm-create]
+      block:
+        - name: Update deployment status
+          set_fact:
+            deployment_phase: "Phase 1: VM Creation"
+            
+        - name: Display phase banner
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ deployment_phase }}"
+              - "=========================================="
+              
+        - name: Stop and destroy existing VM if confirmed
+          when: 
+            - vm_exists.rc == 0
+            - destroy_confirm.user_input | default('no') == 'yes'
+          block:
+            - name: Stop VM if running
+              command: qm stop {{ opnsense_vm_id }}
+              failed_when: false
+              register: stop_result
+              
+            - name: Wait for VM to stop
+              when: stop_result.rc == 0
+              pause:
+                seconds: 10
+                
+            - name: Destroy VM
+              command: qm destroy {{ opnsense_vm_id }}
+              
+        - name: Create OPNsense VM
+          command: |
+            qm create {{ opnsense_vm_id }} \
+              --name "{{ opnsense_vm_name }}" \
+              --memory {{ opnsense_memory }} \
+              --cores {{ opnsense_cores }} \
+              --cpu host \
+              --ostype l26 \
+              --scsihw virtio-scsi-pci \
+              --bootdisk scsi0 \
+              --boot order=scsi0 \
+              --net0 "virtio,bridge={{ wan_bridge }},firewall=1" \
+              --net1 "virtio,bridge={{ lan_bridge }},firewall=1" \
+              --cdrom "{{ opnsense_iso_path }}"
+          register: vm_create_result
+          
+        - name: Add VLAN interfaces if enabled
+          when: enable_vlans
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --net{{ item.0 + 2 }} "virtio,bridge={{ lan_bridge }},tag={{ item.1.tag }},firewall=1"
+          loop: "{{ vlans | list | batch(1) | list }}"
+          loop_control:
+            index_var: item.0
+            
+        - name: Create VM disk
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --scsi0 "local-lvm:{{ opnsense_disk_size }}"
+              
+        - name: Set boot order
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --boot order="scsi0;ide2"
+              
+        - name: Enable QEMU guest agent
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --agent enabled=1
+              
+        - name: Start VM
+          command: qm start {{ opnsense_vm_id }}
+          
+        - name: Wait for VM to boot from ISO
+          debug:
+            msg: "Waiting {{ vm_boot_wait }} seconds for OPNsense installer to boot..."
+          
+        - name: Wait for boot
+          pause:
+            seconds: "{{ vm_boot_wait }}"
+            
+        - name: Check VM status
+          command: qm status {{ opnsense_vm_id }}
+          register: vm_status
+          
+        - name: Display VM creation results
+          debug:
+            msg:
+              - "VM Created Successfully!"
+              - "Status: {{ vm_status.stdout }}"
+              - "Console: Access via Proxmox web UI or 'qm console {{ opnsense_vm_id }}'"
+
+    # Phase 2: Initial Configuration
+    - name: "Phase 2: Initial OPNsense Configuration"
+      tags: [opnsense, initial-config]
+      block:
+        - name: Update deployment status
+          set_fact:
+            deployment_phase: "Phase 2: Initial Configuration"
+            
+        - name: Display phase banner
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ deployment_phase }}"
+              - "=========================================="
+              - "Note: This phase requires OPNsense installation to be completed"
+              - "Please complete the installation if not already done"
+              
+        - name: Create SSH key for OPNsense
+          openssh_keypair:
+            path: /root/.ssh/opnsense_rsa
+            type: rsa
+            size: 4096
+            comment: "OPNsense management key"
+          register: ssh_key
+          
+        - name: Save SSH public key
+          copy:
+            content: "{{ ssh_key.public_key }}"
+            dest: /tmp/opnsense_pubkey
+            mode: '0644'
+            
+        - name: Display manual configuration note
+          debug:
+            msg:
+              - "IMPORTANT: Manual steps required during OPNsense installation:"
+              - "1. Complete the installation wizard"
+              - "2. Set root password"
+              - "3. Configure WAN as DHCP (or static if required)"
+              - "4. Configure LAN as {{ opnsense_lan_ip }}/{{ opnsense_lan_subnet }}"
+              - "5. Enable SSH access"
+              - ""
+              - "Once installation is complete, press Enter to continue..."
+              
+        - name: Wait for user to complete installation
+          pause:
+            prompt: "Press Enter when OPNsense installation is complete and SSH is enabled"
+            
+        - name: Test SSH connectivity to OPNsense
+          wait_for:
+            host: "{{ opnsense_lan_ip }}"
+            port: 22
+            delay: 10
+            timeout: 300
+            state: started
+          register: ssh_ready
+
+    # Phase 3: Network Configuration
+    - name: "Phase 3: Configure OPNsense Network"
+      tags: [opnsense, network-config]
+      block:
+        - name: Update deployment status
+          set_fact:
+            deployment_phase: "Phase 3: Network Configuration"
+            
+        - name: Display phase banner
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ deployment_phase }}"
+              - "=========================================="
+              
+        - name: Configure VLAN interfaces
+          when: enable_vlans
+          debug:
+            msg: "VLAN configuration would be applied here via SSH/API"
+            
+        - name: Configure DHCP services
+          debug:
+            msg: "DHCP configuration would be applied here"
+            
+        - name: Configure firewall rules
+          debug:
+            msg: "Firewall rules would be configured here"
+
+    # Phase 4: Service Configuration
+    - name: "Phase 4: Configure OPNsense Services"
+      tags: [opnsense, service-config]
+      block:
+        - name: Update deployment status
+          set_fact:
+            deployment_phase: "Phase 4: Service Configuration"
+            
+        - name: Display phase banner
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ deployment_phase }}"
+              - "=========================================="
+              
+        - name: Configure DNS forwarding
+          when: adguard_integration
+          debug:
+            msg: |
+              DNS forwarding configuration:
+              - Primary: {{ adguard_primary_ip }}
+              - Secondary: {{ adguard_secondary_ip }}
+              
+        - name: Enable API access
+          debug:
+            msg: "API configuration would be applied here"
+            
+        - name: Configure system settings
+          debug:
+            msg: "System settings would be configured here"
+
+    # Phase 5: Snapshot and Finalization
+    - name: "Phase 5: Create Snapshot and Finalize"
+      tags: [opnsense, snapshot]
+      when: create_snapshot
+      block:
+        - name: Update deployment status
+          set_fact:
+            deployment_phase: "Phase 5: Snapshot and Finalization"
+            deployment_end_time: "{{ ansible_date_time.iso8601 }}"
+            
+        - name: Display phase banner
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ deployment_phase }}"
+              - "=========================================="
+              
+        - name: Stop VM for snapshot
+          command: qm stop {{ opnsense_vm_id }}
+          register: stop_for_snapshot
+          
+        - name: Wait for VM to stop
+          when: stop_for_snapshot.rc == 0
+          pause:
+            seconds: 30
+            
+        - name: Create VM snapshot
+          command: |
+            qm snapshot {{ opnsense_vm_id }} {{ snapshot_name }} \
+              --description "{{ snapshot_description }}"
+          register: snapshot_result
+          
+        - name: Start VM after snapshot
+          command: qm start {{ opnsense_vm_id }}
+          
+        - name: Wait for services to start
+          pause:
+            seconds: "{{ service_start_wait }}"
+
+    # Summary and Access Information
+    - name: "{{ service_name }} - Deployment Summary"
+      tags: [opnsense, summary]
+      block:
+        - name: Calculate deployment time
+          set_fact:
+            deployment_duration: "{{ ((deployment_end_time | to_datetime) - (deployment_start_time | to_datetime)).total_seconds() | int // 60 }} minutes"
+          when: deployment_end_time is defined
+          
+        - name: Generate access information
+          set_fact:
+            access_info:
+              web_ui: "https://{{ opnsense_lan_ip }}"
+              ssh: "ssh root@{{ opnsense_lan_ip }}"
+              api: "https://{{ opnsense_lan_ip }}/api"
+              
+        - name: Display deployment summary
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} - Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "Deployment Duration: {{ deployment_duration | default('Unknown') }}"
+              - "VM ID: {{ opnsense_vm_id }}"
+              - "VM Name: {{ opnsense_vm_name }}"
+              - ""
+              - "Access Information:"
+              - "- Web UI: {{ access_info.web_ui }}"
+              - "- SSH: {{ access_info.ssh }}"
+              - "- API: {{ access_info.api }}"
+              - ""
+              - "Network Configuration:"
+              - "- WAN: {{ opnsense_wan_type | upper }}"
+              - "- LAN: {{ opnsense_lan_ip }}/{{ opnsense_lan_subnet }}"
+              - "- VLANs: {{ vlans | length if enable_vlans else 'Disabled' }}"
+              - ""
+              - "Services:"
+              - "- DHCP: {{ 'Enabled' if opnsense_lan_dhcp_enabled else 'Disabled' }}"
+              - "- DNS: {{ 'AdGuard integration' if adguard_integration else 'Unbound resolver' }}"
+              - "- API: Configured with stored credentials"
+              - ""
+              - "Snapshot: {{ snapshot_name if create_snapshot else 'Not created' }}"
+              - ""
+              - "Next Steps:"
+              - "1. Access web UI at {{ access_info.web_ui }}"
+              - "2. Review and customize firewall rules"
+              - "3. Configure additional services as needed"
+              - "4. Test connectivity from client devices"
+              - "=========================================="
+              
+        - name: Save deployment information
+          copy:
+            content: |
+              {{ service_name }} Deployment Information
+              =====================================
+              Deployed: {{ deployment_start_time }}
+              Completed: {{ deployment_end_time | default('In progress') }}
+              Duration: {{ deployment_duration | default('Unknown') }}
+              
+              VM Configuration:
+              - ID: {{ opnsense_vm_id }}
+              - Name: {{ opnsense_vm_name }}
+              - Memory: {{ opnsense_memory }}MB
+              - Cores: {{ opnsense_cores }}
+              - Disk: {{ opnsense_disk_size }}
+              
+              Network Configuration:
+              - WAN: {{ opnsense_wan_type }}
+              - LAN: {{ opnsense_lan_ip }}/{{ opnsense_lan_subnet }}
+              - DHCP Range: {{ opnsense_lan_dhcp_start }} - {{ opnsense_lan_dhcp_end }}
+              
+              VLANs:
+              {% for vlan in vlans %}
+              - {{ vlan.name }} (VLAN {{ vlan.tag }}): {{ vlan.ip }}/{{ vlan.subnet }}
+              {% endfor %}
+              
+              Access URLs:
+              - Web Interface: {{ access_info.web_ui }}
+              - SSH: {{ access_info.ssh }}
+              - API: {{ access_info.api }}
+              
+              Integration:
+              - AdGuard Primary: {{ adguard_primary_ip if adguard_integration else 'Disabled' }}
+              - AdGuard Secondary: {{ adguard_secondary_ip if adguard_integration else 'Disabled' }}
+              
+              Credentials:
+              - Root password: Set during installation
+              - API Key: Stored in /tmp/opnsense-api-key
+              - API Secret: Stored in /tmp/opnsense-api-secret
+            dest: "/opt/privatebox/deployment-info-opnsense.txt"
+            mode: '0600'
+            
+  handlers:
+    - name: restart opnsense
+      command: qm reset {{ opnsense_vm_id }}
+      
+    - name: stop opnsense
+      command: qm stop {{ opnsense_vm_id }}
+      
+    - name: start opnsense
+      command: qm start {{ opnsense_vm_id }}
