@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Deploy VM
+- name: "OPNsense: Deploy VM"
   hosts: proxmox
   gather_facts: false
   

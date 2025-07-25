@@ -2,7 +2,7 @@
 # Task 6.6: Final Migration Validation
 # Run comprehensive validation tests
 
-- name: Migration: Post-Validation
+- name: "Migration: Post-Validation"
   hosts: all
   gather_facts: yes
   vars_prompt:

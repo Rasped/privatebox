@@ -1,5 +1,5 @@
 ---
-- name: AdGuard: Activate as System DNS
+- name: "AdGuard: Activate as System DNS"
   hosts: container-host
   become: true
   gather_facts: true

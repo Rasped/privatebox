@@ -3,7 +3,7 @@
 # This playbook creates the OPNsense VM with proper specifications
 # and attaches network interfaces according to the network plan
 
-- name: OPNsense: Create VM
+- name: "OPNsense: Create VM"
   hosts: proxmox
   gather_facts: true
   

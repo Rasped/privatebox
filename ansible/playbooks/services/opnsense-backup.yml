@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Backup Configuration
+- name: "OPNsense: Backup Configuration"
   hosts: container-host
   become: true
   gather_facts: true

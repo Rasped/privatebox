@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Assign Interfaces
+- name: "OPNsense: Assign Interfaces"
   hosts: container-host
   become: true
   gather_facts: true

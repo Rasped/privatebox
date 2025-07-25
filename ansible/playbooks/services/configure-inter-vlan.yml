@@ -1,7 +1,7 @@
 ---
 # Task 5.2: Implement Inter-VLAN Routing Rules
 # Configure controlled VLAN communication based on security matrix
-- name: OPNsense: Configure Inter-VLAN Routing
+- name: "OPNsense: Configure Inter-VLAN Routing"
   hosts: container-host
   become: true
   gather_facts: true

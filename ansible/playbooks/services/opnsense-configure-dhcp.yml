@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Configure DHCP
+- name: "OPNsense: Configure DHCP"
   hosts: container-host
   become: true
   gather_facts: true

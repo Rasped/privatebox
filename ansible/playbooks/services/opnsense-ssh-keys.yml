@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Inject SSH Keys
+- name: "OPNsense: Inject SSH Keys"
   hosts: container-host
   become: true
   gather_facts: true

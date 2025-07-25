@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Complete Configuration
+- name: "OPNsense: Complete Configuration"
   hosts: container-host
   become: true
   gather_facts: true

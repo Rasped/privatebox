@@ -2,7 +2,7 @@
 # Task 6.2: VLAN Bridge Configuration
 # Configure Proxmox bridges with VLAN support
 
-- name: Environment: Configure VLAN Bridges
+- name: "Environment: Configure VLAN Bridges"
   hosts: proxmox
   gather_facts: yes
   vars_prompt:

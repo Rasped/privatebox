@@ -1,5 +1,5 @@
 ---
-- name: Network: Plan Architecture
+- name: "Network: Plan Architecture"
   hosts: all
   gather_facts: true
   
