@@ -1,168 +1,87 @@
 # PrivateBox
 
-## Project Overview
+Your privacy-focused network appliance - automated deployment of privacy-enhancing services on Proxmox VE.
 
-PrivateBox is a **privacy-focused router product** built on Proxmox VE that automates the deployment of privacy-enhancing network services. This repository contains both the bootstrap infrastructure for initial setup and Ansible automation for service deployment.
+## What is PrivateBox?
 
-The project provides a complete solution for setting up a privacy-focused network appliance, including automated VM provisioning, service deployment, and management tools.
+PrivateBox transforms a mini PC running Proxmox into a comprehensive privacy protection system for your network. It automatically deploys and manages services like ad-blocking, secure DNS, and firewall protection with just one command.
+
+**Key Features:**
+- 🛡️ **Privacy Protection**: Ad-blocking, DNS privacy, and firewall in one solution
+- 🚀 **One-Command Setup**: Fully automated deployment in ~5 minutes
+- 🎯 **Service-Oriented**: Clean, modular architecture for each service
+- 🔧 **Web Management**: Built-in UIs for container and automation management
+- 📦 **Minimal Hardware**: Runs on Intel N100 mini PCs with 8GB RAM
 
 ## Quick Start
 
-### Installation from GitHub (Recommended)
-
-Run these commands on your Proxmox host to download and execute the installer:
+Run this command on your Proxmox host:
 
 ```bash
-# Download the installer script
+# Review the script before running (recommended)
 curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
-
-# Run the installer
+less quickstart.sh  # Review the script
 sudo bash quickstart.sh
+
+# Or run directly if you trust the source
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
 ```
 
-This will:
-- Automatically detect your network configuration
-- Create an Ubuntu 24.04 VM on your Proxmox host
-- Install Portainer for container management
-- Install Semaphore for Ansible automation
-- Configure all services and provide access information
+That's it! The installer will:
+- Detect your network configuration automatically
+- Create a management VM with all tools pre-installed
+- Set up web interfaces for easy management
+- Display connection information when complete
 
-### Installation Options
+### Custom Installation
 
 ```bash
-# Download the script
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
-
-# Run with custom IP address
+# Specify IP address
 sudo bash quickstart.sh --ip 192.168.1.50
 
-# Skip network auto-discovery
-sudo bash quickstart.sh --no-auto
-
-# Use specific gateway
+# Specify gateway
 sudo bash quickstart.sh --ip 192.168.1.50 --gateway 192.168.1.1
 
-# Skip confirmation prompt (unattended)
+# Skip network auto-discovery
+sudo bash quickstart.sh --no-auto --ip 192.168.1.50 --gateway 192.168.1.1
+
+# Unattended installation
 sudo bash quickstart.sh --yes
 
 # Clean up installation files after completion
 sudo bash quickstart.sh --cleanup
+
+# See all options
+sudo bash quickstart.sh --help
 ```
 
-### Alternative Download Methods
+## What's Included
 
-```bash
-# Using wget
-wget https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh
-sudo bash quickstart.sh
+### Privacy Services
+- **AdGuard Home**: Network-wide ad and tracker blocking
+- **OPNsense**: Enterprise-grade firewall and router (coming soon)
+- **Unbound DNS**: Privacy-focused recursive DNS resolver (coming soon)
 
-# Using curl with different branch
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/develop/quickstart.sh -o quickstart.sh
-sudo bash quickstart.sh --branch develop
+### Management Tools
+- **Portainer**: Simple container management with web UI
+- **Semaphore**: Ansible automation with point-and-click deployment
 
-# Review the script before running
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
-less quickstart.sh  # Review the script
-sudo bash quickstart.sh
-```
+## Prerequisites
 
-### One-Line Installation (Less Secure)
-
-If you prefer the convenience of a one-line installation:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
-```
-
-**Note:** Piping scripts directly to bash is convenient but less secure. We recommend the two-command approach above.
-
-### What the Quickstart Script Does
-
-1. **Downloads Bootstrap Files**: Fetches the latest bootstrap scripts from GitHub
-2. **Runs Network Discovery**: Automatically detects your network configuration
-3. **Creates VM**: Provisions an Ubuntu 24.04 VM with optimal settings
-4. **Installs Services**: Sets up Portainer and Semaphore via cloud-init
-5. **Provides Access Info**: Shows you how to connect to your new PrivateBox
-
-### Troubleshooting
-
-If you can't download from GitHub directly:
-```bash
-# Use a different branch
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/develop/quickstart.sh | sudo bash
-
-# Check if the script is accessible
-curl -I https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh
-
-# View the script before running
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | less
-```
-
-## Features
-
-- **Automated VM Provisioning**: One-command setup on Proxmox hosts
-- **Network Auto-Discovery**: Automatic detection of network configuration
-- **Unattended Installation**: Complete hands-off provisioning
-- **Automatic Template Synchronization**: Creates Semaphore job templates from Ansible playbooks with metadata annotations
-- **Privacy-Focused Services** (via Ansible):
-  - OPNSense firewall and router (dedicated VM)
-  - AdGuard Home for ad-blocking (containerized)
-  - Unbound DNS for enhanced DNS privacy
-  - Additional privacy features
-- **Management Integration**: Pre-configured Portainer and Semaphore with automatic template generation
-- **Service-Oriented Design**: Simple, dedicated Ansible playbooks for each service
-
-## Target Hardware
-
-- Small all-in-one (AIO) computers with Intel N100 CPU and 8-16GB RAM
-- Capable of running multiple *nix-based virtual machines for various services
+- Proxmox VE 7.0 or higher
+- Intel N100 mini PC (or similar) with 8GB+ RAM
+- 20GB available storage
+- Internet connection
 
 ## Repository Structure
 
 ```
-bootstrap/              # Bootstrap infrastructure and scripts
-├── scripts/           # Core installation scripts
-│   ├── create-ubuntu-vm.sh    # Main VM creation script
-│   ├── network-discovery.sh   # Automatic network detection
-│   ├── initial-setup.sh       # Post-install configuration
-│   ├── portainer-setup.sh     # Container management setup
-│   └── semaphore-setup.sh     # Ansible UI setup
-├── config/            # Configuration templates
-├── lib/               # Shared libraries
-└── deploy-to-server.sh  # Remote deployment tool
-
-dev-notes/              # Development notes and technical guides
-
-quickstart.sh          # One-line installer script
+bootstrap/       # Installation scripts and infrastructure
+ansible/         # Service deployment playbooks  
+documentation/   # Technical documentation and guides
 ```
 
-## Bootstrap Scripts
-
-- **bootstrap.sh**: Main entry point for complete installation
-- **create-ubuntu-vm.sh**: Creates and configures Ubuntu VM on Proxmox
-- **network-discovery.sh**: Automatic network configuration detection
-- **initial-setup.sh**: Post-install setup (runs via cloud-init)
-- **portainer-setup.sh**: Container management UI installation
-- **semaphore-setup.sh**: Ansible automation UI installation
-- **health-check.sh**: Service health monitoring
-- **backup.sh**: Configuration and credential backup
-
-## Service Deployment Approach
-
-- **Service Playbooks**: Each service has its own dedicated playbook in `ansible/playbooks/services/`
-- **Containerized Services**: AdGuard Home, Unbound DNS deployed as Podman containers
-- **VM-based Services**: OPNSense deployed as dedicated VM via SSH to Proxmox host
-- **Semaphore Integration**: Automatic UI templates generated from playbook metadata
-- **Simple Architecture**: No complex role hierarchies - just straightforward playbooks
-
 ## Getting Started
-
-### Prerequisites
-
-- Proxmox VE 7.0 or higher
-- At least 4GB free RAM
-- At least 10GB free storage
-- Internet connection
 
 ### Manual Installation
 
@@ -310,6 +229,14 @@ vars_prompt:
 - Implement secure secrets management with Ansible Vault
 - Create monitoring and health check dashboards
 - Document production deployment best practices
+
+## Where to Find More
+
+For more detailed information:
+
+- **Technical Bootstrap Details**: See [bootstrap/README.md](bootstrap/README.md) for in-depth installation documentation
+- **Development Information**: See [CLAUDE.md](CLAUDE.md) for architecture decisions and development guidelines  
+- **Service Documentation**: Check [documentation/](documentation/) for deployment guides and technical references
 
 ## Contributing
 
