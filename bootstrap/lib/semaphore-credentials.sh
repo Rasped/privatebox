@@ -96,6 +96,10 @@ Semaphore Access Key Encryption: $SEMAPHORE_ACCESS_KEY_ENCRYPTION_KEY
 VM SSH Private Key Path: /root/.credentials/semaphore_vm_key
 VM SSH Public Key Path: /root/.credentials/semaphore_vm_key.pub
 
+## Proxmox SSH Key
+Note: The Proxmox SSH private key has been securely uploaded to Semaphore
+      and removed from the VM filesystem for security reasons.
+
 ## Security Note
 # These passwords were automatically generated with strong security requirements.
 # It is recommended to change these passwords periodically for optimal security.
