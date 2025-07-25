@@ -1,5 +1,5 @@
 ---
-- name: Environment: Discover Proxmox
+- name: "Environment: Discover Proxmox"
   hosts: proxmox
   gather_facts: true
   

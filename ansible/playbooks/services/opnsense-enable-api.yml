@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Enable API
+- name: "OPNsense: Enable API"
   hosts: container-host
   become: true
   gather_facts: true

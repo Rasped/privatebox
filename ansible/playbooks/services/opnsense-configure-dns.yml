@@ -1,5 +1,5 @@
 ---
-- name: OPNsense: Configure DNS
+- name: "OPNsense: Configure DNS"
   hosts: container-host
   become: true
   gather_facts: true

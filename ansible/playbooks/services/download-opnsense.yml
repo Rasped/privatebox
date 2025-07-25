@@ -3,7 +3,7 @@
 # This playbook downloads the latest OPNsense ISO to Proxmox storage
 # and verifies the checksum
 
-- name: OPNsense: Download ISO
+- name: "OPNsense: Download ISO"
   hosts: proxmox
   gather_facts: false
   

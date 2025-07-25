@@ -1,7 +1,7 @@
 ---
 # Task 5.3: Create Port Forwarding Rules
 # Configure external service access through NAT/port forwarding
-- name: OPNsense: Configure Port Forwarding
+- name: "OPNsense: Configure Port Forwarding"
   hosts: container-host
   become: true
   gather_facts: true

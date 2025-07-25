@@ -2,7 +2,7 @@
 # Task 6.4: Migrate Services to VLANs
 # Move existing services to appropriate VLANs
 
-- name: Migration: Migrate Services
+- name: "Migration: Migrate Services"
   hosts: container-host
   gather_facts: yes
   vars_prompt:
