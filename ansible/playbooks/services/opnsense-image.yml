@@ -16,6 +16,10 @@
     checksum_url: "https://opnsense.org/download/"
     image_dir: "/var/lib/vz/template/iso"
     
+    # Metadata for Semaphore template generation
+    # Empty dict means generate template without survey variables (hands-off deployment)
+    _semaphore_vars_prompt: {}
+    
   tasks:
     - name: Check if discovery data exists
       stat:

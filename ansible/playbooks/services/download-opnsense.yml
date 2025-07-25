@@ -14,6 +14,10 @@
     download_url: "https://mirror.dns-root.de/opnsense/releases/{{ opnsense_version }}/{{ opnsense_iso }}"
     checksum_url: "https://mirror.dns-root.de/opnsense/releases/{{ opnsense_version }}/{{ opnsense_iso }}.sha256"
     
+    # Metadata for Semaphore template generation
+    # Empty dict means generate template without survey variables (hands-off deployment)
+    _semaphore_vars_prompt: {}
+    
   tasks:
     - name: Ensure ISO storage directory exists
       file:

@@ -12,6 +12,10 @@
     vm_name: "opnsense"
     serial_port: 0
     
+    # Metadata for Semaphore template generation
+    # Empty dict means generate template without survey variables (hands-off deployment)
+    _semaphore_vars_prompt: {}
+    
   tasks:
     - name: Verify VM exists
       shell: |

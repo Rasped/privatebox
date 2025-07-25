@@ -18,6 +18,10 @@
     opnsense_version: "24.7"
     opnsense_iso: "OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
     
+    # Metadata for Semaphore template generation
+    # Empty dict means generate template without survey variables (hands-off deployment)
+    _semaphore_vars_prompt: {}
+    
   tasks:
     - name: Check if VM already exists
       shell: |
@@ -97,17 +101,16 @@
           set_fact:
             vlan_bridge: "{{ 'vmbr1' if 'vmbr1' in available_bridges.stdout_lines else 'vmbr0' }}"
             
-        - name: Configure LAN/VLAN trunk interface (net1)
+        - name: Check if vmbr0 needs VLAN awareness
           shell: |
-            # If using vmbr0 for VLANs, ensure it's VLAN-aware
-            {% if vlan_bridge == 'vmbr0' %}
-            # Check if vmbr0 is VLAN-aware
             if ! grep -q "bridge-vlan-aware yes" /etc/network/interfaces; then
               echo "WARNING: vmbr0 may need to be configured as VLAN-aware"
             fi
-            {% endif %}
-            
-            # Add interface with VLAN trunk support
+          when: vlan_bridge == 'vmbr0'
+          register: vlan_warning
+          
+        - name: Configure LAN/VLAN trunk interface (net1)
+          shell: |
             qm set {{ vm_id }} --net1 virtio,bridge={{ vlan_bridge }},firewall=1
             
         - name: Configure additional VLAN interfaces
