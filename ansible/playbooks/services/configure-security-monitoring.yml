@@ -34,40 +34,22 @@
     - name: opnsense_host
       prompt: "OPNsense IP address or hostname"
       private: no
-      semaphore_type: "string"
-      semaphore_required: true
-      semaphore_description: "OPNsense IP address or hostname"
     - name: enable_ids
       prompt: "Enable Intrusion Detection System"
       private: no
       default: "true"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: true
-      semaphore_description: "Enable Intrusion Detection System"
     - name: enable_ips_blocking
       prompt: "Enable IPS blocking mode (can block legitimate traffic)"
       private: no
       default: "false"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: false
-      semaphore_description: "Enable IPS blocking mode (can block legitimate traffic)"
     - name: alert_email_address
       prompt: "Email address for security alerts (optional)"
       private: no
       default: ""
-      semaphore_type: "string"
-      semaphore_required: false
-      semaphore_description: "Email address for security alerts (optional)"
     - name: confirm_monitoring
       prompt: "Confirm security monitoring configuration"
       private: no
       default: "false"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: false
-      semaphore_description: "Confirm security monitoring configuration"
   
   tasks:
     - name: Pre-flight checks

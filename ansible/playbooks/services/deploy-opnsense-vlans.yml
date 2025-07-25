@@ -10,25 +10,16 @@
       prompt: "VM ID for OPNsense (200-999)"
       default: "200"
       private: no
-      semaphore_type: "integer"
-      semaphore_display_name: "VM ID"
-      semaphore_description: "Unique VM ID for OPNsense instance"
     
     - name: vm_memory
       prompt: "Memory allocation in MB"
       default: "4096"
       private: no
-      semaphore_type: "integer"
-      semaphore_display_name: "Memory (MB)"
-      semaphore_description: "RAM allocation for OPNsense VM"
     
     - name: vm_cores
       prompt: "Number of CPU cores"
       default: "2"
       private: no
-      semaphore_type: "integer"
-      semaphore_display_name: "CPU Cores"
-      semaphore_description: "Number of CPU cores for OPNsense VM"
 
   vars:
     opnsense_iso: "OPNsense-24.7-dvd-amd64.iso"

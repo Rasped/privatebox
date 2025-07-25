@@ -1,11 +1,12 @@
 # Consumer Dashboard Architecture for PrivateBox
 
-## ⚠️ WORK IN PROGRESS - SUBJECT TO CHANGE ⚠️
+## ⚠️ FUTURE FEATURE - NOT CURRENTLY IMPLEMENTED ⚠️
 
-This document represents current thinking on the PrivateBox consumer dashboard architecture. All decisions, technologies, and approaches described here are provisional and will evolve based on implementation experience, user feedback, and technical constraints discovered during development.
+This document describes a planned feature for PrivateBox that would enable mass consumer adoption by providing a user-friendly web interface. While the current system uses Semaphore for service management, this dashboard would provide a simpler, more accessible interface for non-technical users.
 
-**Last Updated**: 2025-07-21  
-**Status**: Initial Design Phase
+**Status**: Planned Future Feature  
+**Priority**: High (for mass adoption)  
+**Target Release**: TBD based on core platform stability  
 
 ---
 

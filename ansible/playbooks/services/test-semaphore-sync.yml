@@ -5,7 +5,6 @@
 
   vars:
     # Exclude from Semaphore - test playbook only
-    semaphore_exclude: true
     
     # Regular variable (not a survey field)
     log_level: debug

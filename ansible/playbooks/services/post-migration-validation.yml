@@ -10,17 +10,11 @@
       prompt: "Generate detailed validation report? (yes/no)"
       default: "yes"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_display_name: "Generate Report"
-      semaphore_description: "Create comprehensive validation report with all test results"
     
     - name: test_external_access
       prompt: "Test external connectivity? (yes/no)"
       default: "yes"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_display_name: "Test External"
-      semaphore_description: "Verify services are accessible from external networks"
 
   vars:
     validation_tests:

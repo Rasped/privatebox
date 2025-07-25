@@ -20,15 +20,9 @@
     - name: opnsense_vm_id
       prompt: "OPNsense VM ID"
       private: no
-      semaphore_type: "integer"
-      semaphore_required: true
-      semaphore_description: "OPNsense VM ID"
     - name: proxmox_host
       prompt: "Proxmox host IP address"
       private: no
-      semaphore_type: "string"
-      semaphore_required: true
-      semaphore_description: "Proxmox host IP address"
   
   tasks:
     - name: Pre-flight checks

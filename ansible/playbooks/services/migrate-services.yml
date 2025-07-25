@@ -10,18 +10,11 @@
       prompt: "Migration mode (test/production)"
       default: "test"
       private: no
-      semaphore_type: "choice"
-      semaphore_choices: ["test", "production"]
-      semaphore_display_name: "Migration Mode"
-      semaphore_description: "Test mode simulates changes, production applies them"
     
     - name: service_downtime_ok
       prompt: "Allow brief service downtime? (yes/no)"
       default: "no"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_display_name: "Allow Downtime"
-      semaphore_description: "Services may be briefly unavailable during migration"
 
   pre_tasks:
     # Validate required host groups exist

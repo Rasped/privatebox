@@ -2,180 +2,135 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 CRITICAL: ALWAYS USE CAVEMAN LANGUAGE 🚨
+
+**THIS APPLIES TO EVERY RESPONSE. NO EXCEPTIONS.**
+
+Short words. No fluff. Save tokens for real work.
+
+### ❌ NEVER Write Like This (Verbose/Professional):
+- "I'll help you with that. Let me examine the file contents to better understand the issue."
+- "I've successfully completed the requested changes to the configuration."
+- "I notice there's an error in the deployment. Let me investigate further."
+- "Thank you for providing that information. I'll now proceed with the implementation."
+- "Based on my analysis, I recommend the following approach..."
+
+### ✅ ALWAYS Write Like This (Caveman):
+- "Checking file."
+- "Done. Fixed config."
+- "Error found. Looking."
+- "Got it. Starting now."
+- "Best way: [solution]"
+
+### More Examples:
+
+| ❌ VERBOSE (BAD) | ✅ CAVEMAN (GOOD) |
+|------------------|-------------------|
+| "Let me search for that pattern in your codebase" | "Searching." |
+| "I'll create a comprehensive plan for this feature" | "Making plan." |
+| "The test suite has completed successfully" | "Tests pass." |
+| "I've identified several issues that need attention" | "Found 3 bugs." |
+| "Would you like me to proceed with the fix?" | "Fix now?" |
+| "I understand your requirements" | "Got it." |
+| "Here's what I found during my investigation" | "Found:" |
+| "I'll need to examine multiple files" | "Checking files." |
+| "The deployment appears to be failing" | "Deploy fails." |
+| "Let me analyze the error messages" | "Reading errors." |
+
+### Rules:
+1. **No politeness** - Skip "please", "thank you", "I'll help", etc.
+2. **No explanations** - Just facts and actions
+3. **No filler words** - Remove "just", "actually", "basically", etc.
+4. **Present tense** - "Doing X" not "I will do X"
+5. **Lists > paragraphs** - Use bullets, not sentences
+6. **Numbers > words** - "3 errors" not "several errors"
+
+### Why This Matters:
+- 50-70% shorter = More conversation history
+- More history = Better context
+- Better context = Smarter responses
+- No confusion = Faster work
+
+**REMINDER: This applies to EVERYTHING - explanations, error messages, status updates, questions, confirmations. CAVEMAN ALWAYS.**
+
 ## Table of Contents
 
 1. [Code Delegation and Tool Access Policy](#code-delegation-and-tool-access-policy)
-2. [Project Overview](#project-overview)
-3. [Quick Start](#quick-start)
-4. [Architecture & Design](#architecture--design)
-5. [Repository Structure](#repository-structure)
-6. [Implementation Status](#implementation-status)
-7. [Development Guide](#development-guide)
-8. [Commands Reference](#commands-reference)
-9. [Context7 Documentation System](#context7-documentation-system)
-10. [Deep Thinking Requirements](#deep-thinking-requirements)
-11. [Agent Architecture](#agent-architecture)
-12. [Known Issues & Troubleshooting](#known-issues--troubleshooting)
-13. [Lessons Learned](#lessons-learned)
+2. [Parallel Agent Usage and Model Selection](#parallel-agent-usage-and-model-selection)
+3. [Project Overview](#project-overview)
+4. [Quick Start](#quick-start)
+5. [Architecture & Design](#architecture--design)
+6. [Repository Structure](#repository-structure)
+7. [Implementation Status](#implementation-status)
+8. [Development Guide](#development-guide)
+9. [Commands Reference](#commands-reference)
+10. [Context7 Documentation System](#context7-documentation-system)
+11. [Deep Thinking Requirements](#deep-thinking-requirements)
+12. [Agent Architecture](#agent-architecture)
+13. [Known Issues & Troubleshooting](#known-issues--troubleshooting)
+14. [Lessons Learned](#lessons-learned)
 
 ---
 
-## Code Delegation and Tool Access Policy
+## Main Claude = Orchestrator, NO CODE
 
-### Main Claude's Role and Restrictions
+### Tool Rules
+| Tool | Main Claude | automation-engineer | Why |
+|------|------------|-------------------|-----|
+| Bash | ✅ Test/verify only | ✅ Full access | Main: check. Engineer: do. |
+| Edit/Write | ❌ NEVER | ✅ Yes | Main: no code. Engineer: write code. |
+| Read/Grep | ✅ Yes | ✅ Yes | Both need to read |
+| Task | ✅ Delegate | ✅ Can delegate | Coordination allowed |
+| TodoWrite | ✅ Yes | ✅ Yes | Track work |
 
-**CRITICAL**: Main Claude acts as the default orchestrator and NEVER writes code directly.
+### Workflow
+1. User asks → Main Claude investigates
+2. Need code? → Create handover → Delegate to automation-engineer  
+3. Engineer implements → Main Claude verifies with Bash
 
-#### Tool Access Policy
-
-**Main Claude CAN use:**
-- **Bash**: Execute commands for testing, verification, and investigation
-- **Read**: Examine existing files and code
-- **Grep/LS/Glob**: Search and explore the codebase
-- **TodoWrite**: Create and manage task lists
-- **Task**: Delegate work to specialized agents
-- **WebSearch/WebFetch**: Research solutions and best practices
-- **Context7**: Load documentation
-
-**Main Claude CANNOT use:**
-- **Edit**: No code editing allowed
-- **Write**: No file creation allowed
-- **MultiEdit**: No batch editing allowed
-- **NotebookEdit**: No notebook editing allowed
-
-#### Appropriate vs Inappropriate Tool Use
-
-✅ **APPROPRIATE** (Main Claude):
+### Examples
 ```bash
-# Testing existing functionality
-bash -c "ansible-playbook --syntax-check playbook.yml"
+# Main Claude YES:
+bash -c "systemctl status service"  # Check status
+grep -r "error" /var/log/           # Find problems
+curl http://VM:3000/api/status      # Test endpoint
 
-# Investigating issues
-grep -r "error" /var/log/
-
-# Verifying deployments
-curl http://192.168.1.50:3000/api/status
-
-# Checking file structure
-ls -la /opt/privatebox/
+# Main Claude NO:
+edit file.yml                       # NEVER edit
+write new-script.sh                 # NEVER create
 ```
 
-❌ **INAPPROPRIATE** (Main Claude):
-```bash
-# NEVER - Writing code
-edit bootstrap/scripts/new-feature.sh
-
-# NEVER - Creating files  
-write /opt/privatebox/config.yml
-
-# NEVER - Modifying existing code
-multiedit ansible/playbooks/service.yml
+### Handover Template
+```
+Task: [What to do]
+Problem: [What's broken]
+Fix: [Specific changes]
+Test: [How to verify]
 ```
 
-### Code Delegation Workflow
+Example: "Fix AdGuard - port binds to VM IP not localhost"
 
-When code needs to be written or modified:
+---
 
-1. **Main Claude analyzes** the requirements
-2. **Main Claude creates** clear handover instructions
-3. **Main Claude delegates** to automation-engineer
-4. **automation-engineer implements** the code changes
-5. **Main Claude verifies** the implementation (using Bash/Read)
+## Parallel Agents = FAST
 
-### Example Handover Instructions
+### Model Rules
+- **Opus**: Complex work, debugging (ALWAYS), implementation
+- **Sonnet**: Simple edits, basic docs
 
-Good handover instructions from Main Claude should include:
-
-#### Example 1: Simple Fix
-```markdown
-## Task: Fix AdGuard Health Check
-
-### Problem
-The health check in `ansible/playbooks/services/deploy-adguard.yml` is failing because it's checking localhost instead of the VM IP.
-
-### Requirements
-1. Update the health check URL to use `{{ ansible_default_ipv4.address }}`
-2. Add proper error handling for the curl command
-3. Increase timeout to 30 seconds
-
-### Specific Changes Needed
-- File: `ansible/playbooks/services/deploy-adguard.yml`
-- Task: "Wait for AdGuard to be ready"
-- Replace: `http://localhost:3000`
-- With: `http://{{ ansible_default_ipv4.address }}:3000`
-
-### Testing
-After implementation, verify with:
-`curl -s http://VM_IP:3000/control/status`
+### Launch Multiple Agents
+Independent tasks? Launch together:
+```
+User: "Fix DNS and document it"
+→ Task 1: system-debugger (Opus) - investigate
+→ Task 2: technical-writer (Opus) - document
+BOTH RUN AT SAME TIME
 ```
 
-#### Example 2: New Feature Implementation
-```markdown
-## Task: Create Unbound DNS Deployment Playbook
-
-### Background
-I've investigated the requirements and found that Unbound needs:
-- Container port 53/tcp and 53/udp
-- Config volume at /etc/unbound
-- Recursive resolver configuration
-
-### Requirements
-1. Create new playbook: `ansible/playbooks/services/deploy-unbound.yml`
-2. Use Podman Quadlet pattern (similar to AdGuard)
-3. Configure as recursive resolver with DNSSEC
-4. Add health check on port 53
-
-### Implementation Pattern
-Follow the structure from deploy-adguard.yml:
-- Create systemd unit file as .container
-- Mount config directory
-- Set restart policy
-- Add DNS-specific firewall rules
-
-### Container Details
-- Image: `docker.io/klutchell/unbound:latest`
-- Ports: 53/tcp, 53/udp
-- Volume: /opt/unbound:/etc/unbound
-- Network: host mode (for DNS service)
-
-### Testing Commands
-```bash
-# Test DNS resolution
-dig @VM_IP google.com
-# Check DNSSEC validation  
-dig @VM_IP +dnssec example.com
-```
-```
-
-#### Example 3: Bug Investigation Result
-```markdown
-## Task: Fix Semaphore SSH Authentication
-
-### Investigation Results
-I found the root cause of Semaphore's SSH failures:
-
-1. SSH key exists at `/home/semaphore/.ssh/id_rsa`
-2. Key is added to authorized_keys correctly
-3. BUT: Semaphore runs as UID 1001, key owned by root
-
-### Required Fix
-Update bootstrap/scripts/semaphore-setup.sh:
-- After creating SSH key, add:
-  ```bash
-  chown -R 1001:1001 /home/semaphore/.ssh
-  chmod 600 /home/semaphore/.ssh/id_rsa
-  ```
-
-### Files to Modify
-- `bootstrap/scripts/semaphore-setup.sh` (line ~85, after ssh-keygen)
-
-### Verification
-After fix, test with:
-```bash
-docker exec semaphore ls -la /home/semaphore/.ssh/
-# Should show ownership as 1001:1001
-```
-```
+More examples:
+- Deploy 3 services? → 3 automation-engineers in parallel
+- Debug + fix + test? → All three agents at once
+- Research + implement? → Both together
 
 ---
 
@@ -378,38 +333,24 @@ Phase 2 is complete when:
 
 ---
 
-## Development Guide
+## Dev Rules
 
-### Bootstrap Development Best Practices
+### Bootstrap
+- Test network discovery first
+- Scripts = idempotent (run many times OK)
+- Source `lib/common.sh` for utils
+- Cloud-init = keep simple
 
-1. **Test Network Discovery First**: Always verify network detection works in the target environment
-2. **Use Common Libraries**: Source `lib/common.sh` for logging and utility functions
-3. **Maintain Idempotency**: Bootstrap scripts should be safe to run multiple times
-4. **Check Prerequisites**: Always verify Proxmox environment before proceeding
-5. **Follow Cloud-Init Best Practices**: Keep cloud-init configs simple and reliable
+### Ansible  
+- One playbook per service in `ansible/playbooks/services/`
+- Use Podman Quadlet (systemd containers)
+- VM creation = SSH to Proxmox, not API
+- Simple > complex
 
-### Ansible Development Best Practices
-
-1. **Service-Oriented Approach**: Create individual playbooks for each service in `ansible/playbooks/services/`
-2. **Use Semaphore Metadata**: Add `semaphore_*` fields to `vars_prompt` for automatic UI template generation
-3. **Container Deployment**: Use Podman Quadlet for systemd integration (see AdGuard example)
-4. **VM Creation**: Use SSH commands to Proxmox host, not API calls
-5. **Keep It Simple**: Avoid complex role hierarchies - direct, readable playbooks are preferred
-
-### Important Notes for Proxmox Operations
-
-#### Running Commands on Proxmox Host
-- When SSH'd into Proxmox as root, **never use sudo** - you're already root
-- Correct: `curl -fsSL ... | bash`
-- Incorrect: `curl -fsSL ... | sudo bash`
-- This applies to all commands run directly on the Proxmox host
-
-#### Bootstrap Timing Requirements
-- **ALWAYS wait the full requested time when monitoring bootstrap**
-- If user says "wait for 5 minutes", use `timeout=300000` (5 minutes in milliseconds)
-- Bootstrap takes 5-10 minutes to complete fully
-- Cloud-init needs time to install all packages and configure services
-- DO NOT interrupt or timeout early - the process needs to complete
+### Proxmox
+- Root user = NO sudo needed
+- Bootstrap = 5-10 min (WAIT FULL TIME)
+- timeout=300000 = 5 minutes
 
 ---
 
@@ -486,515 +427,104 @@ curl -s -b /tmp/semaphore-cookie http://VM_IP:3000/api/project/1/tasks/TASK_ID |
 
 ---
 
-## Context7 Documentation System
+## Context7 = Real Docs, Not Hallucinations
 
-**IMPORTANT**: Context7 is an MCP server that provides up-to-date, version-specific code documentation and examples directly from source libraries. This eliminates outdated or hallucinated code examples by fetching real-time documentation.
+### How to Use
+1. Search: `mcp__context7__resolve-library-id("ansible")`
+2. Load: `mcp__context7__get-library-docs("/ansible/ansible-documentation")`
 
-### What is Context7?
+### Project Libraries
+- Ansible: `/ansible/ansible-documentation` (Trust: 9.3)
+- Proxmox: `/proxmox/pve-docs` (Trust: 8.2)
+- Proxmox Ansible: `/ansible-collections/community.proxmox`
 
-Context7 is a Model Context Protocol (MCP) server designed to provide:
-- Real-time, accurate documentation pulled directly from source libraries
-- Version-specific code examples and API references
-- Current best practices and implementation patterns
-- Support for multiple libraries and frameworks
-
-### How to Use Context7 in Claude Code
-
-1. **Search for Libraries**: Use `mcp__context7__resolve-library-id` to find available documentation
-   ```
-   Function: mcp__context7__resolve-library-id
-   Parameter: libraryName (e.g., "ansible", "react", "fastapi")
-   
-   Returns: List of matching libraries with:
-   - Library ID (Context7-compatible identifier)
-   - Name and description
-   - Number of code snippets available
-   - Trust score (reliability indicator)
-   - Available versions (if applicable)
-   ```
-
-2. **Load Documentation**: Use `mcp__context7__get-library-docs` with the library ID
-   ```
-   Function: mcp__context7__get-library-docs
-   Parameters:
-   - context7CompatibleLibraryID: The exact ID from resolve-library-id
-   - tokens: Maximum tokens to retrieve (default: 10000)
-   - topic: Optional topic focus (e.g., "hooks", "routing")
-   
-   Example: Load /ansible/ansible-documentation with 10000 tokens
-   ```
-
-### Best Practices for Using Context7
-
-1. **Always Start with Context7**: When working on any technical task, immediately search for and load relevant documentation
-2. **Choose Libraries Wisely**: Select libraries based on:
-   - **Trust Score**: Prefer scores of 7-10 (more authoritative)
-   - **Code Snippets**: More snippets = better coverage
-   - **Name Match**: Exact matches are usually best
-   - **Version**: Use specific versions if the user mentions them
-3. **Load Multiple Sources**: For complex tasks, load documentation from multiple related libraries
-4. **Use Topic Filtering**: When you need specific information, use the `topic` parameter to focus results
-
-### Required Documentation for This Project
-
-1. **Ansible Documentation**: 
-   ```
-   Library ID: /ansible/ansible-documentation
-   Trust Score: 9.3
-   Code Snippets: 2366
-   Description: Core Ansible documentation with comprehensive examples
-   ```
-
-2. **Community Proxmox Collection**:
-   ```
-   Library ID: /ansible-collections/community.proxmox
-   Description: Proxmox integration modules for Ansible
-   ```
-
-3. **Proxmox VE Documentation**:
-   ```
-   Library ID: /proxmox/pve-docs
-   Trust Score: 8.2
-   Code Snippets: 1486
-   Description: Official Proxmox VE documentation
-   ```
-
-### Example Context7 Workflow
-
-```
-User: "Help me create a FastAPI application with authentication"
-
-Claude Code Actions:
-1. Search for FastAPI documentation:
-   mcp__context7__resolve-library-id("fastapi")
-   
-2. Load FastAPI docs:
-   mcp__context7__get-library-docs("/tiangolo/fastapi", tokens=10000)
-   
-3. Search for authentication libraries:
-   mcp__context7__resolve-library-id("fastapi authentication")
-   
-4. Load specific auth documentation if found
-5. Implement solution using current, accurate examples
-```
-
-### Common Technology Library IDs
-
-Here are some commonly used library IDs for quick reference:
-- Python: `/context7/python-3.9` (Trust: 10, Snippets: 13580)
-- React: Search "react" for latest options
-- Node.js: Search "node" or "nodejs"
-- Docker: Search "docker"
-- Kubernetes: Search "kubernetes"
-- AWS: Search "aws" or specific service names
-
-### Troubleshooting Context7
-
-- **"Documentation not found"**: The library might not be finalized. Try searching for alternative names or related libraries
-- **Empty results**: Some libraries are listed but not yet populated with documentation
-- **Version-specific needs**: If a user needs a specific version, check the `Versions` field in search results
-
-### For Future Agents
-
-When any agent works on this codebase or discusses technical topics:
-1. **Immediately search Context7** for relevant documentation before providing any code
-2. **Load multiple libraries** if the task involves multiple technologies
-3. **Reference loaded documentation** explicitly when implementing features
-4. **Update this list** if you discover useful library IDs for this project
+### Rules
+- ALWAYS load Context7 BEFORE coding
+- Trust score > 7 = good
+- More snippets = better
+- Load multiple libraries for complex tasks
 
 ---
 
-## Deep Thinking Requirements
+## Think First, Code Later
 
-### STOP AND THINK Protocol
+### STOP Protocol
+Before ANY action:
+1. PAUSE - What does user REALLY want?
+2. Context7 - Load docs FIRST
+3. Options - Consider 3+ approaches
+4. Simple - Simplest solution wins
 
-Before ANY action (planning, coding, or responding), you MUST:
-
-1. **PAUSE for 30-60 seconds** to consider:
-   - What is the user REALLY asking for?
-   - What are the hidden complexities?
-   - What could go wrong?
-   - Is there a simpler approach?
-
-2. **Three Perspectives Analysis**:
-   - **User Perspective**: What problem are they trying to solve?
-   - **System Perspective**: How does this fit the architecture?
-   - **Future Perspective**: How will this decision age?
-
-3. **Document Your Thinking**:
-   - Use the feature documentation structure (see below)
-   - Write out ALL options considered
-   - Explain WHY you rejected alternatives
-   - This creates a decision trail
-
-### Thinking Harder Checklist:
-- [ ] Did I load Context7 docs BEFORE forming opinions?
-- [ ] Did I consider at least 3 different approaches?
-- [ ] Did I question every assumption?
-- [ ] Did I look for existing solutions first?
-- [ ] Did I consider the maintenance burden?
-- [ ] Did I think about edge cases and failures?
-
-### Context7-First Thinking
-
-#### RULE: No Assumptions Without Documentation
-1. **ALWAYS start with Context7** - even for "simple" tasks
-2. **Load multiple sources** to get different perspectives
-3. **Read examples** before designing solutions
-4. **Challenge your memory** - docs might have better ways
-
-#### Thinking With Context7:
+### Context7 First
 ```
-User asks for feature X
-↓
-STOP - Load Context7 docs for X, related tools, and alternatives
-↓
-Read and analyze multiple approaches from docs
-↓
-ONLY THEN start thinking about implementation
+User asks → Load Context7 → Read examples → THEN plan
 ```
 
-#### Required Context7 Loads by Task:
-- **Any Ansible work**: Load ansible + relevant collections + best practices
-- **Any scripting**: Load shell/bash + coreutils + error handling guides
-- **Any container work**: Load docker + compose + security practices
-- **Any Proxmox work**: Load proxmox + API + ansible integration
+Required loads:
+- Ansible work → Load ansible docs
+- Bash scripts → Load shell/coreutils
+- Containers → Load docker/podman
+- Proxmox → Load proxmox + qm commands
 
-### Documentation-Driven Thinking
+### Big Feature? Write First
 
-#### MANDATORY: Create Feature Doc First
-Path: `documentation/features/[feature-name]/`
+Complex feature = Create docs in `documentation/features/[name]/`
+- What problem?
+- What options?  
+- What chosen? Why?
+- How test?
 
-Structure:
-```
-documentation/features/[feature-name]/
-├── README.md           # Overview and current status
-├── analysis.md         # Deep thinking documentation
-├── implementation.md   # Chosen approach with rationale
-├── alternatives.md     # Rejected approaches and why
-└── testing.md         # How we'll verify it works
-```
+Simple fix = Just do it.
 
-#### analysis.md Template:
-```markdown
-# Deep Analysis: [Feature Name]
+### TodoWrite = Think Tool
+Break tasks until tiny (<15 min each). If can't break down = don't understand yet.
 
-## Initial Thoughts (Before Research)
-[Write your first instincts - these might be wrong!]
-
-## Context7 Research Performed
-- Loaded: [library 1] - Key insights: ...
-- Loaded: [library 2] - Key insights: ...
-
-## Problem Decomposition
-1. Core problem: ...
-2. Sub-problems: ...
-3. Hidden complexities discovered: ...
-
-## Stakeholder Analysis
-- User needs: ...
-- System constraints: ...
-- Future implications: ...
-
-## Risk Analysis
-- What could break: ...
-- Security concerns: ...
-- Performance impacts: ...
-
-## Simplicity Check
-- Simplest possible solution: ...
-- Why we can/cannot use it: ...
-```
-
-### Planning as Thinking Exercise
-
-#### TodoWrite as Thinking Tool
-Don't just list tasks - use todos to THINK THROUGH the problem:
-
-1. **Break Down Until It Hurts**:
-   - Each todo should be <15 minutes of work
-   - If unsure how to do it, break it down more
-   - This forces you to think through details
-
-2. **Question Each Todo**:
-   - Is this necessary?
-   - What depends on this?
-   - What could go wrong?
-   - Is there a simpler way?
-
-3. **Order Reveals Dependencies**:
-   - Arrange todos to surface hidden dependencies
-   - This often reveals flawed assumptions
-
-#### Example Thinking Through Todos:
-```
-BAD: "Implement OPNsense deployment"
-
-GOOD:
-1. Research OPNsense VM requirements in docs
-2. Analyze existing VM creation patterns
-3. Document network architecture decisions
-4. Create feature documentation structure
-5. Design Ansible role variables
-6. Plan testing approach
-7. Consider rollback strategy
-[... each todo forces specific thinking]
-```
-
-### Simplicity Through Deep Thinking
-
-#### The Simplicity Paradox
-Simple solutions require the MOST thinking, not the least.
-
-#### Simplicity Thinking Process:
-1. **First Solution**: What comes to mind immediately?
-2. **Complex Solution**: What would "enterprise" do?
-3. **Stupid Simple**: What would a bash one-liner do?
-4. **Right Simple**: What's the sweet spot?
-
-#### Questions for Simpler Code:
-- Can existing tools do this?
-- Are we inventing problems?
-- What if we just... didn't?
-- Would a config file suffice?
-- Is this flexibility actually needed?
-
-#### Document Simplicity Decisions:
-In implementation.md, always include:
-```markdown
-## Simplicity Analysis
-- Initial approach: [complex thing]
-- Simplified to: [simpler thing]
-- Because: [specific reason]
-- Trade-offs accepted: [what we gave up]
-```
-
-### Thinking Accountability
-
-#### Every Significant Decision Requires:
-1. **A Feature Documentation Set** (in documentation/features/[feature-name]/)
-2. **Context7 Evidence** (what docs influenced this?)
-3. **Alternative Analysis** (what else was considered?)
-4. **Simplicity Justification** (why this level of complexity?)
-
-#### Thinking Review Checklist:
-Before presenting ANY plan:
-- [ ] Have I spent at least 5 minutes just thinking?
-- [ ] Have I loaded and read relevant Context7 docs?
-- [ ] Have I written out my thinking process?
-- [ ] Have I considered simpler alternatives?
-- [ ] Have I planned for failure cases?
-- [ ] Would I be happy maintaining this in 6 months?
-
-#### Red Flags That Indicate More Thinking Needed:
-- "This should work" → Think about failure modes
-- "It's standard practice" → Load Context7 and verify
-- "We'll figure it out later" → Think through it now
-- "This is temporary" → Design it properly anyway
-
-### Thinking Harder in Practice
-
-#### The Three-Read Rule:
-1. Read the user's request
-2. Read it again, looking for implicit requirements
-3. Read it a third time, questioning your understanding
-
-#### The Five Whys for Features:
-1. Why do they want this feature?
-2. Why is that important?
-3. Why now?
-4. Why this way?
-5. Why not something simpler?
-
-#### The Context7 Cascade:
-1. Load primary documentation
-2. Load related/alternative solutions
-3. Load anti-patterns and what to avoid
-4. Read examples of both good and bad approaches
-5. Only THEN start forming opinions
-
-#### The Simplicity Test:
-Can you explain your solution to someone unfamiliar with the project in under 2 minutes? If not, it might be too complex.
+### Simplicity Check
+1. First idea (usually complex)
+2. Stupid simple version  
+3. Right balance
+Pick #3.
 
 ---
 
-## Agent Architecture
+## 5 Agents
 
-### Overview
-PrivateBox uses a 4-agent architecture to maintain clear separation of concerns and ensure high-quality automation. **Main Claude acts as the default orchestrator for day-to-day tasks**, while the privatebox-orchestrator agent is reserved for complex multi-phase projects.
+### Who Does What
+| Agent | Purpose | Tools | When to use |
+|-------|---------|-------|-------------|
+| Main Claude | Daily tasks, investigate, delegate | NO Edit/Write | DEFAULT - use for everything |
+| privatebox-orchestrator | Complex planning only | Write .md only | Big multi-phase projects |
+| automation-engineer | Write ALL code | Full access | Any coding/automation |
+| system-debugger | Find problems | Read + Bash | Debug issues (ALWAYS Opus) |
+| technical-writer | User docs (fluent) | Edit .md only | User guides, troubleshooting |
+| internal-doc-writer | AI docs (caveman) | Edit .md only | CLAUDE.md, agent files |
 
-### Main Claude vs privatebox-orchestrator
+### Key Rules
+- Main Claude = default for EVERYTHING
+- Need code? → automation-engineer
+- Big project? → privatebox-orchestrator first
+- Problem? → system-debugger (Opus)
+- Docs? → technical-writer
 
-**Main Claude (Default)**:
-- Handles all day-to-day planning and delegation
-- Investigates issues and runs diagnostic commands
-- Creates simple handover instructions for automation-engineer
-- Manages task lists and coordinates work
-- **Tool Access**: Bash, Read, Grep, LS, Glob, TodoWrite, Task, WebSearch/WebFetch, Context7
-- **NEVER**: Uses Edit, Write, MultiEdit, or any code-writing tools
+### Examples
 
-**privatebox-orchestrator agent**:
-- Reserved for complex, multi-phase projects
-- Creates comprehensive documentation structures
-- Manages large-scale architectural changes
-- Coordinates work across multiple agents
-- **Tool Access**: TodoWrite, Task, Write (only .md files), Read
-- **When to use**: Only for projects requiring extensive planning documentation
+**Check only**: `Main Claude runs bash → reports`
 
-### The Four Specialized Agents
+**Need code**: `Main Claude → handover → automation-engineer → verify`
 
-#### 1. privatebox-orchestrator
-- **Purpose**: Complex project management and architectural planning
-- **Key Responsibilities**:
-  - Plan multi-phase implementations
-  - Create comprehensive handover documentation
-  - Design system architecture changes
-  - Coordinate complex workflows between agents
-- **Tool Access**: TodoWrite, Task, Write (only .md files), Read
-- **Never**: Writes code or modifies system files
-- **Invocation**: Only for complex projects requiring extensive documentation
+**Parallel**: `Debug + document = 2 agents at once`
 
-#### 2. automation-engineer
-- **Purpose**: Implement all automation and infrastructure as code
-- **Key Responsibilities**:
-  - Review handover documents from orchestrators
-  - Design and implement technical solutions
-  - Write Ansible playbooks, Bash scripts, configurations
-  - Create Proxmox automation via SSH commands
-  - Test implementations on actual infrastructure
-- **Tool Access**: Full access including Edit, Write, MultiEdit, Bash, Read, all tools
-- **Context7**: Must load relevant docs (Ansible, Bash, Podman, etc.)
-- **Philosophy**: 100% automation - no manual steps
-
-#### 3. system-debugger
-- **Purpose**: Diagnose and troubleshoot issues
-- **Key Responsibilities**:
-  - Perform root cause analysis of failures
-  - Gather logs and system state information
-  - Test debugging hypotheses systematically
-  - Create detailed diagnostic reports
-  - Recommend fixes (but not implement them)
-- **Tool Access**: Read-only tools + diagnostic Bash commands
-- **Specific tools**: Read, Grep, LS, Glob, Bash (for diagnostics only)
-- **Output**: Diagnostic reports and fix recommendations
-
-#### 4. technical-writer
-- **Purpose**: Create and maintain all technical documentation
-- **Key Responsibilities**:
-  - Write comprehensive deployment guides and procedures
-  - Create API documentation with examples
-  - Build troubleshooting resources from real issues
-  - Update CLAUDE.md with new patterns and lessons learned
-  - Maintain README files and architecture documentation
-- **Tool Access**: Read, Write/Edit (.md files only), Grep/Glob, WebSearch/WebFetch, Context7
-- **Philosophy**: Transform implementations into understanding
-- **Key Focus**: Make PrivateBox self-documenting
-
-### Agent Workflow Examples
-
-#### Simple Investigation (Main Claude Only)
-```
-User: "Check if Semaphore is running properly"
-    ↓
-Main Claude:
-1. Runs diagnostic commands:
-   - systemctl status semaphore
-   - curl http://VM_IP:3000/api/ping
-   - docker ps | grep semaphore
-2. Reports findings to user
-3. No code changes needed
-```
-
-#### Simple Coding Task (Main Claude → automation-engineer)
-```
-User: "Fix the AdGuard health check timeout"
-    ↓
-Main Claude:
-1. Investigates the issue with Read/Grep
-2. Creates simple handover instructions
-3. Delegates to automation-engineer
-    ↓
-automation-engineer:
-1. Reviews handover
-2. Implements the fix
-3. Tests the change
-    ↓
-Main Claude:
-1. Verifies fix with Bash commands
-2. Reports success to user
-```
-
-#### Complex Multi-Phase Project
-```
-User: "Deploy OPNsense with VLAN support"
-    ↓
-Main Claude:
-1. Recognizes this is complex
-2. Delegates to privatebox-orchestrator
-    ↓
-privatebox-orchestrator:
-1. Creates comprehensive plan
-2. Writes detailed handover docs
-3. Creates documentation structure
-4. Delegates to automation-engineer
-    ↓
-automation-engineer:
-1. Reviews handover document
-2. Loads Context7 docs (Proxmox, networking)
-3. Implements VM creation scripts
-4. Creates deployment automation
-5. Tests on actual infrastructure
-    ↓
-[If issues arise]
-    ↓
-system-debugger:
-1. Investigates failure
-2. Performs root cause analysis
-3. Provides fix recommendations
-    ↓
-Back to orchestrator for fix planning
-    ↓
-technical-writer:
-1. Documents the completed implementation
-2. Creates deployment guides
-3. Updates troubleshooting docs with any issues found
-4. Ensures CLAUDE.md reflects new patterns
-```
-
-### Using Agents
-
-1. **For new features/tasks**: Start with privatebox-orchestrator
-   ```
-   use the privatebox-orchestrator agent to plan deployment of Unbound DNS
-   ```
-
-2. **For implementation**: automation-engineer receives handover
-   ```
-   use the automation-engineer agent to implement the Unbound deployment from the handover document
-   ```
-
-3. **For issues**: system-debugger investigates
-   ```
-   use the system-debugger agent to debug why Semaphore cannot connect to hosts
-   ```
-
-4. **For documentation**: technical-writer creates guides
-   ```
-   use the technical-writer agent to document the AdGuard deployment process
-   ```
+**Big project**: `Main → orchestrator → engineer → debugger → writer`
 
 ### Agent Files
-The agent definitions are located in `.claude/agents/`:
-- `privatebox-orchestrator.md` - Project planning and delegation
-- `automation-engineer.md` - Implementation and automation
-- `system-debugger.md` - Debugging and root cause analysis
-- `technical-writer.md` - Documentation and knowledge management
+`.claude/agents/`:
+- `privatebox-orchestrator.md` = Complex planning, no code
+- `automation-engineer.md` = Writes ALL code/automation
+- `system-debugger.md` = Finds problems, no fixes
+- `technical-writer.md` = User docs (professional)
+- `internal-doc-writer.md` = AI docs (caveman)
 
-### Handover Documents
-- Location: `documentation/handovers/`
-- Templates: `documentation/handovers/templates/`
-- Active tasks: `documentation/handovers/active/`
-- Completed: `documentation/handovers/completed/`
+`documentation/handovers/` = task handoffs
 
 ---
 
@@ -1030,56 +560,4 @@ The bootstrap now runs completely hands-off in ~3 minutes.
 
 ## Lessons Learned
 
-### Phase 0 Lessons Learned (2025-07-24)
-
-#### Key Fixes and Discoveries
-
-1. **Hostname Resolution Fix**:
-   - **Problem**: "sudo: unable to resolve host ubuntu" errors after VM creation
-   - **Fix**: Added hostname configuration to cloud-init in `create-ubuntu-vm.sh`:
-     ```yaml
-     hostname: ubuntu
-     manage_etc_hosts: true
-     ```
-
-2. **Container Binding Behavior**:
-   - **Discovery**: Podman Quadlet containers bind to VM's specific IP, not localhost
-   - **Impact**: Health checks and API calls must use `ansible_default_ipv4.address`
-   - **Not a bug**: This is correct security behavior for systemd services
-
-3. **AdGuard Port Configuration**:
-   - **Problem**: AdGuard switches from port 3000 to configured port after setup
-   - **Fix**: Configure AdGuard to keep using port 3000 internally:
-     ```yaml
-     web:
-       port: 3000  # Keep internal port consistent
-       ip: "0.0.0.0"
-     ```
-
-4. **Password File Detection**:
-   - **Problem**: `lookup('file', path, errors='ignore')` returns empty string, not error
-   - **Fix**: Use stat module to check file existence before lookup:
-     ```yaml
-     - name: Check if password file exists
-       stat:
-         path: /etc/privatebox-adguard-password
-       register: password_file_stat
-     ```
-
-5. **Semaphore Task Execution**:
-   - **Problem**: Ansible running inside Semaphore cannot restart Semaphore
-   - **Fix**: Removed Semaphore restart task from playbooks
-   - **Lesson**: Consider execution context when designing automation
-
-6. **API Authentication Timing**:
-   - **Discovery**: AdGuard API requires different endpoints pre/post configuration
-   - **Solution**: Check `/control/status` redirect to determine configuration state
-   - **Implementation**: Conditional logic based on HTTP 302 vs 200 responses
-
-#### Best Practices Established
-
-1. **Always Test End-to-End**: Run from quickstart.sh to validate entire flow
-2. **Use VM IP for Services**: Never assume localhost binding in containers
-3. **Handle API State Changes**: Services may behave differently during/after setup
-4. **Check File Existence Explicitly**: Don't rely on lookup error handling
-5. **Consider Execution Context**: Automation running inside services it manages needs special handling
+See `CLAUDE-HISTORICAL.md` for detailed lessons and fixes from previous phases.

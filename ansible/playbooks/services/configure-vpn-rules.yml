@@ -43,33 +43,18 @@
     - name: opnsense_host
       prompt: "OPNsense IP address or hostname"
       private: no
-      semaphore_type: "string"
-      semaphore_required: true
-      semaphore_description: "OPNsense IP address or hostname"
     - name: enable_wireguard
       prompt: "Enable WireGuard VPN"
       private: no
       default: "true"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: true
-      semaphore_description: "Enable WireGuard VPN"
     - name: vpn_admin_access
       prompt: "Allow VPN users to access Management VLAN"
       private: no
       default: "false"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: false
-      semaphore_description: "Allow VPN users to access Management VLAN"
     - name: confirm_vpn_changes
       prompt: "Confirm VPN configuration changes"
       private: no
       default: "false"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: false
-      semaphore_description: "Confirm VPN configuration changes"
   
   tasks:
     - name: Pre-flight checks
