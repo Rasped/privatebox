@@ -1,0 +1,290 @@
+---
+- name: "OPNsense: Deploy VM on Proxmox"
+  hosts: proxmox
+  become: false  # Running as root on Proxmox
+  gather_facts: true
+  
+  vars:
+    service_name: "OPNsense Firewall"
+    service_description: "Secure firewall and routing platform for PrivateBox"
+    service_tag: "opnsense"
+    
+    # VM Configuration - can be overridden
+    opnsense_vm_id: 8000
+    opnsense_vm_name: "opnsense"
+    opnsense_memory: 2048
+    opnsense_cores: 2
+    opnsense_cpu: "host"
+    opnsense_disk_size: "16G"
+    opnsense_storage: "local-lvm"
+    opnsense_onboot: true
+    opnsense_qemu_agent: true
+    
+    # Network Configuration
+    opnsense_net0_bridge: "vmbr0"  # WAN interface
+    opnsense_net1_bridge: "vmbr1"  # LAN interface
+    
+    # OPNsense Image Configuration
+    opnsense_version: "24.7"
+    opnsense_base_url: "https://mirror.dns-root.de/opnsense/releases"
+    opnsense_image_name: "OPNsense-{{ opnsense_version }}-vm-amd64.qcow2"
+    opnsense_image_url: "{{ opnsense_base_url }}/{{ opnsense_version }}/{{ opnsense_image_name }}"
+    opnsense_checksum_url: "{{ opnsense_base_url }}/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-checksums-amd64.txt"
+    
+    # Local paths
+    template_dir: "/var/lib/vz/template/qemu"
+    image_path: "{{ template_dir }}/{{ opnsense_image_name }}"
+    checksum_path: "{{ template_dir }}/{{ opnsense_image_name }}.sha256"
+    
+    # Default values for prompts
+    confirm_deploy: true
+
+  tasks:
+    # Pre-deployment validation
+    - name: "{{ service_name }} - Pre-deployment checks"
+      when: confirm_deploy | bool
+      tags: [opnsense, preflight]
+      block:
+        - name: Check if Proxmox VE
+          assert:
+            that:
+              - ansible_distribution == "Debian"
+              - "'pve' in ansible_kernel"
+            fail_msg: "This playbook must run on a Proxmox VE host"
+            
+        - name: Check if VM ID already exists
+          shell: qm status {{ opnsense_vm_id }}
+          register: vm_exists
+          failed_when: false
+          changed_when: false
+          
+        - name: Fail if VM already exists
+          fail:
+            msg: "VM with ID {{ opnsense_vm_id }} already exists. Please remove it first or use a different ID."
+          when: vm_exists.rc == 0
+          
+        - name: Ensure template directory exists
+          file:
+            path: "{{ template_dir }}"
+            state: directory
+            mode: '0755'
+            
+        - name: Check available storage
+          command: pvesm status
+          register: storage_status
+          changed_when: false
+          
+        - name: Display available storage
+          debug:
+            msg: "Available storage pools: {{ storage_status.stdout }}"
+
+    # Download and verify OPNsense image
+    - name: "{{ service_name }} - Download and verify image"
+      when: confirm_deploy | bool
+      tags: [opnsense, download]
+      block:
+        - name: Check if image already exists
+          stat:
+            path: "{{ image_path }}"
+          register: image_exists
+          
+        - name: Download OPNsense checksum file
+          get_url:
+            url: "{{ opnsense_checksum_url }}"
+            dest: "{{ checksum_path }}.full"
+            mode: '0644'
+          when: not image_exists.stat.exists
+          
+        - name: Extract relevant checksum
+          shell: |
+            grep "{{ opnsense_image_name }}" "{{ checksum_path }}.full" | awk '{print $4}' > "{{ checksum_path }}"
+          when: not image_exists.stat.exists
+          
+        - name: Read checksum
+          slurp:
+            src: "{{ checksum_path }}"
+          register: checksum_content
+          when: not image_exists.stat.exists
+          
+        - name: Set checksum fact
+          set_fact:
+            opnsense_sha256: "{{ checksum_content.content | b64decode | trim }}"
+          when: not image_exists.stat.exists
+          
+        - name: Download OPNsense image
+          get_url:
+            url: "{{ opnsense_image_url }}"
+            dest: "{{ image_path }}"
+            checksum: "sha256:{{ opnsense_sha256 }}"
+            mode: '0644'
+          when: not image_exists.stat.exists
+          register: download_result
+          
+        - name: Verify downloaded image
+          stat:
+            path: "{{ image_path }}"
+          register: downloaded_image
+          
+        - name: Display image info
+          debug:
+            msg:
+              - "Image downloaded: {{ downloaded_image.stat.exists }}"
+              - "Image size: {{ (downloaded_image.stat.size / 1024 / 1024) | round(2) }} MB"
+              - "Image path: {{ image_path }}"
+
+    # Create VM
+    - name: "{{ service_name }} - Create VM"
+      when: confirm_deploy | bool
+      tags: [opnsense, create]
+      block:
+        - name: Create VM with basic configuration
+          command: |
+            qm create {{ opnsense_vm_id }} \
+              --name {{ opnsense_vm_name }} \
+              --memory {{ opnsense_memory }} \
+              --cores {{ opnsense_cores }} \
+              --cpu {{ opnsense_cpu }} \
+              --ostype l26 \
+              --agent {{ opnsense_qemu_agent | int }} \
+              --onboot {{ opnsense_onboot | int }}
+          register: vm_create
+          
+        - name: Configure network interfaces
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --net0 virtio,bridge={{ opnsense_net0_bridge }} \
+              --net1 virtio,bridge={{ opnsense_net1_bridge }}
+          when: vm_create.changed
+          
+        - name: Import disk image
+          command: |
+            qm importdisk {{ opnsense_vm_id }} {{ image_path }} {{ opnsense_storage }}
+          register: import_disk
+          when: vm_create.changed
+          
+        - name: Get imported disk name
+          shell: |
+            qm config {{ opnsense_vm_id }} | grep -E '^unused[0-9]+:' | head -1 | cut -d' ' -f2
+          register: imported_disk
+          when: import_disk.changed
+          
+        - name: Attach imported disk
+          command: |
+            qm set {{ opnsense_vm_id }} --scsi0 {{ imported_disk.stdout }},size={{ opnsense_disk_size }}
+          when: imported_disk.stdout is defined and imported_disk.stdout
+          
+        - name: Set boot device
+          command: |
+            qm set {{ opnsense_vm_id }} --boot c --bootdisk scsi0
+          when: vm_create.changed
+          
+        - name: Add serial console
+          command: |
+            qm set {{ opnsense_vm_id }} --serial0 socket --vga serial0
+          when: vm_create.changed
+
+    # Start VM and wait for it to be accessible
+    - name: "{{ service_name }} - Start VM"
+      when: confirm_deploy | bool
+      tags: [opnsense, start]
+      block:
+        - name: Start VM
+          command: qm start {{ opnsense_vm_id }}
+          register: vm_start
+          
+        - name: Wait for VM to boot
+          pause:
+            seconds: 60
+          when: vm_start.changed
+          
+        - name: Get VM status
+          command: qm status {{ opnsense_vm_id }}
+          register: vm_status
+          changed_when: false
+          
+        - name: Display VM status
+          debug:
+            msg: "VM Status: {{ vm_status.stdout }}"
+            
+        - name: Get VM configuration
+          command: qm config {{ opnsense_vm_id }}
+          register: vm_config
+          changed_when: false
+          
+        - name: Note about initial configuration
+          debug:
+            msg:
+              - "=========================================="
+              - "OPNsense VM Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "VM ID: {{ opnsense_vm_id }}"
+              - "VM Name: {{ opnsense_vm_name }}"
+              - "Status: {{ vm_status.stdout }}"
+              - ""
+              - "Network Configuration:"
+              - "- WAN (net0): {{ opnsense_net0_bridge }}"
+              - "- LAN (net1): {{ opnsense_net1_bridge }}"
+              - ""
+              - "Initial Access:"
+              - "1. Console: qm terminal {{ opnsense_vm_id }}"
+              - "2. Default credentials: root / opnsense"
+              - "3. LAN IP: 192.168.1.1 (default)"
+              - "4. Web UI: https://192.168.1.1"
+              - ""
+              - "Next Steps:"
+              - "1. Complete initial setup via console"
+              - "2. Run opnsense-configure-initial.yml"
+              - "=========================================="
+
+    # Post-deployment validation
+    - name: "{{ service_name }} - Post-deployment validation"
+      when: confirm_deploy | bool
+      tags: [opnsense, validate]
+      block:
+        - name: Verify VM is running
+          command: qm status {{ opnsense_vm_id }}
+          register: final_status
+          failed_when: "'running' not in final_status.stdout"
+          changed_when: false
+          
+        - name: Check QEMU guest agent
+          command: qm agent {{ opnsense_vm_id }} ping
+          register: agent_ping
+          failed_when: false
+          changed_when: false
+          
+        - name: Display agent status
+          debug:
+            msg: "QEMU Guest Agent: {{ 'Available' if agent_ping.rc == 0 else 'Not ready (this is normal for initial boot)' }}"
+            
+        - name: Save deployment info
+          copy:
+            content: |
+              {{ service_name }} VM Deployment Information
+              =========================================
+              Deployed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+              
+              VM Configuration:
+              - VM ID: {{ opnsense_vm_id }}
+              - VM Name: {{ opnsense_vm_name }}
+              - Memory: {{ opnsense_memory }} MB
+              - Cores: {{ opnsense_cores }}
+              - Disk: {{ opnsense_disk_size }}
+              - Storage: {{ opnsense_storage }}
+              
+              Network:
+              - WAN: {{ opnsense_net0_bridge }}
+              - LAN: {{ opnsense_net1_bridge }}
+              
+              Image: {{ opnsense_image_name }}
+              Version: {{ opnsense_version }}
+            dest: "/opt/privatebox/deployment-info-opnsense-vm.txt"
+            mode: '0644'
+          delegate_to: localhost
+          become: false
+
+  handlers:
+    - name: restart vm
+      command: qm reset {{ opnsense_vm_id }}
