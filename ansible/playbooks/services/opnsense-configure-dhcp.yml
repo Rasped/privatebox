@@ -11,10 +11,15 @@
     
     # Default DHCP settings
     default_lease_time: 7200
-    max_lease_time: 86400      opnsense_host:
-        semaphore_type: "string"
-        semaphore_required: true
-        semaphore_description: "OPNsense IP address or hostname"
+    max_lease_time: 86400
+  
+  vars_prompt:
+    - name: opnsense_host
+      prompt: "OPNsense IP address or hostname"
+      private: no
+      semaphore_type: "string"
+      semaphore_required: true
+      semaphore_description: "OPNsense IP address or hostname"
   
   tasks:
     - name: Pre-flight checks
