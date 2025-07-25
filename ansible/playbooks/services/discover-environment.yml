@@ -1,5 +1,5 @@
 ---
-- name: Discover Proxmox Environment
+- name: Environment: Discover Proxmox
   hosts: proxmox
   gather_facts: true
   
@@ -14,9 +14,7 @@
     # Default values for hands-off deployment
     confirm_discovery: true
     
-    # Empty vars_prompt for Semaphore template generation
-    _semaphore_vars_prompt:
-      confirm_discovery:
+    # Empty vars_prompt for Semaphore template generation      confirm_discovery:
         type: "yes_no"
         description: "Confirm environment discovery"
         required: false

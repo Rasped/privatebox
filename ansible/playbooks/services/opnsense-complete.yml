@@ -1,5 +1,5 @@
 ---
-- name: Complete OPNsense Configuration
+- name: OPNsense: Complete Configuration
   hosts: container-host
   become: true
   gather_facts: true
@@ -7,11 +7,7 @@
   vars:
     service_name: "OPNsense Complete Setup"
     service_description: "Run all OPNsense configuration playbooks in sequence"
-    service_tag: "opnsense-complete"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_vm_id:
+    service_tag: "opnsense-complete"      opnsense_vm_id:
         semaphore_type: "integer"
         semaphore_required: true
         semaphore_description: "OPNsense VM ID"

@@ -1,7 +1,7 @@
 ---
 # Task 5.4: Configure VPN Access Rules
 # Set up secure remote access with WireGuard VPN
-- name: Configure OPNsense VPN Access Rules
+- name: OPNsense: Configure VPN Rules
   hosts: container-host
   become: true
   gather_facts: true
@@ -37,11 +37,7 @@
         description: "VPN users cannot access management by default"
       - name: "vpn_to_iot"
         allow: false
-        description: "VPN users cannot access IoT"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_host:
+        description: "VPN users cannot access IoT"      opnsense_host:
         semaphore_type: "string"
         semaphore_required: true
         semaphore_description: "OPNsense IP address or hostname"

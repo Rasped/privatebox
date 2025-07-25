@@ -1,5 +1,5 @@
 ---
-- name: Deploy OPNsense VM
+- name: OPNsense: Deploy VM
   hosts: proxmox
   gather_facts: false
   
@@ -9,12 +9,7 @@
     min_memory_mb: 2048
     min_cpus: 1
     optimal_memory_mb: 4096
-    optimal_cpus: 2
-    
-    # Metadata for Semaphore template generation
-    # Empty dict means generate template without survey variables (hands-off deployment)
-    _semaphore_vars_prompt: {}
-    
+    optimal_cpus: 2    
   tasks:
     - name: Load discovery data
       include_vars:

@@ -1,5 +1,5 @@
 ---
-- name: Configure DNS resolver on OPNsense
+- name: OPNsense: Configure DNS
   hosts: container-host
   become: true
   gather_facts: true
@@ -19,11 +19,7 @@
       - "1.1.1.1"
       - "1.0.0.1"
       - "9.9.9.9"
-      - "149.112.112.112"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_host:
+      - "149.112.112.112"      opnsense_host:
         semaphore_type: "string"
         semaphore_required: true
         semaphore_description: "OPNsense IP address or hostname"

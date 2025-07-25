@@ -4,31 +4,12 @@
   gather_facts: no
 
   vars:
+    # Exclude from Semaphore - test playbook only
+    semaphore_exclude: true
+    
     # Regular variable (not a survey field)
     log_level: debug
     container_name: test-service
-    
-    # Semaphore template metadata - used by generate-templates.py
-    _semaphore_vars_prompt:
-      service_enabled:
-        type: boolean
-        description: "Enable or disable the test service"
-        required: true
-        
-      service_port:
-        type: integer
-        description: "Port number for the test service"
-        min: 1024
-        max: 65535
-        required: true
-        
-      service_name:
-        type: text
-        description: "Display name for the service"
-        required: false
-      
-      # Note: admin_password is not included since it's private
-      # and shouldn't appear in Semaphore survey
 
   vars_prompt:
     - name: service_enabled

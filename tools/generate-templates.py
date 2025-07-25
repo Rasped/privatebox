@@ -221,42 +221,40 @@ def parse_playbook(playbook_path):
         if not isinstance(play, dict):
             return None
         
-        # Check for metadata structure in vars
+        # Check for explicit exclusion
         vars_section = play.get('vars', {})
-        
-        # Check if _semaphore_vars_prompt key exists (even if empty)
-        if '_semaphore_vars_prompt' not in vars_section:
-            # No metadata key found - skip this playbook
+        if vars_section.get('semaphore_exclude', False):
+            # Playbook explicitly excluded from Semaphore
             return None
-            
-        metadata = vars_section.get('_semaphore_vars_prompt', {})
         
-        # Also get vars_prompt to match variable names
+        # Get vars_prompt for variables
         vars_prompt = play.get('vars_prompt', [])
         
-        # Build vars list from vars_prompt, enriched with metadata
+        # Build vars list from vars_prompt (if any)
         semaphore_vars = []
         
         for var_prompt in vars_prompt:
-            var_name = var_prompt.get('name')
-            if var_name and var_name in metadata:
-                # Merge prompt info with metadata
-                var_info = var_prompt.copy()
-                var_metadata = metadata[var_name]
-                # Add semaphore fields with prefix for compatibility
-                var_info['semaphore_type'] = var_metadata.get('type', 'text')
-                var_info['semaphore_description'] = var_metadata.get('description', var_prompt.get('prompt', ''))
-                var_info['semaphore_required'] = var_metadata.get('required', True)
-                if 'min' in var_metadata:
-                    var_info['semaphore_min'] = var_metadata['min']
-                if 'max' in var_metadata:
-                    var_info['semaphore_max'] = var_metadata['max']
-                semaphore_vars.append(var_info)
+            var_info = var_prompt.copy()
+            # Use semaphore_* fields if present in vars_prompt
+            if 'semaphore_type' in var_prompt:
+                var_info['semaphore_type'] = var_prompt['semaphore_type']
+            else:
+                var_info['semaphore_type'] = 'text'  # default
+                
+            if 'semaphore_description' in var_prompt:
+                var_info['semaphore_description'] = var_prompt['semaphore_description']
+            elif 'prompt' in var_prompt:
+                var_info['semaphore_description'] = var_prompt['prompt']
+                
+            var_info['semaphore_required'] = var_prompt.get('semaphore_required', 
+                                                           not var_prompt.get('private', True))
+            
+            semaphore_vars.append(var_info)
         
         # Get the hosts to determine which inventory to use
         hosts = play.get('hosts', 'all')
         
-        # Return playbook info even if no survey vars (for hands-off deployment)
+        # Return playbook info (all playbooks are included by default)
         return {
             'name': play.get('name', 'Unnamed playbook'),
             'hosts': hosts,
@@ -333,8 +331,8 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
     """Create or update a template based on playbook information."""
     headers = {"Authorization": f"Bearer {api_token}"}
     
-    # Determine template name
-    template_name = playbook_info.get('template_name', f"Deploy: {playbook_path.stem}")
+    # Use play name as template name
+    template_name = playbook_info.get('name', playbook_path.stem)
     
     # Convert variables to survey format
     survey_vars = convert_to_survey_vars(playbook_info['vars'])
