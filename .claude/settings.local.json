@@ -49,7 +49,9 @@
       "Bash(do sed -i 's/hosts: proxmox-host/hosts: proxmox/g' \"$file\")",
       "Bash(echo:*)",
       "Bash(done)",
-      "Bash(dig:*)"
+      "Bash(dig:*)",
+      "Bash(ansible-playbook:*)",
+      "WebFetch(domain:docs.anthropic.com)"
     ],
     "deny": []
   }

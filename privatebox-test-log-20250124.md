@@ -4,7 +4,7 @@
 **Test Environment**: Proxmox 192.168.1.10
 **Tester**: Claude Code
 **Log File**: /Users/rasped/privatebox/privatebox-test-log-20250124.md
-**Last Updated**: 2025-01-24 22:10
+**Last Updated**: 2025-01-25 11:30
 
 ## Test Execution Rules
 1. ✅ Each step must complete successfully before proceeding
@@ -23,11 +23,14 @@
 4. **Semaphore-setup.sh**: Not checking /etc/privatebox-proxmox-host file - Added check
 5. **Semaphore-setup.sh**: Not adding discovered Proxmox to inventory - Fixed
 6. **Semaphore-setup.sh**: Template sync looking for "Default Inventory" instead of "VM Inventory" - Fixed
+7. **Semaphore-setup.sh**: SSH key and inventory naming inconsistent - Streamlined to match machines
+8. **AdGuard.yml**: DNS modifications broke VM internet access - Split into deploy and activate playbooks
 
 ### Commits:
 - fd98c5a: Fix Proxmox host discovery reliability 
 - 384fe41: Add Proxmox host to Semaphore inventory when discovered
-- [pending]: Fix template sync to use "VM Inventory" instead of "Default Inventory"
+- fd7f35f: Streamline SSH key and inventory naming for consistency
+- dce81c0: Split AdGuard deployment and DNS activation into separate playbooks
 
 ### Final Test Result: ✅ SUCCESS
 - Deployment Time: ~2:48 (20:28:00 - 20:30:48)
@@ -729,4 +732,58 @@ local inv_id=$(get_inventory_id_by_name "http://localhost:3000" "$admin_session"
 - Aligns with the new dual-inventory architecture
 
 **Verification Needed**: Run bootstrap again to confirm template generation now works
+
+
+## Test Run 5: Complete Hands-Off Success with DNS Fix
+
+### Quickstart Deployment
+**Time**: 13:15:14 - 13:18:05
+**Duration**: ~3 minutes
+**VM Created**: 192.168.1.21
+**Result**: ✅ SUCCESS
+
+**Key Improvements Verified**:
+1. ✅ SSH keys named correctly: "proxmox" and "container-host"
+2. ✅ Inventories named correctly: "proxmox" and "container-host"
+3. ✅ Template generation successful (17 templates created)
+4. ✅ Bootstrap completed 100% hands-off
+
+**Credentials**:
+- SSH: ubuntuadmin/Changeme123
+- Semaphore: admin/r2t-CGK4Ss(5u4VvMz+0ucwuYbJZZuEP
+
+### AdGuard Deployment Test
+**Time**: 13:28:26
+**Task ID**: 3
+**Result**: ✅ SUCCESS
+
+**Key Verification**:
+1. ✅ AdGuard deployed successfully via Semaphore
+2. ✅ VM DNS still works (using systemd-resolved at 127.0.0.53)
+3. ✅ GitHub.com resolves successfully (no circular dependency)
+4. ✅ AdGuard web UI accessible at http://192.168.1.21:8080
+5. ✅ AdGuard DNS service working on port 53
+6. ✅ /etc/resolv.conf NOT modified (still using systemd stub)
+
+**DNS Test Results**:
+- System DNS: `nslookup github.com` → Success (via 127.0.0.53)
+- AdGuard DNS: `dig @192.168.1.21 google.com` → Success (142.250.74.46)
+
+### Architecture Validation
+The split deployment/activation approach works perfectly:
+- AdGuard runs as a service but doesn't break system DNS
+- Semaphore can continue to clone from GitHub
+- Ready for OPNsense deployment without DNS issues
+- DNS activation can be done later when all services are ready
+
+**Known Issue**:
+- activate-adguard-dns.yml template not auto-created during bootstrap
+- Manual template regeneration didn't pick it up either
+- May need to investigate template generator logic for new playbooks
+
+**Next Steps**: 
+- Add vars_prompt to OPNsense playbooks for Semaphore templates
+- Deploy OPNsense while DNS still works
+- Configure network architecture
+- Run activate-adguard-dns.yml only when ready (manually or after fixing template generation)
 
