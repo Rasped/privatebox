@@ -2,7 +2,7 @@
 # Task 6.1: Pre-Migration Validation
 # Ensure environment ready for migration to VLAN network
 
-- name: Pre-Migration Validation Checks
+- name: Migration: Pre-Check Validation
   hosts: all
   gather_facts: yes
   vars_prompt:

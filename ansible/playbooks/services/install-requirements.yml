@@ -4,6 +4,9 @@
   gather_facts: false
   
   vars:
+    # Exclude from Semaphore - internal use only
+    semaphore_exclude: true
+    
     required_collections:
       - name: community.general
         version: ">=7.0.0"

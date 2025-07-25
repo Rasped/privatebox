@@ -1,5 +1,5 @@
 ---
-- name: Configure DHCP services on OPNsense
+- name: OPNsense: Configure DHCP
   hosts: container-host
   become: true
   gather_facts: true
@@ -11,11 +11,7 @@
     
     # Default DHCP settings
     default_lease_time: 7200
-    max_lease_time: 86400
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_host:
+    max_lease_time: 86400      opnsense_host:
         semaphore_type: "string"
         semaphore_required: true
         semaphore_description: "OPNsense IP address or hostname"

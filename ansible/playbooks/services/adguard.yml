@@ -1,5 +1,5 @@
 ---
-- name: Deploy AdGuard Home DNS Filter
+- name: AdGuard: Deploy DNS Filter
   hosts: container-host
   become: true
   gather_facts: true
@@ -60,9 +60,6 @@
     systemd_timeout_start_sec: 900
     systemd_timeout_stop_sec: 90
     
-    # Metadata for Semaphore template generation
-    # Empty dict means generate template without survey variables (hands-off deployment)
-    _semaphore_vars_prompt: {}
 
   tasks:
     # Pre-deployment validation

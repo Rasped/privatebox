@@ -1,5 +1,5 @@
 ---
-- name: Manage OPNsense Image
+- name: OPNsense: Manage Image
   hosts: proxmox
   gather_facts: false
   
@@ -14,12 +14,7 @@
       - name: "Mirror EU2"
         url: "https://mirror.terrahost.no/opnsense/releases/{{ opnsense_version }}/{{ image_filename }}"
     checksum_url: "https://opnsense.org/download/"
-    image_dir: "/var/lib/vz/template/iso"
-    
-    # Metadata for Semaphore template generation
-    # Empty dict means generate template without survey variables (hands-off deployment)
-    _semaphore_vars_prompt: {}
-    
+    image_dir: "/var/lib/vz/template/iso"    
   tasks:
     - name: Check if discovery data exists
       stat:

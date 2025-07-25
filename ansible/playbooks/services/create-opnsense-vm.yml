@@ -3,7 +3,7 @@
 # This playbook creates the OPNsense VM with proper specifications
 # and attaches network interfaces according to the network plan
 
-- name: Create OPNsense VM
+- name: OPNsense: Create VM
   hosts: proxmox
   gather_facts: true
   
@@ -16,12 +16,7 @@
     iso_storage: "local"
     vm_storage: "local-lvm"
     opnsense_version: "24.7"
-    opnsense_iso: "OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
-    
-    # Metadata for Semaphore template generation
-    # Empty dict means generate template without survey variables (hands-off deployment)
-    _semaphore_vars_prompt: {}
-    
+    opnsense_iso: "OPNsense-{{ opnsense_version }}-dvd-amd64.iso"    
   tasks:
     - name: Check if VM already exists
       shell: |

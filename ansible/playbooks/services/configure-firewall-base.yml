@@ -1,7 +1,7 @@
 ---
 # Task 5.1: Create Base Firewall Rules Template
 # Implements foundational security rules for OPNsense based on Phase 3 planning
-- name: Configure OPNsense Base Firewall Rules
+- name: OPNsense: Configure Base Firewall
   hosts: container-host
   become: true
   gather_facts: true
@@ -17,11 +17,7 @@
     
     # Secure paths
     backup_dir: "/opt/privatebox/backups"
-    scripts_dir: "/opt/privatebox/scripts"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_host:
+    scripts_dir: "/opt/privatebox/scripts"      opnsense_host:
         semaphore_type: "string"
         semaphore_required: true
         semaphore_description: "OPNsense IP address or hostname"

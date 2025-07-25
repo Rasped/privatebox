@@ -2,7 +2,7 @@
 # Task 6.3: Deploy OPNsense with VLAN Support
 # Deploy OPNsense VM with all VLANs configured
 
-- name: Deploy OPNsense with VLAN Support
+- name: OPNsense: Deploy with VLAN Support
   hosts: proxmox
   gather_facts: yes
   vars_prompt:

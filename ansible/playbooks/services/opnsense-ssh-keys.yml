@@ -1,5 +1,5 @@
 ---
-- name: Inject SSH keys into OPNsense configuration
+- name: OPNsense: Inject SSH Keys
   hosts: container-host
   become: true
   gather_facts: true
@@ -14,11 +14,7 @@
     ssh_private_key_path: "/root/.ssh/id_rsa"
     
     # OPNsense configuration path (on Proxmox host)
-    opnsense_config_path: "/tmp/opnsense-config.xml"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_vm_id:
+    opnsense_config_path: "/tmp/opnsense-config.xml"      opnsense_vm_id:
         semaphore_type: "integer"
         semaphore_required: true
         semaphore_description: "OPNsense VM ID"

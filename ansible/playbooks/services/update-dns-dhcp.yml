@@ -2,7 +2,7 @@
 # Task 6.5: Update DNS and DHCP Configuration
 # Configure DHCP servers for all VLANs
 
-- name: Update DNS and DHCP for VLAN Network
+- name: Network: Update DNS and DHCP
   hosts: proxmox
   gather_facts: yes
   vars_prompt:

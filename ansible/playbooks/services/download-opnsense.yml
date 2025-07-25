@@ -3,7 +3,7 @@
 # This playbook downloads the latest OPNsense ISO to Proxmox storage
 # and verifies the checksum
 
-- name: Download OPNsense ISO
+- name: OPNsense: Download ISO
   hosts: proxmox
   gather_facts: false
   
@@ -12,12 +12,7 @@
     opnsense_iso: "OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
     iso_storage_path: "/var/lib/vz/template/iso"
     download_url: "https://mirror.dns-root.de/opnsense/releases/{{ opnsense_version }}/{{ opnsense_iso }}"
-    checksum_url: "https://mirror.dns-root.de/opnsense/releases/{{ opnsense_version }}/{{ opnsense_iso }}.sha256"
-    
-    # Metadata for Semaphore template generation
-    # Empty dict means generate template without survey variables (hands-off deployment)
-    _semaphore_vars_prompt: {}
-    
+    checksum_url: "https://mirror.dns-root.de/opnsense/releases/{{ opnsense_version }}/{{ opnsense_iso }}.sha256"    
   tasks:
     - name: Ensure ISO storage directory exists
       file:

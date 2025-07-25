@@ -1,7 +1,7 @@
 ---
 # Task 5.2: Implement Inter-VLAN Routing Rules
 # Configure controlled VLAN communication based on security matrix
-- name: Configure OPNsense Inter-VLAN Routing Rules
+- name: OPNsense: Configure Inter-VLAN Routing
   hosts: container-host
   become: true
   gather_facts: true
@@ -13,11 +13,7 @@
     
     # API credentials location
     api_key_file: "/etc/privatebox-opnsense-api-key"
-    api_secret_file: "/etc/privatebox-opnsense-api-secret"
-    
-    # Metadata for Semaphore template generation
-    _semaphore_vars_prompt:
-      opnsense_host:
+    api_secret_file: "/etc/privatebox-opnsense-api-secret"      opnsense_host:
         semaphore_type: "string"
         semaphore_required: true
         semaphore_description: "OPNsense IP address or hostname"
