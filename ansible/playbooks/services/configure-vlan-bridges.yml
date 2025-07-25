@@ -9,17 +9,11 @@
     - name: physical_interface
       prompt: "Physical interface for VLAN trunk (e.g., enp1s0)"
       private: no
-      semaphore_type: "text"
-      semaphore_display_name: "Physical Interface"
-      semaphore_description: "The physical network interface to use for VLAN trunk"
     
     - name: create_backup
       prompt: "Create backup of network configuration? (yes/no)"
       default: "yes"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_display_name: "Create Backup"
-      semaphore_description: "Backup current network configuration before changes"
 
   vars:
     vlan_bridges:

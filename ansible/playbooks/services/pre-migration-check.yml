@@ -10,9 +10,6 @@
       prompt: "Continue migration if warnings are found? (yes/no)"
       default: "no"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_display_name: "Continue on Warnings"
-      semaphore_description: "Allow migration to proceed with non-critical warnings"
 
   vars:
     validation_results_path: "/var/log/privatebox/pre-migration-validation.log"

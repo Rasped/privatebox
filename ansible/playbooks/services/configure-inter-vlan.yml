@@ -19,17 +19,10 @@
     - name: opnsense_host
       prompt: "OPNsense IP address or hostname"
       private: no
-      semaphore_type: "string"
-      semaphore_required: true
-      semaphore_description: "OPNsense IP address or hostname"
     - name: confirm_routing_changes
       prompt: "Confirm inter-VLAN routing changes"
       private: no
       default: "false"
-      semaphore_type: "boolean"
-      semaphore_required: true
-      semaphore_default: false
-      semaphore_description: "Confirm inter-VLAN routing changes"
   
   tasks:
     - name: Pre-flight checks

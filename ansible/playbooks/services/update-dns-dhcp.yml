@@ -10,17 +10,11 @@
       prompt: "OPNsense management IP"
       default: "10.100.0.1"
       private: no
-      semaphore_type: "text"
-      semaphore_display_name: "OPNsense IP"
-      semaphore_description: "IP address of OPNsense on management VLAN"
     
     - name: configure_static_mappings
       prompt: "Configure static DHCP mappings? (yes/no)"
       default: "yes"
       private: no
-      semaphore_type: "yes_no"
-      semaphore_display_name: "Static Mappings"
-      semaphore_description: "Create static DHCP reservations for known services"
 
   vars:
     # VLAN DHCP configurations

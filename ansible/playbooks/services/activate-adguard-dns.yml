@@ -13,8 +13,6 @@
       prompt: "This will configure the system to use AdGuard for DNS. Continue?"
       default: "yes"
       private: false
-      semaphore_type: "yes_no"
-      semaphore_description: "Activate AdGuard as the system DNS resolver"
       
   tasks:
     - name: Pre-activation checks
