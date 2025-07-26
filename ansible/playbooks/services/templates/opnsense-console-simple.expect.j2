@@ -16,104 +16,103 @@ log_file /tmp/opnsense-console-config.log
 
 send_user "Starting OPNsense console configuration for VM $vm_id\n"
 
-# Use SSH to send keystrokes to VM console
-spawn ssh root@{{ proxmox_host }} "qm sendkey $vm_id"
+# Note: We'll use exec to run commands directly, not spawn
 
 send_user "Waiting 30 seconds for boot to complete...\n"
 sleep 30
 
 # Send Enter to get to login prompt
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Type root username
 send_user "Sending username...\n"
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id r o o t"
+exec qm sendkey $vm_id r o o t
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Type default password
 send_user "Sending password...\n"
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id o p n s e n s e"
+exec qm sendkey $vm_id o p n s e n s e
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 5
 
 # Wait for menu and select option 2 (Set interface IP)
 send_user "Selecting interface configuration...\n"
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id 2"
+exec qm sendkey $vm_id 2
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Select interface 1 (LAN)
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id 1"
+exec qm sendkey $vm_id 1
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # No DHCP
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id n"
+exec qm sendkey $vm_id n
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Enter IP address
 send_user "Setting IP address to $lan_ip...\n"
 foreach char [split $lan_ip ""] {
     if {$char == "."} {
-        exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id dot"
+        exec qm sendkey $vm_id dot
     } else {
-        exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id $char"
+        exec qm sendkey $vm_id $char
     }
     sleep 0.1
 }
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Enter netmask
 send_user "Setting netmask to $lan_netmask...\n"
 foreach char [split $lan_netmask ""] {
-    exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id $char"
+    exec qm sendkey $vm_id $char
     sleep 0.1
 }
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Enter gateway
 send_user "Setting gateway to $lan_gateway...\n"
 foreach char [split $lan_gateway ""] {
     if {$char == "."} {
-        exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id dot"
+        exec qm sendkey $vm_id dot
     } else {
-        exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id $char"
+        exec qm sendkey $vm_id $char
     }
     sleep 0.1
 }
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Skip IPv6
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id n"
+exec qm sendkey $vm_id n
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # No DHCP server
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id n"
+exec qm sendkey $vm_id n
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Keep HTTPS
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id n"
+exec qm sendkey $vm_id n
 sleep 1
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 2
 
 # Press enter to continue
-exec ssh root@{{ proxmox_host }} "qm sendkey $vm_id ret"
+exec qm sendkey $vm_id ret
 sleep 5
 
 send_user "\n===========================================\n"
