@@ -104,7 +104,7 @@
           
         - name: Extract relevant checksum
           shell: |
-            grep "{{ opnsense_image_name }}" "{{ checksum_path }}.full" | awk '{print $2}' | sed 's/[()]//g' > "{{ checksum_path }}"
+            grep "{{ opnsense_image_name }}" "{{ checksum_path }}.full" | awk -F' = ' '{print $2}' > "{{ checksum_path }}"
           when: not image_exists.stat.exists
           
         - name: Read checksum
