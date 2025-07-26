@@ -304,8 +304,8 @@
           
         - name: Create expect script from template
           template:
-            src: opnsense-console-config.expect.j2
-            dest: /tmp/opnsense-console-config.expect
+            src: opnsense-console-simple.expect.j2
+            dest: /tmp/opnsense-console-simple.expect
             mode: '0755'
           vars:
             vm_id: "{{ opnsense_vm_id }}"
@@ -313,9 +313,10 @@
             lan_netmask: "{{ opnsense_lan_netmask }}"
             lan_gateway: "{{ opnsense_lan_gateway }}"
             ssh_public_key: "{{ ssh_key.public_key }}"
+            proxmox_host: "{{ ansible_host }}"
             
-        - name: Configure OPNsense via console
-          command: /tmp/opnsense-console-config.expect
+        - name: Configure OPNsense via sendkey
+          command: /tmp/opnsense-console-simple.expect
           register: console_config
           timeout: 300
           
