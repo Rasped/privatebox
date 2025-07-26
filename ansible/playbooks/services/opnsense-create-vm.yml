@@ -162,12 +162,29 @@
               --onboot {{ opnsense_onboot | int }}
           register: vm_create
           
-        - name: Configure network interfaces
+        - name: Check if vmbr1 exists
+          command: ip link show vmbr1
+          register: vmbr1_check
+          failed_when: false
+          changed_when: false
+          
+        - name: Configure network interfaces (dual NIC)
           command: |
             qm set {{ opnsense_vm_id }} \
               --net0 virtio,bridge={{ opnsense_net0_bridge }} \
               --net1 virtio,bridge={{ opnsense_net1_bridge }}
-          when: vm_create.changed
+          when: vm_create.changed and vmbr1_check.rc == 0
+          
+        - name: Configure network interfaces (single NIC)
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --net0 virtio,bridge={{ opnsense_net0_bridge }}
+          when: vm_create.changed and vmbr1_check.rc != 0
+          
+        - name: Warn about single NIC configuration
+          debug:
+            msg: "WARNING: vmbr1 not found. Configured with single NIC on vmbr0 only."
+          when: vmbr1_check.rc != 0
           
         - name: Import disk image
           command: |
@@ -204,11 +221,17 @@
         - name: Start VM
           command: qm start {{ opnsense_vm_id }}
           register: vm_start
+          failed_when: false
+          
+        - name: Check if VM started successfully
+          fail:
+            msg: "VM failed to start: {{ vm_start.stderr | default('Unknown error') }}"
+          when: vm_start.rc != 0
           
         - name: Wait for VM to boot
           pause:
             seconds: 60
-          when: vm_start.changed
+          when: vm_start.rc == 0
           
         - name: Get VM status
           command: qm status {{ opnsense_vm_id }}
