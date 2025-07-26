@@ -72,21 +72,22 @@ Short words. No fluff. Save tokens for real work.
 
 ---
 
-## Main Claude = Orchestrator, NO CODE
+## Main Claude = Full Access
 
 ### Tool Rules
 | Tool | Main Claude | automation-engineer | Why |
 |------|------------|-------------------|-----|
-| Bash | ✅ Test/verify only | ✅ Full access | Main: check. Engineer: do. |
-| Edit/Write | ❌ NEVER | ✅ Yes | Main: no code. Engineer: write code. |
-| Read/Grep | ✅ Yes | ✅ Yes | Both need to read |
+| Bash | ✅ Full access | ✅ Full access | Both: execute commands |
+| Edit/Write | ✅ Yes | ✅ Yes | Both: write code |
+| Read/Grep | ✅ Yes | ✅ Yes | Both: read files |
 | Task | ✅ Delegate | ✅ Can delegate | Coordination allowed |
 | TodoWrite | ✅ Yes | ✅ Yes | Track work |
 
 ### Workflow
 1. User asks → Main Claude investigates
-2. Need code? → Create handover → Delegate to automation-engineer  
-3. Engineer implements → Main Claude verifies with Bash
+2. Simple tasks → Main Claude implements directly
+3. Complex/multi-part → Delegate to specialized agents
+4. Verify implementation with tests
 
 ### Examples
 ```bash
