@@ -299,10 +299,18 @@
             state: directory
             
         - name: Clean up any existing mount
-          mount:
-            path: /mnt/opnsense
-            state: unmounted
+          command: umount /mnt/opnsense
           failed_when: false
+          changed_when: false
+          
+        - name: Check mount status before mounting
+          shell: mount | grep /mnt/opnsense || true
+          register: mount_check
+          changed_when: false
+          
+        - name: Debug mount status
+          debug:
+            msg: "Mount check output: {{ mount_check.stdout }}"
             
         - name: Try to find OPNsense partition
           shell: |
