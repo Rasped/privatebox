@@ -130,7 +130,7 @@
           register: download_result
           
         - name: Decompress OPNsense image
-          command: bunzip2 -k "{{ compressed_image_path }}"
+          command: bunzip2 "{{ compressed_image_path }}"
           args:
             creates: "{{ image_path }}"
           when: not image_exists.stat.exists
