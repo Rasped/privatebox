@@ -295,7 +295,7 @@
             
         - name: Copy console configuration script
           copy:
-            src: scripts/opnsense-console-config.py
+            src: ../../files/scripts/opnsense-console-config.py
             dest: /tmp/opnsense-console-config.py
             mode: '0755'
             
