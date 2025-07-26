@@ -288,35 +288,25 @@
       when: confirm_deploy | bool
       tags: [opnsense, configure]
       block:
-        - name: Ensure expect is installed
-          apt:
-            name: expect
+        - name: Ensure Python is available
+          package:
+            name: python3
             state: present
-            update_cache: no
             
-        - name: Generate SSH key for OPNsense access
-          openssh_keypair:
-            path: "/root/.ssh/opnsense_key"
-            type: rsa
-            size: 4096
-            comment: "ansible@{{ inventory_hostname }}"
-          register: ssh_key
-          
-        - name: Create expect script from template
-          template:
-            src: opnsense-console-simple.expect.j2
-            dest: /tmp/opnsense-console-simple.expect
+        - name: Copy console configuration script
+          copy:
+            src: scripts/opnsense-console-config.py
+            dest: /tmp/opnsense-console-config.py
             mode: '0755'
-          vars:
-            vm_id: "{{ opnsense_vm_id }}"
-            lan_ip: "{{ opnsense_lan_ip }}"
-            lan_netmask: "{{ opnsense_lan_netmask }}"
-            lan_gateway: "{{ opnsense_lan_gateway }}"
-            ssh_public_key: "{{ ssh_key.public_key }}"
-            proxmox_host: "{{ ansible_host }}"
             
-        - name: Configure OPNsense via sendkey
-          command: /tmp/opnsense-console-simple.expect
+        - name: Configure OPNsense via console
+          command: >
+            python3 /tmp/opnsense-console-config.py
+            {{ opnsense_vm_id }}
+            {{ opnsense_lan_ip }}
+            {{ opnsense_lan_netmask }}
+            {{ opnsense_lan_gateway }}
+            --root-password "{{ opnsense_root_password }}"
           register: console_config
           timeout: 300
           
@@ -325,25 +315,28 @@
             msg: "{{ console_config.stdout_lines }}"
           when: console_config is defined
           
-        - name: Wait for SSH to be available
+        - name: Wait for web interface to be available
           wait_for:
             host: "{{ opnsense_lan_ip }}"
-            port: 22
+            port: 443
             delay: 10
             timeout: 120
             
-        - name: Test SSH connection
-          command: ssh -o StrictHostKeyChecking=no -i /root/.ssh/opnsense_key root@{{ opnsense_lan_ip }} "hostname"
-          register: ssh_test
+        - name: Test HTTPS connectivity
+          uri:
+            url: "https://{{ opnsense_lan_ip }}"
+            method: GET
+            validate_certs: false
+            status_code: [200, 302, 401]
+          register: https_test
           failed_when: false
           
-        - name: Verify SSH access
+        - name: Verify web access
           assert:
             that:
-              - ssh_test.rc == 0
-              - "'opnsense' in ssh_test.stdout.lower() or 'opnsense' in ssh_test.stderr.lower()"
-            fail_msg: "Failed to establish SSH connection to OPNsense"
-            success_msg: "SSH connection to OPNsense established successfully"
+              - https_test.status in [200, 302, 401]
+            fail_msg: "Failed to reach OPNsense web interface"
+            success_msg: "OPNsense web interface is accessible"
           
         - name: Get VM status
           command: qm status {{ opnsense_vm_id }}
@@ -375,16 +368,19 @@
               - "- WAN (net1): {{ opnsense_net1_bridge }} (isolated)"
               - ""
               - "Access Information:"
-              - "1. SSH: ssh -i /root/.ssh/opnsense_key root@{{ opnsense_lan_ip }}"
-              - "2. Web UI: https://{{ opnsense_lan_ip }}"
-              - "   Default login: root / opnsense (change immediately!)"
-              - "3. Console: qm terminal {{ opnsense_vm_id }}"
+              - "1. Web UI: https://{{ opnsense_lan_ip }}"
+              - "   Login: root / {{ opnsense_root_password }}"
+              - "2. Console: qm terminal {{ opnsense_vm_id }}"
               - ""
               - "Configured Settings:"
               - "- LAN IP: {{ opnsense_lan_ip }}/{{ opnsense_lan_netmask }}"
               - "- Gateway: {{ opnsense_lan_gateway }}"
-              - "- SSH enabled with key authentication"
-              - "- Root password: Set via console (check logs)"
+              - "- Root password has been changed from default"
+              - ""
+              - "Next Steps:"
+              - "1. Access web UI to complete configuration"
+              - "2. Enable SSH and add your public key via System > Settings > Administration"
+              - "3. Configure firewall rules as needed"
               - ""
               - "Configuration Complete!"
               - "The system is ready for production use."
