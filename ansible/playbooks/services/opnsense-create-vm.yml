@@ -25,15 +25,16 @@
     opnsense_net1_bridge: "vmbr1"  # LAN interface
     
     # OPNsense Image Configuration
-    opnsense_version: "24.7"
-    opnsense_base_url: "https://mirror.dns-root.de/opnsense/releases"
-    opnsense_image_name: "OPNsense-{{ opnsense_version }}-vm-amd64.qcow2"
+    opnsense_version: "25.7"
+    opnsense_base_url: "https://pkg.opnsense.org/releases"
+    opnsense_image_name: "OPNsense-{{ opnsense_version }}-vga-amd64.img.bz2"
     opnsense_image_url: "{{ opnsense_base_url }}/{{ opnsense_version }}/{{ opnsense_image_name }}"
-    opnsense_checksum_url: "{{ opnsense_base_url }}/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-checksums-amd64.txt"
+    opnsense_checksum_url: "{{ opnsense_base_url }}/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-checksums-amd64.sha256"
     
     # Local paths
     template_dir: "/var/lib/vz/template/qemu"
-    image_path: "{{ template_dir }}/{{ opnsense_image_name }}"
+    compressed_image_path: "{{ template_dir }}/{{ opnsense_image_name }}"
+    image_path: "{{ template_dir }}/OPNsense-{{ opnsense_version }}-vga-amd64.img"
     checksum_path: "{{ template_dir }}/{{ opnsense_image_name }}.sha256"
     
     # Default values for prompts
@@ -83,10 +84,16 @@
       when: confirm_deploy | bool
       tags: [opnsense, download]
       block:
-        - name: Check if image already exists
+        - name: Check if decompressed image already exists
           stat:
             path: "{{ image_path }}"
           register: image_exists
+          
+        - name: Check if compressed image already exists
+          stat:
+            path: "{{ compressed_image_path }}"
+          register: compressed_exists
+          when: not image_exists.stat.exists
           
         - name: Download OPNsense checksum file
           get_url:
@@ -97,7 +104,7 @@
           
         - name: Extract relevant checksum
           shell: |
-            grep "{{ opnsense_image_name }}" "{{ checksum_path }}.full" | awk '{print $4}' > "{{ checksum_path }}"
+            grep "{{ opnsense_image_name }}" "{{ checksum_path }}.full" | awk '{print $2}' | sed 's/[()]//g' > "{{ checksum_path }}"
           when: not image_exists.stat.exists
           
         - name: Read checksum
@@ -111,14 +118,20 @@
             opnsense_sha256: "{{ checksum_content.content | b64decode | trim }}"
           when: not image_exists.stat.exists
           
-        - name: Download OPNsense image
+        - name: Download OPNsense compressed image
           get_url:
             url: "{{ opnsense_image_url }}"
-            dest: "{{ image_path }}"
+            dest: "{{ compressed_image_path }}"
             checksum: "sha256:{{ opnsense_sha256 }}"
             mode: '0644'
-          when: not image_exists.stat.exists
+          when: not image_exists.stat.exists and not (compressed_exists.stat.exists | default(false))
           register: download_result
+          
+        - name: Decompress OPNsense image
+          command: bunzip2 -k "{{ compressed_image_path }}"
+          args:
+            creates: "{{ image_path }}"
+          when: not image_exists.stat.exists
           
         - name: Verify downloaded image
           stat:
