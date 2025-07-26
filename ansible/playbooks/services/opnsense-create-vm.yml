@@ -1,4 +1,6 @@
 ---
+# TODO: Add OPNsense VM as inventory in Semaphore after creation
+# TODO: Add SSH key to Semaphore for OPNsense access
 - name: "OPNsense: Deploy VM on Proxmox"
   hosts: proxmox
   become: false  # Running as root on Proxmox
