@@ -207,21 +207,12 @@
             comment: "ansible@{{ inventory_hostname }}"
           register: ssh_key
           
-        - name: Load NBD kernel module
-          modprobe:
-            name: nbd
-            params: "max_part=63"
-            
-        - name: Connect image file with qemu-nbd
-          command: qemu-nbd -c /dev/nbd0 -f raw {{ image_path }}
-          
-        - name: Create partition mappings
-          command: kpartx -av /dev/nbd0
-          register: kpartx_output
+        - name: Connect image file with losetup
+          command: losetup -P /dev/loop0 {{ image_path }}
           
         - name: Wait for device mappings
           wait_for:
-            path: /dev/nbd0p2
+            path: /dev/loop0p4
             state: present
             timeout: 10
             
@@ -244,19 +235,8 @@
           debug:
             msg: "Mount check output: {{ mount_check.stdout }}"
             
-        - name: Try to find OPNsense partition
-          shell: |
-            for part in /dev/nbd0p*; do
-              if file -s $part | grep -q "Unix Fast File system"; then
-                echo $part
-                exit 0
-              fi
-            done
-            exit 1
-          register: opnsense_partition
-          
-        - name: Mount OPNsense partition
-          command: mount -t ufs -o ufstype=ufs2 {{ opnsense_partition.stdout }} /mnt/opnsense
+        - name: Mount OPNsense partition (partition 4)
+          command: mount -t ufs -o ufstype=ufs2,rw /dev/loop0p4 /mnt/opnsense
           
         - name: Check if conf directory exists
           stat:
@@ -375,11 +355,8 @@
             path: /mnt/opnsense
             state: unmounted
             
-        - name: Remove partition mappings
-          command: kpartx -dv /dev/nbd0
-          
-        - name: Disconnect NBD device
-          command: qemu-nbd -d /dev/nbd0
+        - name: Disconnect loop device
+          command: losetup -d /dev/loop0
           
         - name: Clean up mount point
           file:
