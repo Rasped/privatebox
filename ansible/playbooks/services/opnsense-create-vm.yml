@@ -298,6 +298,12 @@
             path: /mnt/opnsense
             state: directory
             
+        - name: Clean up any existing mount
+          mount:
+            path: /mnt/opnsense
+            state: unmounted
+          failed_when: false
+            
         - name: Try to find OPNsense partition
           shell: |
             for part in /dev/nbd0p*; do
