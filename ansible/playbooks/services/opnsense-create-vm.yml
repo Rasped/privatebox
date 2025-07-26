@@ -281,7 +281,7 @@
             params: "max_part=63"
             
         - name: Connect VM disk with qemu-nbd
-          command: qemu-nbd -c /dev/nbd0 /dev/pve/vm-{{ opnsense_vm_id }}-disk-0
+          command: qemu-nbd -c /dev/nbd0 -f raw /dev/pve/vm-{{ opnsense_vm_id }}-disk-0
           
         - name: Create partition mappings
           command: kpartx -av /dev/nbd0
