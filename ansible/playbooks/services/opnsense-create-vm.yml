@@ -59,13 +59,20 @@
               - "'pve' in ansible_kernel"
             fail_msg: "This playbook must run on a Proxmox VE host"
             
-        - name: Install required tools for disk mounting
+        - name: Check if required tools exist
+          command: which {{ item }}
+          loop:
+            - qemu-nbd
+            - kpartx
+          register: tool_check
+          failed_when: false
+          changed_when: false
+          
+        - name: Install kpartx if missing
           apt:
-            name:
-              - kpartx
-              - qemu-utils
+            name: kpartx
             state: present
-            update_cache: yes
+          when: tool_check.results[1].rc != 0
             
         - name: Check if VM ID already exists
           shell: qm status {{ opnsense_vm_id }}
