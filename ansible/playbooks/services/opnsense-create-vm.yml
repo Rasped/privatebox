@@ -194,77 +194,9 @@
               - "Image size: {{ (downloaded_image.stat.size / 1024 / 1024) | round(2) }} MB"
               - "Image path: {{ image_path }}"
 
-    # Create VM
-    - name: "{{ service_name }} - Create VM"
-      when: confirm_deploy | bool
-      tags: [opnsense, create]
-      block:
-        - name: Create VM with basic configuration
-          command: |
-            qm create {{ opnsense_vm_id }} \
-              --name {{ opnsense_vm_name }} \
-              --memory {{ opnsense_memory }} \
-              --cores {{ opnsense_cores }} \
-              --cpu {{ opnsense_cpu }} \
-              --ostype l26 \
-              --agent {{ opnsense_qemu_agent | int }} \
-              --onboot {{ opnsense_onboot | int }}
-          register: vm_create
-          
-        - name: Check if vmbr1 exists
-          command: ip link show vmbr1
-          register: vmbr1_check
-          failed_when: false
-          changed_when: false
-          
-        - name: Configure network interfaces (dual NIC)
-          command: |
-            qm set {{ opnsense_vm_id }} \
-              --net0 virtio,bridge={{ opnsense_net0_bridge }} \
-              --net1 virtio,bridge={{ opnsense_net1_bridge }}
-          when: vm_create.changed and vmbr1_check.rc == 0
-          
-        - name: Configure network interfaces (single NIC)
-          command: |
-            qm set {{ opnsense_vm_id }} \
-              --net0 virtio,bridge={{ opnsense_net0_bridge }}
-          when: vm_create.changed and vmbr1_check.rc != 0
-          
-        - name: Warn about single NIC configuration
-          debug:
-            msg: "WARNING: vmbr1 not found. Configured with single NIC on vmbr0 only."
-          when: vmbr1_check.rc != 0
-          
-        - name: Import disk image
-          command: |
-            qm importdisk {{ opnsense_vm_id }} {{ image_path }} {{ opnsense_storage }}
-          register: import_disk
-          when: vm_create.changed
-          
-        - name: Get imported disk name
-          shell: |
-            qm config {{ opnsense_vm_id }} | grep -E '^unused[0-9]+:' | head -1 | cut -d' ' -f2
-          register: imported_disk
-          when: import_disk.changed
-          
-        - name: Attach imported disk
-          command: |
-            qm set {{ opnsense_vm_id }} --scsi0 {{ imported_disk.stdout }},size={{ opnsense_disk_size }}
-          when: imported_disk.stdout is defined and imported_disk.stdout
-          
-        - name: Set boot device
-          command: |
-            qm set {{ opnsense_vm_id }} --boot c --bootdisk scsi0
-          when: vm_create.changed
-          
-        - name: Add serial console
-          command: |
-            qm set {{ opnsense_vm_id }} --serial0 socket --vga serial0
-          when: vm_create.changed
-
-    # Configure OPNsense before first boot
-    - name: "{{ service_name }} - Pre-boot configuration"
-      when: confirm_deploy | bool
+    # Configure OPNsense image before importing
+    - name: "{{ service_name }} - Pre-import configuration"
+      when: confirm_deploy | bool and downloaded_image.stat.exists
       tags: [opnsense, configure]
       block:
         - name: Generate SSH key for OPNsense access
@@ -280,8 +212,8 @@
             name: nbd
             params: "max_part=63"
             
-        - name: Connect VM disk with qemu-nbd
-          command: qemu-nbd -c /dev/nbd0 -f raw /dev/pve/vm-{{ opnsense_vm_id }}-disk-0
+        - name: Connect image file with qemu-nbd
+          command: qemu-nbd -c /dev/nbd0 -f raw {{ image_path }}
           
         - name: Create partition mappings
           command: kpartx -av /dev/nbd0
@@ -453,6 +385,74 @@
           file:
             path: /mnt/opnsense
             state: absent
+
+    # Create VM
+    - name: "{{ service_name }} - Create VM"
+      when: confirm_deploy | bool
+      tags: [opnsense, create]
+      block:
+        - name: Create VM with basic configuration
+          command: |
+            qm create {{ opnsense_vm_id }} \
+              --name {{ opnsense_vm_name }} \
+              --memory {{ opnsense_memory }} \
+              --cores {{ opnsense_cores }} \
+              --cpu {{ opnsense_cpu }} \
+              --ostype l26 \
+              --agent {{ opnsense_qemu_agent | int }} \
+              --onboot {{ opnsense_onboot | int }}
+          register: vm_create
+          
+        - name: Check if vmbr1 exists
+          command: ip link show vmbr1
+          register: vmbr1_check
+          failed_when: false
+          changed_when: false
+          
+        - name: Configure network interfaces (dual NIC)
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --net0 virtio,bridge={{ opnsense_net0_bridge }} \
+              --net1 virtio,bridge={{ opnsense_net1_bridge }}
+          when: vm_create.changed and vmbr1_check.rc == 0
+          
+        - name: Configure network interfaces (single NIC)
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --net0 virtio,bridge={{ opnsense_net0_bridge }}
+          when: vm_create.changed and vmbr1_check.rc != 0
+          
+        - name: Warn about single NIC configuration
+          debug:
+            msg: "WARNING: vmbr1 not found. Configured with single NIC on vmbr0 only."
+          when: vmbr1_check.rc != 0
+          
+        - name: Import disk image
+          command: |
+            qm importdisk {{ opnsense_vm_id }} {{ image_path }} {{ opnsense_storage }}
+          register: import_disk
+          when: vm_create.changed
+          
+        - name: Get imported disk name
+          shell: |
+            qm config {{ opnsense_vm_id }} | grep -E '^unused[0-9]+:' | head -1 | cut -d' ' -f2
+          register: imported_disk
+          when: import_disk.changed
+          
+        - name: Attach imported disk
+          command: |
+            qm set {{ opnsense_vm_id }} --scsi0 {{ imported_disk.stdout }},size={{ opnsense_disk_size }}
+          when: imported_disk.stdout is defined and imported_disk.stdout
+          
+        - name: Set boot device
+          command: |
+            qm set {{ opnsense_vm_id }} --boot c --bootdisk scsi0
+          when: vm_create.changed
+          
+        - name: Add serial console
+          command: |
+            qm set {{ opnsense_vm_id }} --serial0 socket --vga serial0
+          when: vm_create.changed
 
     # Start VM and wait for it to be accessible
     - name: "{{ service_name }} - Start VM"
