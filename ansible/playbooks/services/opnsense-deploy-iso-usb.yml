@@ -408,13 +408,9 @@
             seconds: 60
             prompt: "Waiting for OPNsense to boot after installation..."
             
-        - name: Detach DVD ISO
-          command: |
-            qm set {{ opnsense_vm_id }} --ide2 none
-            
-        - name: Update boot order to boot from disk
-          command: |
-            qm set {{ opnsense_vm_id }} --boot order=scsi0
+        # NOTE: DVD ISO removal and boot order update removed
+        # The config import process needs the DVD available
+        # User should manually remove DVD after full deployment
     
     # Configuration import monitoring
     - name: "{{ service_name }} - Monitor config import"
