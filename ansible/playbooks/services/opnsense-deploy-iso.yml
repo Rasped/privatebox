@@ -65,6 +65,7 @@
               - xorriso
               - bzip2
               - libxml2-utils  # for xmllint
+              - python3-passlib  # for password_hash filter
             state: present
             
         - name: Check if VM already exists
