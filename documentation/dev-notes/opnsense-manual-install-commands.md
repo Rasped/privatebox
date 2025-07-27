@@ -1,6 +1,10 @@
 # OPNsense Manual Installation Commands
 
-This document captures the command sequence for OPNsense installation automation.
+This document captures the EXACT command sequence for OPNsense installation automation.
+
+## CRITICAL: Order of Operations
+
+The DVD ISO must be removed and boot order changed BEFORE the final reboot, otherwise the system will fail to boot with "no bootable device" error.
 
 ## Installation Navigation Sequence
 
@@ -41,8 +45,9 @@ To select Import config: qm sendkey <vmid> down (3x) then ret
 
 **Prompt: Disk Selection**
 ```
-Default: First disk (da0)
-Command: qm sendkey <vmid> ret
+NOTE: First option is cd0 (DVD), need to select da0
+Command: qm sendkey <vmid> down  # Move to da0
+Command: qm sendkey <vmid> ret   # Select disk
 ```
 
 **Prompt: Confirm Disk Destruction**
@@ -53,14 +58,40 @@ Command: qm sendkey <vmid> left  # Move to Yes
 Command: qm sendkey <vmid> ret   # Confirm
 ```
 
-**Error: Disk Corruption**
+### 4. Post-Installation
+
+**Prompt: Installation Complete**
 ```
-Error: "Operation is not permitted, table da0 is corrupt"
-Issue: Imported/resized disk has partition table issues
-Solution: Need fresh disk instead of imported IMG
+Options:
+1. Change root password
+2. Complete Install
+
+To skip password change: qm sendkey <vmid> down
+To complete: qm sendkey <vmid> ret
 ```
+
+### 5. CRITICAL: Fix Boot Configuration BEFORE Reboot
+
+**Must Complete These Steps Before Pressing Enter to Reboot**
+```
+Step 1: Remove DVD ISO
+Command: qm set <vmid> --ide2 none
+
+Step 2: Set boot order to hard disk
+Command: qm set <vmid> --boot order=scsi0
+
+Step 3: NOW press enter to reboot
+Command: qm sendkey <vmid> ret
+```
+
+**If you see "no bootable device" error:**
+- The boot order was not changed before reboot
+- Solution: qm stop <vmid> --skiplock
+- Then: qm set <vmid> --boot order=scsi0
+- Finally: qm start <vmid>
 
 ### Notes
 - USB config at da1 contains /conf/config.xml
 - Main disk at da0
-- Config import happens at first boot after installation
+- Config import process is unreliable to automate
+- Alternative configuration methods needed post-installation
