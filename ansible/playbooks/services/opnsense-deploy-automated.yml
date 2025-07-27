@@ -126,7 +126,7 @@
         - name: Create fresh disk
           command: |
             qm set {{ opnsense_vm_id }} \
-              --ide1 {{ opnsense_storage }}:{{ opnsense_disk_size }}
+              --ide3 {{ opnsense_storage }}:{{ opnsense_disk_size }}
               
         - name: Attach DVD ISO as boot device
           command: |
@@ -230,7 +230,7 @@
           command: qm set {{ opnsense_vm_id }} --ide2 none
           
         - name: Set boot order to hard disk
-          command: qm set {{ opnsense_vm_id }} --boot order=ide1
+          command: qm set {{ opnsense_vm_id }} --boot order=ide3
           
         - name: Reboot system
           command: qm sendkey {{ opnsense_vm_id }} ret
