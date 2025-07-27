@@ -126,7 +126,7 @@
         - name: Create fresh disk
           command: |
             qm set {{ opnsense_vm_id }} \
-              --ide1 {{ opnsense_storage }}:{{ opnsense_disk_size }}G
+              --ide1 {{ opnsense_storage }}:{{ opnsense_disk_size }}
               
         - name: Attach DVD ISO as boot device
           command: |
