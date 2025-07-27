@@ -229,8 +229,15 @@
         - name: Remove DVD ISO
           command: qm set {{ opnsense_vm_id }} --ide2 none
           
-        - name: Set boot order to hard disk
-          command: qm set {{ opnsense_vm_id }} --boot order=ide3
+        # Workaround: Move disk from ide3 to ide1 to fix boot issue
+        - name: Attach disk as ide1
+          command: qm set {{ opnsense_vm_id }} --ide1 local-lvm:vm-{{ opnsense_vm_id }}-disk-0,size=16G
+          
+        - name: Remove disk from ide3
+          command: qm set {{ opnsense_vm_id }} --delete ide3
+          
+        - name: Set boot order to ide1
+          command: qm set {{ opnsense_vm_id }} --boot order=ide1
           
         - name: Reboot system
           command: qm sendkey {{ opnsense_vm_id }} ret
