@@ -33,7 +33,7 @@
     # VM Configuration
     opnsense_vm_id: 8001
     opnsense_vm_name: "opnsense-img"
-    opnsense_memory: 2048
+    opnsense_memory: 4096  # Increased to 4GB for installation (3GB minimum recommended)
     opnsense_cores: 2
     opnsense_cpu: "host"
     opnsense_disk_size: "16"  # Minimum size in GB
@@ -239,8 +239,13 @@
         - name: Attach imported disk as scsi0
           command: |
             qm set {{ opnsense_vm_id }} \
-              --scsi0 {{ opnsense_storage }}:vm-{{ opnsense_vm_id }}-disk-0 \
+              --scsi0 {{ opnsense_storage }}:vm-{{ opnsense_vm_id }}-disk-0,size={{ opnsense_disk_size }}G \
               --boot order=scsi0
+              
+        - name: Resize disk to required size
+          command: |
+            qm resize {{ opnsense_vm_id }} scsi0 {{ opnsense_disk_size }}G
+          ignore_errors: true  # Will fail if disk is already larger
               
         - name: Attach USB configuration disk
           command: |
