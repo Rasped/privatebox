@@ -1,6 +1,6 @@
 ---
 # OPNsense Automated Installation Playbook
-# 
+#
 # This playbook automates the OPNsense installation using qm sendkey commands
 # based on the manual installation steps documented in opnsense-manual-install-commands.md
 #
@@ -17,34 +17,34 @@
 
 - name: "OPNsense: Automated Installation via qm sendkey"
   hosts: proxmox
-  become: false  # Already root on Proxmox
+  become: false # Already root on Proxmox
   gather_facts: true
-  
+
   vars:
     # Service metadata
     service_name: "OPNsense Firewall (Automated)"
     service_description: "Automated installation using qm sendkey commands"
-    
+
     # VM Configuration
     opnsense_vm_id: 8003
     opnsense_vm_name: "opnsense-auto"
-    opnsense_memory: 4096  # 4GB for installation
+    opnsense_memory: 4096 # 4GB for installation
     opnsense_cores: 2
     opnsense_cpu: "host"
-    opnsense_disk_size: "16"  # Disk size in GB
+    opnsense_disk_size: "16" # Disk size in GB
     opnsense_storage: "local-lvm"
     opnsense_onboot: true
-    
+
     # Network Configuration
-    opnsense_net0_bridge: "vmbr0"  # LAN
-    opnsense_net1_bridge: "vmbr1"  # WAN
-    
+    opnsense_net0_bridge: "vmbr0" # LAN
+    opnsense_net1_bridge: "vmbr1" # WAN
+
     # ISO Configuration
-    opnsense_version: "25.1"
+    opnsense_version: "25.7"
     opnsense_iso_url: "https://pkg.opnsense.org/releases/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso.bz2"
     work_dir: "/tmp/opnsense-auto"
     iso_storage_path: "/var/lib/vz/template/iso"
-    
+
   tasks:
     # Prerequisites check
     - name: "{{ service_name }} - Check prerequisites"
@@ -55,18 +55,18 @@
             name:
               - bzip2
             state: present
-            
+
         - name: Check if VM already exists
           command: qm status {{ opnsense_vm_id }}
           register: vm_exists
           failed_when: false
           changed_when: false
-          
+
         - name: Fail if VM already exists
           fail:
             msg: "VM {{ opnsense_vm_id }} already exists. Remove it first or use different ID."
           when: vm_exists.rc == 0
-    
+
     # ISO preparation (reuse from existing playbook)
     - name: "{{ service_name }} - Prepare ISO"
       tags: [opnsense, iso]
@@ -75,33 +75,32 @@
           file:
             path: "{{ work_dir }}"
             state: directory
-            mode: '0755'
-            
+            mode: "0755"
+
         - name: Ensure ISO storage directory exists
           file:
             path: "{{ iso_storage_path }}"
             state: directory
-            mode: '0755'
-            
+            mode: "0755"
+
         - name: Check if ISO already exists
           stat:
             path: "{{ iso_storage_path }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
           register: iso_exists
-          
+
         - name: Download compressed ISO
           get_url:
             url: "{{ opnsense_iso_url }}"
             dest: "{{ work_dir }}/opnsense.iso.bz2"
-            mode: '0644'
+            mode: "0644"
           when: not iso_exists.stat.exists
-          
+
         - name: Extract ISO
           command: bzip2 -d -c "{{ work_dir }}/opnsense.iso.bz2" > "{{ iso_storage_path }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
           args:
             creates: "{{ iso_storage_path }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
           when: not iso_exists.stat.exists
-    
-    
+
     # VM Creation
     - name: "{{ service_name }} - Create VM"
       tags: [opnsense, vm]
@@ -116,33 +115,32 @@
               --ostype l26 \
               --vga std \
               --onboot {{ opnsense_onboot | int }}
-              
+
         - name: Configure network interfaces
           command: |
             qm set {{ opnsense_vm_id }} \
               --net0 virtio,bridge={{ opnsense_net0_bridge }} \
               --net1 virtio,bridge={{ opnsense_net1_bridge }}
-              
+
         - name: Create fresh disk
           command: |
             qm set {{ opnsense_vm_id }} \
               --ide3 {{ opnsense_storage }}:{{ opnsense_disk_size }}
-              
+
         - name: Attach DVD ISO as boot device
           command: |
             qm set {{ opnsense_vm_id }} \
               --ide2 local:iso/OPNsense-{{ opnsense_version }}-dvd-amd64.iso,media=cdrom \
               --boot order=ide2
-              
-              
+
         - name: Start VM
           command: qm start {{ opnsense_vm_id }}
-          
+
         - name: Wait for VM to boot
           pause:
             seconds: 180
             prompt: "Waiting for VM to boot to installer login (3 minutes)..."
-    
+
     # Automated Installation
     - name: "{{ service_name }} - Automated Installation"
       tags: [opnsense, install]
@@ -155,11 +153,11 @@
               sleep 0.1
             done
             qm sendkey {{ opnsense_vm_id }} ret
-            
+
         - name: Wait for password prompt
           pause:
             seconds: 2
-            
+
         - name: Send installer password
           shell: |
             for char in o p n s e n s e; do
@@ -167,96 +165,96 @@
               sleep 0.1
             done
             qm sendkey {{ opnsense_vm_id }} ret
-            
+
         - name: Wait for installer to start
           pause:
             seconds: 5
-            
+
         # Step 2: Keymap selection (default US)
         - name: Accept default keymap
           command: qm sendkey {{ opnsense_vm_id }} ret
-          
+
         - name: Wait for installation menu
           pause:
             seconds: 2
-            
+
         # Step 3: Select Install (UFS)
         - name: Select Install (UFS) option
           shell: |
             qm sendkey {{ opnsense_vm_id }} down
             sleep 1
             qm sendkey {{ opnsense_vm_id }} ret
-            
+
         - name: Wait for disk selection
           pause:
             seconds: 3
-            
+
         # Step 4: Select da0 disk (not cd0)
         - name: Select da0 disk
           shell: |
             qm sendkey {{ opnsense_vm_id }} down
             sleep 1
             qm sendkey {{ opnsense_vm_id }} ret
-            
+
         - name: Wait for confirmation prompt
           pause:
             seconds: 2
-            
+
         # Step 5: Confirm disk destruction
         - name: Confirm disk destruction
           shell: |
             qm sendkey {{ opnsense_vm_id }} left
             sleep 1
             qm sendkey {{ opnsense_vm_id }} ret
-            
+
         - name: Wait for installation to complete
           pause:
             seconds: 300
             prompt: "Installation in progress (5 minutes)..."
-            
+
         # Step 6: Skip password change
         - name: Skip password change
           shell: |
             qm sendkey {{ opnsense_vm_id }} down
             sleep 1
             qm sendkey {{ opnsense_vm_id }} ret
-            
+
         - name: Wait before boot configuration
           pause:
             seconds: 2
-            
+
         # Step 7: CRITICAL - Fix boot configuration WITHOUT letting installer reboot
         # DO NOT send enter to trigger installer reboot - we'll do it manually
-        
+
         - name: Remove DVD ISO
           command: qm set {{ opnsense_vm_id }} --ide2 none
-          
+
         # Workaround: Move disk from ide3 to ide1 to fix boot issue
         - name: Attach disk as ide1
           command: qm set {{ opnsense_vm_id }} --ide1 local-lvm:vm-{{ opnsense_vm_id }}-disk-0,size=16G
-          
+
         - name: Remove disk from ide3
           command: qm set {{ opnsense_vm_id }} --delete ide3
-          
+
         - name: Set boot order to ide1
           command: qm set {{ opnsense_vm_id }} --boot order=ide1
-          
+
         - name: Hard stop VM (skip installer reboot)
           command: qm stop {{ opnsense_vm_id }}
-          
+
         - name: Wait for VM to stop
           pause:
             seconds: 5
             prompt: "Waiting for VM to stop..."
-            
+
         - name: Start VM fresh
           command: qm start {{ opnsense_vm_id }}
-          
+
         - name: Wait for system boot
           pause:
             seconds: 60
             prompt: "Waiting for OPNsense to boot..."
-    
+
     # Verification
     - name: "{{ service_name }} - Verify deployment"
       tags: [opnsense, verify]
@@ -264,7 +262,7 @@
         - name: Check VM status
           command: qm status {{ opnsense_vm_id }}
           register: vm_status
-          
+
         - name: Display deployment summary
           debug:
             msg:
@@ -283,7 +281,7 @@
               - "2. Configure network manually"
               - "3. Or use API/SSH post-configuration"
               - "=========================================="
-    
+
     # Cleanup
     - name: "{{ service_name }} - Cleanup"
       tags: [opnsense, cleanup]
