@@ -55,7 +55,11 @@
       "Bash(chmod:*)",
       "Bash(tree:*)",
       "Bash(./fix-semaphore-keys.sh:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "WebFetch(domain:gist.github.com)",
+      "Bash(touch:*)",
+      "WebFetch(domain:mirror.dns-root.de)",
+      "WebFetch(domain:pkg.opnsense.org)"
     ],
     "deny": []
   }
