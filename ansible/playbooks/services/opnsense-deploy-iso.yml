@@ -65,7 +65,7 @@
               - xorriso
               - bzip2
               - libxml2-utils  # for xmllint
-              - python3-passlib  # for password_hash filter
+              - apache2-utils  # for htpasswd
             state: present
             
         - name: Check if VM already exists
@@ -134,8 +134,13 @@
       block:
         # Configuration preparation (inside remaster block)
         - name: Generate bcrypt password hash
+          shell: |
+            echo -n "{{ opnsense_root_password }}" | htpasswd -bnBC 10 "" | tr -d ':\n' | sed 's/$2y/$2b/'
+          register: password_hash_result
+          
+        - name: Set password hash fact
           set_fact:
-            password_hash: "{{ opnsense_root_password | password_hash('bcrypt', rounds=10) | regex_replace('\\$2y\\$', '\\$2b\\$') }}"
+            password_hash: "{{ password_hash_result.stdout }}"
             
         - name: Create config.xml from template
           template:
