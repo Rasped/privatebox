@@ -1,0 +1,283 @@
+---
+# OPNsense IMG Deployment (Pre-installed Disk Image)
+# 
+# This playbook deploys OPNsense using the VGA IMG file which contains
+# a pre-installed system. No installation process needed - just boot!
+#
+# The IMG approach bypasses all installation prompts. We just:
+# 1. Download and extract the pre-installed disk image
+# 2. Import it as a VM disk
+# 3. Create VM and attach the disk
+# 4. Attach config ISO for automatic configuration import
+# 5. Boot directly into configured state
+#
+# Usage:
+#   ansible-playbook -i inventory.yml opnsense-deploy-img.yml \
+#     -e "opnsense_ssh_key='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC...'"
+#
+# Optional overrides:
+#   -e "opnsense_vm_id=8001"
+#   -e "opnsense_lan_ip=192.168.1.100"
+#   -e "opnsense_root_password=YourPassword"
+
+- name: "OPNsense: Deploy via Pre-installed IMG"
+  hosts: proxmox
+  become: false  # Already root on Proxmox
+  gather_facts: true
+  
+  vars:
+    # Service metadata
+    service_name: "OPNsense Firewall (IMG)"
+    service_description: "Secure firewall via pre-installed disk image"
+    
+    # VM Configuration
+    opnsense_vm_id: 8001
+    opnsense_vm_name: "opnsense-img"
+    opnsense_memory: 2048
+    opnsense_cores: 2
+    opnsense_cpu: "host"
+    opnsense_disk_size: "16"  # Minimum size in GB
+    opnsense_storage: "local-lvm"
+    opnsense_onboot: true
+    
+    # Network Configuration
+    opnsense_net0_bridge: "vmbr0"  # LAN
+    opnsense_net1_bridge: "vmbr1"  # WAN
+    opnsense_lan_ip: "192.168.1.69"
+    opnsense_lan_netmask: "24"
+    opnsense_lan_gateway: "192.168.1.3"
+    
+    # Authentication
+    # Pass SSH key via -e "opnsense_ssh_key='ssh-rsa AAAA...'"
+    opnsense_root_password: "PrivateBox2024!"
+    opnsense_ssh_key: "{{ opnsense_ssh_key | mandatory }}"  # Required - pass as extra var
+    
+    # IMG Configuration
+    opnsense_version: "25.1"
+    opnsense_img_url: "https://pkg.opnsense.org/releases/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-vga-amd64.img.bz2"
+    work_dir: "/tmp/opnsense-img"
+    iso_storage_path: "/var/lib/vz/template/iso"
+    
+  tasks:
+    # Prerequisites check
+    - name: "{{ service_name }} - Check prerequisites"
+      tags: [opnsense, prereq]
+      block:
+        - name: Ensure required tools are installed
+          package:
+            name:
+              - bzip2
+              - genisoimage  # For creating config ISO
+              - libxml2-utils  # for xmllint
+              - apache2-utils  # for htpasswd
+            state: present
+            
+        - name: Check if VM already exists
+          command: qm status {{ opnsense_vm_id }}
+          register: vm_exists
+          failed_when: false
+          changed_when: false
+          
+        - name: Fail if VM already exists
+          fail:
+            msg: "VM {{ opnsense_vm_id }} already exists. Remove it first or use different ID."
+          when: vm_exists.rc == 0
+          
+        - name: Check if vmbr1 exists
+          command: ip link show {{ opnsense_net1_bridge }}
+          register: vmbr1_exists
+          failed_when: false
+          changed_when: false
+          
+        - name: Warn if vmbr1 missing
+          debug:
+            msg: "WARNING: {{ opnsense_net1_bridge }} not found. Will configure single NIC only."
+          when: vmbr1_exists.rc != 0
+    
+    # IMG Download and preparation
+    - name: "{{ service_name }} - Download and prepare IMG"
+      tags: [opnsense, img]
+      block:
+        - name: Create working directory
+          file:
+            path: "{{ work_dir }}"
+            state: directory
+            mode: '0755'
+            
+        - name: Check if IMG already extracted
+          stat:
+            path: "{{ work_dir }}/opnsense.img"
+          register: img_exists
+          
+        - name: Download compressed IMG
+          get_url:
+            url: "{{ opnsense_img_url }}"
+            dest: "{{ work_dir }}/opnsense.img.bz2"
+            mode: '0644'
+          when: not img_exists.stat.exists
+          
+        - name: Extract IMG
+          command: bzip2 -d -k "{{ work_dir }}/opnsense.img.bz2"
+          args:
+            creates: "{{ work_dir }}/opnsense.img"
+          when: not img_exists.stat.exists
+    
+    # Configuration ISO creation
+    - name: "{{ service_name }} - Create configuration ISO"
+      tags: [opnsense, config]
+      block:
+        # Generate password hash
+        - name: Generate bcrypt password hash
+          shell: |
+            echo -n "{{ opnsense_root_password }}" | htpasswd -bnBC 10 "" | tr -d ':\n' | sed 's/$2y/$2b/'
+          register: password_hash_result
+          
+        - name: Set password hash fact
+          set_fact:
+            password_hash: "{{ password_hash_result.stdout }}"
+            
+        # Create config.xml
+        - name: Create config.xml from template
+          template:
+            src: ../../templates/opnsense-config.xml.j2
+            dest: "{{ work_dir }}/config.xml"
+            mode: '0644'
+          vars:
+            root_password_hash: "{{ password_hash }}"
+            ssh_key: "{{ opnsense_ssh_key }}"
+            lan_ip: "{{ opnsense_lan_ip }}"
+            lan_netmask: "{{ opnsense_lan_netmask }}"
+            gateway_ip: "{{ opnsense_lan_gateway }}"
+            timestamp_epoch: "{{ lookup('pipe', 'date +%s') }}"
+            
+        - name: Validate XML syntax
+          command: xmllint --noout "{{ work_dir }}/config.xml"
+          changed_when: false
+          
+        # Create config directory structure
+        - name: Create conf directory for ISO
+          file:
+            path: "{{ work_dir }}/iso-contents/conf"
+            state: directory
+            mode: '0755'
+            
+        - name: Copy config.xml to ISO structure
+          copy:
+            src: "{{ work_dir }}/config.xml"
+            dest: "{{ work_dir }}/iso-contents/conf/config.xml"
+            mode: '0644'
+            remote_src: true
+            
+        # Create config ISO
+        - name: Create configuration ISO
+          command: |
+            genisoimage -quiet -R -J -joliet-long \
+              -o "{{ iso_storage_path }}/opnsense-config-{{ opnsense_vm_id }}.iso" \
+              "{{ work_dir }}/iso-contents"
+          args:
+            creates: "{{ iso_storage_path }}/opnsense-config-{{ opnsense_vm_id }}.iso"
+    
+    # VM Creation and IMG import
+    - name: "{{ service_name }} - Create VM and import disk"
+      tags: [opnsense, deploy]
+      block:
+        - name: Create VM
+          command: |
+            qm create {{ opnsense_vm_id }} \
+              --name {{ opnsense_vm_name }} \
+              --memory {{ opnsense_memory }} \
+              --cores {{ opnsense_cores }} \
+              --cpu {{ opnsense_cpu }} \
+              --ostype l26 \
+              --scsihw virtio-scsi-pci \
+              --onboot {{ opnsense_onboot | int }}
+              
+        - name: Configure network interfaces (dual NIC)
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --net0 virtio,bridge={{ opnsense_net0_bridge }} \
+              --net1 virtio,bridge={{ opnsense_net1_bridge }}
+          when: vmbr1_exists.rc == 0
+          
+        - name: Configure network interfaces (single NIC)
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --net0 virtio,bridge={{ opnsense_net0_bridge }}
+          when: vmbr1_exists.rc != 0
+              
+        - name: Import disk image to VM
+          command: |
+            qm importdisk {{ opnsense_vm_id }} "{{ work_dir }}/opnsense.img" {{ opnsense_storage }}
+          register: import_result
+          
+        - name: Attach imported disk as scsi0
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --scsi0 {{ opnsense_storage }}:vm-{{ opnsense_vm_id }}-disk-0 \
+              --boot order=scsi0
+              
+        - name: Attach configuration ISO
+          command: |
+            qm set {{ opnsense_vm_id }} \
+              --ide2 local:iso/opnsense-config-{{ opnsense_vm_id }}.iso,media=cdrom
+              
+        - name: Start VM
+          command: qm start {{ opnsense_vm_id }}
+          
+        - name: Wait for OPNsense to boot and import config
+          pause:
+            seconds: 120
+            prompt: "Waiting for OPNsense to boot and import configuration..."
+    
+    # Verification
+    - name: "{{ service_name }} - Verify deployment"
+      tags: [opnsense, verify]
+      block:
+        - name: Wait for HTTPS interface
+          wait_for:
+            host: "{{ opnsense_lan_ip }}"
+            port: 443
+            delay: 10
+            timeout: 300
+            
+        - name: Test HTTPS connectivity
+          uri:
+            url: "https://{{ opnsense_lan_ip }}"
+            method: GET
+            validate_certs: false
+            status_code: [200, 302, 401]
+          register: https_test
+          
+        - name: Display deployment summary
+          debug:
+            msg:
+              - "=========================================="
+              - "OPNsense IMG Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "VM ID: {{ opnsense_vm_id }}"
+              - "VM Name: {{ opnsense_vm_name }}"
+              - ""
+              - "Access Information:"
+              - "- Web UI: https://{{ opnsense_lan_ip }}"
+              - "  Username: root"
+              - "  Password: {{ opnsense_root_password }}"
+              - ""
+              - "- SSH: ssh -i ~/.ssh/your_key root@{{ opnsense_lan_ip }}"
+              - ""
+              - "Network Configuration:"
+              - "- LAN IP: {{ opnsense_lan_ip }}/{{ opnsense_lan_netmask }}"
+              - "- Gateway: {{ opnsense_lan_gateway }}"
+              - ""
+              - "Pre-installed system - no installation needed!"
+              - "=========================================="
+              
+    # Cleanup
+    - name: "{{ service_name }} - Cleanup"
+      tags: [opnsense, cleanup]
+      block:
+        - name: Remove working directory
+          file:
+            path: "{{ work_dir }}"
+            state: absent
+          ignore_errors: true
