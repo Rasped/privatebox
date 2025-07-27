@@ -40,7 +40,7 @@
     opnsense_net1_bridge: "vmbr1" # WAN
 
     # ISO Configuration
-    opnsense_version: "25.7"
+    opnsense_version: "25.1"
     opnsense_iso_url: "https://pkg.opnsense.org/releases/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso.bz2"
     work_dir: "/tmp/opnsense-auto"
     iso_storage_path: "/var/lib/vz/template/iso"
