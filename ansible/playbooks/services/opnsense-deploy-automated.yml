@@ -239,8 +239,16 @@
         - name: Set boot order to ide1
           command: qm set {{ opnsense_vm_id }} --boot order=ide1
           
-        - name: Reboot system
+        - name: Trigger installer reboot
           command: qm sendkey {{ opnsense_vm_id }} ret
+          
+        - name: Wait for installer to shutdown
+          pause:
+            seconds: 10
+            prompt: "Waiting for installer shutdown..."
+            
+        - name: Hard reset VM via Proxmox
+          command: qm reset {{ opnsense_vm_id }}
           
         - name: Wait for system boot
           pause:
