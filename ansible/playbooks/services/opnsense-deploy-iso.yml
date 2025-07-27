@@ -50,7 +50,7 @@
     
     # ISO Configuration
     opnsense_version: "25.7"
-    opnsense_iso_url: "https://pkg.opnsense.org/releases/mirror/OPNsense-{{ opnsense_version }}-dvd-amd64.iso.bz2"
+    opnsense_iso_url: "https://pkg.opnsense.org/releases/mirror/OPNsense-{{ opnsense_version }}-vga-amd64.img.bz2"
     iso_storage_path: "/var/lib/vz/template/iso"
     work_dir: "/tmp/opnsense-remaster"
     
