@@ -225,7 +225,9 @@
           pause:
             seconds: 2
             
-        # Step 7: CRITICAL - Fix boot configuration BEFORE reboot
+        # Step 7: CRITICAL - Fix boot configuration WITHOUT letting installer reboot
+        # DO NOT send enter to trigger installer reboot - we'll do it manually
+        
         - name: Remove DVD ISO
           command: qm set {{ opnsense_vm_id }} --ide2 none
           
@@ -239,16 +241,16 @@
         - name: Set boot order to ide1
           command: qm set {{ opnsense_vm_id }} --boot order=ide1
           
-        - name: Trigger installer reboot
-          command: qm sendkey {{ opnsense_vm_id }} ret
+        - name: Hard stop VM (skip installer reboot)
+          command: qm stop {{ opnsense_vm_id }}
           
-        - name: Wait for installer to shutdown
+        - name: Wait for VM to stop
           pause:
-            seconds: 10
-            prompt: "Waiting for installer shutdown..."
+            seconds: 5
+            prompt: "Waiting for VM to stop..."
             
-        - name: Hard reset VM via Proxmox
-          command: qm reset {{ opnsense_vm_id }}
+        - name: Start VM fresh
+          command: qm start {{ opnsense_vm_id }}
           
         - name: Wait for system boot
           pause:
