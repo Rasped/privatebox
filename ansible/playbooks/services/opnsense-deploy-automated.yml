@@ -141,8 +141,8 @@
           
         - name: Wait for VM to boot
           pause:
-            seconds: 120
-            prompt: "Waiting for VM to boot to installer login (2 minutes)..."
+            seconds: 180
+            prompt: "Waiting for VM to boot to installer login (3 minutes)..."
     
     # Automated Installation
     - name: "{{ service_name }} - Automated Installation"
