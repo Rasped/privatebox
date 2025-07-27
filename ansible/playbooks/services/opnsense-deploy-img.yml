@@ -1,15 +1,15 @@
 ---
-# OPNsense IMG Deployment (Pre-installed Disk Image)
+# OPNsense IMG Deployment with USB Config Drive
 # 
 # This playbook deploys OPNsense using the VGA IMG file which contains
-# a pre-installed system. No installation process needed - just boot!
+# a pre-installed system. Configuration is provided via USB disk image.
 #
 # The IMG approach bypasses all installation prompts. We just:
 # 1. Download and extract the pre-installed disk image
 # 2. Import it as a VM disk
-# 3. Create VM and attach the disk
-# 4. Attach config ISO for automatic configuration import
-# 5. Boot directly into configured state
+# 3. Create USB disk image with config.xml
+# 4. Create VM and attach both disks
+# 5. Automate config import process
 #
 # Usage:
 #   ansible-playbook -i inventory.yml opnsense-deploy-img.yml \
@@ -28,7 +28,7 @@
   vars:
     # Service metadata
     service_name: "OPNsense Firewall (IMG)"
-    service_description: "Secure firewall via pre-installed disk image"
+    service_description: "Secure firewall via pre-installed disk image with USB config"
     
     # VM Configuration
     opnsense_vm_id: 8001
@@ -56,7 +56,8 @@
     opnsense_version: "25.1"
     opnsense_img_url: "https://pkg.opnsense.org/releases/{{ opnsense_version }}/OPNsense-{{ opnsense_version }}-vga-amd64.img.bz2"
     work_dir: "/tmp/opnsense-img"
-    iso_storage_path: "/var/lib/vz/template/iso"
+    # USB config disk will be stored in a permanent location
+    usb_config_path: "/var/lib/vz/images/opnsense-config-{{ opnsense_vm_id }}.img"
     
   tasks:
     # Prerequisites check
@@ -67,7 +68,7 @@
           package:
             name:
               - bzip2
-              - genisoimage  # For creating config ISO
+              - dosfstools    # For mkfs.vfat
               - libxml2-utils  # for xmllint
               - apache2-utils  # for htpasswd
             state: present
@@ -122,8 +123,8 @@
             creates: "{{ work_dir }}/opnsense.img"
           when: not img_exists.stat.exists
     
-    # Configuration ISO creation
-    - name: "{{ service_name }} - Create configuration ISO"
+    # USB Configuration disk creation
+    - name: "{{ service_name }} - Create USB configuration disk"
       tags: [opnsense, config]
       block:
         # Generate password hash
@@ -154,28 +155,49 @@
           command: xmllint --noout "{{ work_dir }}/config.xml"
           changed_when: false
           
-        # Create config directory structure
-        - name: Create conf directory for ISO
+        # Create USB disk image
+        - name: Check if USB config disk exists
+          stat:
+            path: "{{ usb_config_path }}"
+          register: usb_exists
+          
+        - name: Create 10MB USB disk image
+          command: dd if=/dev/zero of="{{ usb_config_path }}" bs=1M count=10
+          when: not usb_exists.stat.exists
+            
+        - name: Format USB disk as FAT32
+          command: mkfs.vfat -F 32 "{{ usb_config_path }}"
+          when: not usb_exists.stat.exists
+          
+        - name: Create mount point for USB disk
           file:
-            path: "{{ work_dir }}/iso-contents/conf"
+            path: "{{ work_dir }}/usb-mount"
             state: directory
             mode: '0755'
             
-        - name: Copy config.xml to ISO structure
+        - name: Mount USB disk image
+          command: mount -o loop "{{ usb_config_path }}" "{{ work_dir }}/usb-mount"
+          
+        - name: Create conf directory on USB disk
+          file:
+            path: "{{ work_dir }}/usb-mount/conf"
+            state: directory
+            mode: '0755'
+            
+        - name: Copy config.xml to USB disk
           copy:
             src: "{{ work_dir }}/config.xml"
-            dest: "{{ work_dir }}/iso-contents/conf/config.xml"
+            dest: "{{ work_dir }}/usb-mount/conf/config.xml"
             mode: '0644'
             remote_src: true
             
-        # Create config ISO
-        - name: Create configuration ISO
-          command: |
-            genisoimage -quiet -R -J -joliet-long \
-              -o "{{ iso_storage_path }}/opnsense-config-{{ opnsense_vm_id }}.iso" \
-              "{{ work_dir }}/iso-contents"
-          args:
-            creates: "{{ iso_storage_path }}/opnsense-config-{{ opnsense_vm_id }}.iso"
+        - name: Unmount USB disk
+          command: umount "{{ work_dir }}/usb-mount"
+          
+        - name: Remove mount point
+          file:
+            path: "{{ work_dir }}/usb-mount"
+            state: absent
     
     # VM Creation and IMG import
     - name: "{{ service_name }} - Create VM and import disk"
@@ -216,18 +238,42 @@
               --scsi0 {{ opnsense_storage }}:vm-{{ opnsense_vm_id }}-disk-0 \
               --boot order=scsi0
               
-        - name: Attach configuration ISO
+        - name: Attach USB configuration disk
           command: |
             qm set {{ opnsense_vm_id }} \
-              --ide2 local:iso/opnsense-config-{{ opnsense_vm_id }}.iso,media=cdrom
+              --args "-drive file={{ usb_config_path }},if=none,id=drive-usb0,format=raw,cache=none -device usb-storage,id=usb0,drive=drive-usb0,removable=on"
               
         - name: Start VM
           command: qm start {{ opnsense_vm_id }}
           
-        - name: Wait for OPNsense to boot and import config
+        - name: Wait for OPNsense to boot
           pause:
-            seconds: 120
-            prompt: "Waiting for OPNsense to boot and import configuration..."
+            seconds: 30
+            prompt: "Waiting for OPNsense to boot..."
+            
+        - name: Send key to trigger config importer
+          command: |
+            qm sendkey {{ opnsense_vm_id }} ret
+            
+        - name: Wait for importer prompt
+          pause:
+            seconds: 5
+            
+        - name: Send USB device name (da1)
+          shell: |
+            # Send 'd' 'a' '1' and Enter
+            qm sendkey {{ opnsense_vm_id }} d
+            sleep 0.5
+            qm sendkey {{ opnsense_vm_id }} a
+            sleep 0.5
+            qm sendkey {{ opnsense_vm_id }} 1
+            sleep 0.5
+            qm sendkey {{ opnsense_vm_id }} ret
+            
+        - name: Wait for configuration import and reboot
+          pause:
+            seconds: 90
+            prompt: "Waiting for OPNsense to import configuration and reboot..."
     
     # Verification
     - name: "{{ service_name }} - Verify deployment"
@@ -269,7 +315,7 @@
               - "- LAN IP: {{ opnsense_lan_ip }}/{{ opnsense_lan_netmask }}"
               - "- Gateway: {{ opnsense_lan_gateway }}"
               - ""
-              - "Pre-installed system - no installation needed!"
+              - "Configuration imported via USB disk!"
               - "=========================================="
               
     # Cleanup
