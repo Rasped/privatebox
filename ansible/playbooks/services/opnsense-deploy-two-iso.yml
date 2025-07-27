@@ -316,6 +316,28 @@
             qm sendkey {{ opnsense_vm_id }} "ret"
             sleep 5
             
+        - name: Skip LAGG configuration prompt
+          shell: |
+            # Skip LAGG configuration (Link Aggregation)
+            qm sendkey {{ opnsense_vm_id }} "n"
+            sleep 1
+            qm sendkey {{ opnsense_vm_id }} "ret"
+            sleep 2
+            
+        - name: Skip VLAN configuration prompt
+          shell: |
+            # Skip VLAN configuration
+            qm sendkey {{ opnsense_vm_id }} "n"
+            sleep 1
+            qm sendkey {{ opnsense_vm_id }} "ret"
+            sleep 2
+            
+        - name: Auto-detect network interfaces
+          shell: |
+            # Select 'a' for auto-detection of interfaces
+            qm sendkey {{ opnsense_vm_id }} "a"
+            sleep 2
+            
         - name: Wait for installation to complete
           pause:
             seconds: 180
