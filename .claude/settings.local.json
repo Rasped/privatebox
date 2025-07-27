@@ -59,7 +59,9 @@
       "WebFetch(domain:gist.github.com)",
       "Bash(touch:*)",
       "WebFetch(domain:mirror.dns-root.de)",
-      "WebFetch(domain:pkg.opnsense.org)"
+      "WebFetch(domain:pkg.opnsense.org)",
+      "Bash(ping:*)",
+      "Bash(nmap:*)"
     ],
     "deny": []
   }

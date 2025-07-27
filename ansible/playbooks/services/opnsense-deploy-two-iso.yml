@@ -336,6 +336,8 @@
           shell: |
             # Select 'a' for auto-detection of interfaces
             qm sendkey {{ opnsense_vm_id }} "a"
+            sleep 1
+            qm sendkey {{ opnsense_vm_id }} "ret"
             sleep 2
             
         - name: Wait for installation to complete
