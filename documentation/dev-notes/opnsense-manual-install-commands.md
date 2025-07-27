@@ -45,6 +45,21 @@ Default: First disk (da0)
 Command: qm sendkey <vmid> ret
 ```
 
+**Prompt: Confirm Disk Destruction**
+```
+Question: Are you sure you want to destroy the current content?
+Default: No (right button)
+Command: qm sendkey <vmid> left  # Move to Yes
+Command: qm sendkey <vmid> ret   # Confirm
+```
+
+**Error: Disk Corruption**
+```
+Error: "Operation is not permitted, table da0 is corrupt"
+Issue: Imported/resized disk has partition table issues
+Solution: Need fresh disk instead of imported IMG
+```
+
 ### Notes
 - USB config at da1 contains /conf/config.xml
 - Main disk at da0
