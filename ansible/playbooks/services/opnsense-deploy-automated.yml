@@ -114,7 +114,6 @@
               --cores {{ opnsense_cores }} \
               --cpu {{ opnsense_cpu }} \
               --ostype l26 \
-              --scsihw virtio-scsi-pci \
               --vga std \
               --onboot {{ opnsense_onboot | int }}
               
@@ -127,7 +126,7 @@
         - name: Create fresh disk
           command: |
             qm set {{ opnsense_vm_id }} \
-              --scsi0 {{ opnsense_storage }}:{{ opnsense_disk_size }}
+              --ide1 {{ opnsense_storage }}:{{ opnsense_disk_size }}
               
         - name: Attach DVD ISO as boot device
           command: |
@@ -231,7 +230,7 @@
           command: qm set {{ opnsense_vm_id }} --ide2 none
           
         - name: Set boot order to hard disk
-          command: qm set {{ opnsense_vm_id }} --boot order=scsi0
+          command: qm set {{ opnsense_vm_id }} --boot order=ide1
           
         - name: Reboot system
           command: qm sendkey {{ opnsense_vm_id }} ret
