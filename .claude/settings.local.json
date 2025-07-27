@@ -61,7 +61,8 @@
       "WebFetch(domain:mirror.dns-root.de)",
       "WebFetch(domain:pkg.opnsense.org)",
       "Bash(ping:*)",
-      "Bash(nmap:*)"
+      "Bash(nmap:*)",
+      "Bash(true)"
     ],
     "deny": []
   }
