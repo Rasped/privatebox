@@ -96,7 +96,7 @@
           when: not iso_exists.stat.exists
 
         - name: Extract ISO
-          command: bzip2 -d -c "{{ work_dir }}/opnsense.iso.bz2" > "{{ iso_storage_path }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
+          shell: bzip2 -d -c "{{ work_dir }}/opnsense.iso.bz2" > "{{ iso_storage_path }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
           args:
             creates: "{{ iso_storage_path }}/OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
           when: not iso_exists.stat.exists
