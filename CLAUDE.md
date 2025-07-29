@@ -511,4 +511,4 @@ The bootstrap now runs completely hands-off in ~3 minutes.
 
 ## Lessons Learned
 
-See `CLAUDE-HISTORICAL.md` for detailed lessons and fixes from previous phases.
+See `documentation/archive/CLAUDE-HISTORICAL.md` for detailed lessons and fixes from previous phases.
