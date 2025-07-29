@@ -91,14 +91,12 @@ Short words. No fluff. Save tokens for real work.
 
 ### Examples
 ```bash
-# Main Claude YES:
+# Main Claude can do everything:
 bash -c "systemctl status service"  # Check status
 grep -r "error" /var/log/           # Find problems
 curl http://VM:3000/api/status      # Test endpoint
-
-# Main Claude NO:
-edit file.yml                       # NEVER edit
-write new-script.sh                 # NEVER create
+edit file.yml                       # Edit files
+write new-script.sh                 # Create files
 ```
 
 ### Handover Template
@@ -179,14 +177,14 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 
 2. **Service Architecture**: 
    - Service-oriented Ansible playbooks for each component
-   - OPNSense will run in dedicated VM (created via SSH to Proxmox)
+   - OPNSense will run in dedicated VM (template-based deployment)
    - Other services containerized using Podman Quadlet (systemd integration)
    - Semaphore provides web UI for Ansible execution with automatic template sync
 
 3. **Network Features**:
    - Automatic IP detection and assignment
    - Support for static IP configuration
-   - Multiple VLANs for service segregation (planned)
+   - Network segregation (design TBD)
 
 ### Critical Implementation Notes
 
@@ -194,7 +192,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
    - Each service has its own playbook in `ansible/playbooks/services/`
    - No complex role hierarchy - simple, direct playbooks
    - Services deployed as Podman containers with systemd integration
-   - VM creation handled via SSH commands to Proxmox host
+   - VM creation handled via template deployment playbooks
 
 2. **Container Strategy**: Using Podman Quadlet for systemd-native container management
 
@@ -228,14 +226,10 @@ bootstrap/                 # Bootstrap infrastructure (FULLY IMPLEMENTED)
 quickstart.sh             # One-line installer (downloads and runs bootstrap)
 
 ansible/                  # Service-oriented Ansible automation
-├── inventories/          # Environment-specific inventory configurations
-│   └── development/      # Development environment
-├── group_vars/           # Global variables and container configurations
-│   └── all.yml          # Common settings for all hosts
 └── playbooks/           # Service deployment playbooks
     └── services/        # Individual service playbooks
-        ├── deploy-adguard.yml   # AdGuard Home deployment (implemented)
-        └── ADGUARD_DEPLOYMENT_GUIDE.md  # Deployment documentation
+        ├── adguard-deploy.yml   # AdGuard Home deployment (implemented)
+        └── adguard-configure-dns.yml  # DNS configuration
 
 documentation/           # Comprehensive planning and technical documentation
 ├── features/            # Feature-specific documentation
@@ -258,8 +252,7 @@ documentation/           # Comprehensive planning and technical documentation
 
 #### Ansible Documentation
 - `ansible/README.md` - Service-oriented architecture overview
-- `ansible/playbooks/services/ADGUARD_DEPLOYMENT_GUIDE.md` - Example service deployment
-- `ansible/group_vars/all.yml` - Common configuration and container settings
+- `ansible/playbooks/services/` - Service deployment playbooks
 - `README.md` - Project overview and quick start guide
 
 ---
@@ -275,62 +268,19 @@ documentation/           # Comprehensive planning and technical documentation
 - ✅ **Remote Deployment**: Deploy to remote Proxmox servers
 - ✅ **Health Monitoring**: Service health check scripts
 
-### Phase 0: Prerequisites & Information Gathering (COMPLETE - 2025-07-24)
-- ✅ **VM Hostname Resolution**: Fixed "sudo: unable to resolve host" errors in cloud-init
-- ✅ **Container Networking**: Documented Podman Quadlet binding behavior (binds to VM IP)
-- ✅ **AdGuard API Documentation**: Created comprehensive test scripts and endpoint docs
-- ✅ **100% Hands-Off AdGuard**: Automatic deployment and configuration via Ansible
-- ✅ **DNS Integration**: System automatically configured to use AdGuard after deployment
+### Current Implementation Status
 
-### Ansible (SERVICE-ORIENTED APPROACH)
-- ✅ **Service Playbooks**: Individual playbooks for each service
-- ✅ **AdGuard Deployment**: Fully automated with Podman Quadlet and API configuration
+#### Working Features
+- ✅ **VM Creation**: Automated Ubuntu 24.04 VM provisioning with cloud-init
+- ✅ **Container Networking**: Podman Quadlet with proper port binding
+- ✅ **AdGuard Deployment**: Fully automated with API configuration
 - ✅ **Semaphore Integration**: Automatic template synchronization
-- ✅ **Inventory**: SSH-based access to management VM
-- 🚧 **Additional Services**: OPNSense, Unbound DNS planned
-- 🚧 **VM Creation**: Via SSH to Proxmox host (no API needed)
-- ❌ **Secrets Management**: Needs implementation
+- ✅ **SSH Management**: Automated key distribution for Proxmox and container hosts
 
-### Phase 2: Network Design & Planning
-
-#### Current Status
-Phase 0 (Prerequisites) and Phase 1 (AdGuard fixes) are complete. Phase 2 is a **planning-only phase** focused on detailed design before implementation.
-
-#### Phase 2 Objectives
-1. **Detailed Firewall Rules**: Document every rule with ports, protocols, and justification
-2. **Migration Strategy**: Plan zero-downtime migration from flat to VLAN network
-3. **OPNsense Automation**: Research deployment automation capabilities
-4. **Risk Assessment**: Identify and plan for all failure scenarios
-
-#### Key Deliverables
-- Firewall rule matrix (use `/documentation/templates/firewall-rules-template.md`)
-- Migration runbook (use `/documentation/templates/migration-runbook-template.md`)
-- OPNsense automation research (use `/documentation/templates/opnsense-automation-research.md`)
-- Updated network diagrams
-- Risk assessment with mitigation plans
-
-#### Critical Decisions Needed
-1. **OPNsense Deployment Method**:
-   - How much can be automated vs manual configuration?
-   - Best approach for initial setup (config.xml, console, API)?
-   
-2. **Migration Approach**:
-   - Big bang (all VLANs at once) vs incremental?
-   - How to maintain access during transition?
-   - Temporary dual-network period?
-
-3. **Technical Architecture**:
-   - Proxmox bridge configuration for VLANs
-   - Performance implications of inter-VLAN routing
-   - High availability considerations
-
-#### Success Criteria
-Phase 2 is complete when:
-- All firewall rules documented with technical detail
-- Step-by-step migration plan with rollback procedures
-- OPNsense automation approach fully researched and documented
-- All risks identified with mitigation strategies
-- Clear implementation path for Phase 3
+#### In Development
+- 🚧 **OPNSense**: Template-based deployment being developed
+- 🚧 **Additional Services**: Unbound DNS, WireGuard VPN planned
+- 🚧 **Network Design**: Architecture decisions pending
 
 ---
 
@@ -493,8 +443,8 @@ Pick #3.
 ### Who Does What
 | Agent | Purpose | Tools | When to use |
 |-------|---------|-------|-------------|
-| Main Claude | Daily tasks, investigate, delegate | NO Edit/Write | DEFAULT - use for everything |
-| privatebox-orchestrator | Complex planning only | Write .md only | Big multi-phase projects |
+| Main Claude | Daily tasks, investigate, delegate | Full access | DEFAULT - use for everything |
+| privatebox-orchestrator | Complex planning only | Write .md only | Big multi-project coordination |
 | automation-engineer | Write ALL code | Full access | Any coding/automation |
 | system-debugger | Find problems | Read + Bash | Debug issues (ALWAYS Opus) |
 | technical-writer | User docs (fluent) | Edit .md only | User guides, troubleshooting |
