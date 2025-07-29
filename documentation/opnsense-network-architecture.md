@@ -442,3 +442,84 @@ The phased approach solves the chicken-and-egg problem:
 5. Ship with clean, predictable network setup
 
 Every PrivateBox ships with the same internal network structure, making support and maintenance straightforward.
+
+## Infrastructure Components
+
+### File Server (VM 7000)
+- **OS**: Alpine Linux 3.22.1
+- **IP**: 192.168.1.17 (static)
+- **Purpose**: Hosts templates and files for deployment
+- **Services**: Nginx file server
+- **URLs**:
+  - Web interface: http://192.168.1.17/
+  - OPNsense template: http://192.168.1.17/templates/opnsense-template.qcow2
+
+### Bootstrap/Management VM (VM 9000)
+- **OS**: Ubuntu 24.04
+- **IP**: 192.168.1.21 (DHCP assigned)
+- **Services**:
+  - Portainer: http://192.168.1.21:9000
+  - Semaphore: http://192.168.1.21:3000
+- **Purpose**: Ansible automation and container management
+
+### OPNsense Template (ID 8000)
+- **Type**: Proxmox template
+- **OS**: OPNsense 25.7 (unconfigured)
+- **Specs**: 4GB RAM, 2 cores, 16GB disk
+- **Export**: 2.8GB qcow2 image
+
+## Deployment Process
+
+### Template Distribution
+1. **Export**: OPNsense template exported as qcow2 image
+2. **Host**: File server provides HTTP access to template
+3. **Deploy**: Ansible playbook downloads and imports template
+
+### Automated Deployment via Semaphore
+```bash
+# 1. Login to Semaphore
+curl -c /tmp/semaphore-cookie -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"auth": "admin", "password": "YOUR_PASSWORD"}' \
+  http://192.168.1.21:3000/api/auth/login
+
+# 2. Run template sync
+curl -s -b /tmp/semaphore-cookie -X POST \
+  -d '{"template_id": 1, "project_id": 1}' \
+  http://192.168.1.21:3000/api/project/1/tasks
+
+# 3. Deploy OPNsense VM
+curl -s -b /tmp/semaphore-cookie -X POST \
+  -d '{"template_id": 4, "project_id": 1}' \
+  http://192.168.1.21:3000/api/project/1/tasks
+```
+
+### Manual Deployment
+```bash
+# From ansible directory
+./deploy-opnsense.sh [vm_id] [vm_name]
+
+# Or with custom template URL
+OPNSENSE_TEMPLATE_URL=http://192.168.1.17/templates/opnsense-template.qcow2 \
+  ./deploy-opnsense.sh 101 opnsense-test
+```
+
+## Production Workflow
+
+1. **Manufacturing Setup**:
+   - Proxmox on 192.168.1.10
+   - File server on 192.168.1.17 (hosts templates)
+   - Bootstrap VM on 192.168.1.21 (runs automation)
+
+2. **Deployment Steps**:
+   - Run quickstart.sh on new Proxmox host
+   - Bootstrap VM pulls playbooks from GitHub
+   - Semaphore downloads template from file server
+   - Creates OPNsense VM from template
+   - Ready for network configuration
+
+3. **Hands-Off Features**:
+   - Auto-discovery of network settings
+   - Automatic template download
+   - No manual intervention required
+   - Consistent deployments across units
