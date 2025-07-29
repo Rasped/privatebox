@@ -4,16 +4,13 @@ Self-contained bootstrap scripts for setting up PrivateBox infrastructure on Pro
 
 ## Quick Start
 
+Use the quickstart.sh script from the main repository:
+
 ```bash
-# Fix Proxmox repositories (if needed)
-sudo ./scripts/fix-proxmox-repos.sh
-
-# Create Ubuntu VM with all services
-sudo ./scripts/create-ubuntu-vm.sh
-
-# Or use automatic network discovery
-sudo ./scripts/create-ubuntu-vm.sh --auto-discover
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
 ```
+
+This handles all bootstrap operations automatically.
 
 ## Remote Deployment
 
@@ -61,8 +58,7 @@ Or use `--auto-discover` to automatically detect network settings and generate t
 bootstrap/
 ├── scripts/         # All bootstrap scripts
 ├── lib/            # Common functions library
-├── config/         # Configuration files
-└── mass-production/ # Mass production deployment (client/server)
+└── config/         # Configuration files
 ```
 
 ## Dependencies
@@ -73,6 +69,7 @@ bootstrap/
 
 ## Services Deployed
 
+### During Bootstrap
 1. **Portainer** - Docker/Podman container management (port 9000)
 2. **Semaphore** - Ansible automation UI (port 3000)
    - Pre-configured with PrivateBox repository
@@ -80,17 +77,10 @@ bootstrap/
    - "Generate Templates" task created automatically
    - API token and environment configured for template synchronization
 
-Note: The actual privacy router services (OPNSense, AdGuard Home, Unbound DNS) are deployed via Ansible playbooks from this repository (see the ansible/ directory).
+### Available via Semaphore Templates
+- **AdGuard Home** - Network-wide ad and tracker blocking
+- Additional services in development (OPNsense, Unbound DNS)
 
-## Mass Production
-
-The `mass-production/` directory contains scripts for automated deployment of multiple PrivateBox machines in a factory/production environment. This includes:
-
-- **client/** - Scripts that run on target machines during provisioning
-- **server/** - Management server API (not yet implemented)
-- **common.sh** - Shared utilities for mass production scripts
-
-See `mass-production/CLAUDE.md` for detailed documentation.
 
 ## Template Synchronization Setup
 

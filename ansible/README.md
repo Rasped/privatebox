@@ -6,16 +6,19 @@ This directory contains Ansible automation for deploying containerized services 
 
 This implementation uses a **service-oriented approach** where each container service has its own dedicated playbook. This design is optimized for use with SemaphoreUI and prioritizes simplicity and maintainability.
 
+### Self-Contained Playbooks
+
+Each service playbook is completely self-contained:
+- All variables are defined within the playbook (with sensible defaults)
+- No dependency on external roles or includes
+- Can be run independently without additional configuration
+- Variables can be overridden via command line (-e flag)
+- Designed for easy understanding and modification
+
 ## Directory Structure
 
 ```
 ansible/
-├── inventories/          # Host inventories
-│   ├── development/      # Development environment
-│   └── production/       # Production environment
-├── group_vars/          # Variable definitions
-│   ├── all/             # Global variables
-│   └── privatebox/      # PrivateBox-specific variables
 ├── playbooks/           # Ansible playbooks
 │   └── services/        # Service deployment playbooks
 ├── files/               # Static files
@@ -31,20 +34,15 @@ ansible/
 2. SemaphoreUI installed and configured
 3. SSH keys configured in SemaphoreUI:
    - The bootstrap process creates two SSH keys:
-     - **"proxmox-host"** - For managing the Proxmox host
-     - **"vm-container-host"** - For managing VMs and containers (use this one)
+     - **"proxmox"** - For managing the Proxmox host
+     - **"container-host"** - For managing VMs and containers (use this one)
    - These keys are automatically added to SemaphoreUI
-   - When creating job templates, select "vm-container-host" from the SSH Key dropdown
-4. Target hosts must have the public key in `~/.ssh/authorized_keys`
+   - When creating job templates, select "container-host" from the SSH Key dropdown
+4. SSH keys are automatically configured during bootstrap
 
 ### Deploy AdGuard Home
 
-```bash
-# Using ansible-playbook directly
-ansible-playbook -i inventories/development/hosts.yml playbooks/services/adguard.yml
-
-# Or configure in SemaphoreUI as a job template
-```
+Services are deployed through SemaphoreUI job templates. The inventory is specified within each playbook.
 
 ## Automatic Template Synchronization
 
@@ -114,10 +112,10 @@ For playbooks without metadata or custom configurations:
 1. Create a new job template in SemaphoreUI:
    - **Name**: "Deploy AdGuard Home"
    - **Playbook**: `playbooks/services/adguard.yml`
-   - **Inventory**: Select "Development" or "Production"
+   - **Inventory**: Select your inventory
    - **Repository**: PrivateBox (already configured)
    - **Environment**: Select appropriate environment
-   - **SSH Key**: Select "vm-container-host" (created during bootstrap)
+   - **SSH Key**: Select "container-host" (created during bootstrap)
    
 2. Configure survey variables:
    - `confirm_deploy`: Boolean (default: yes)
@@ -129,7 +127,13 @@ For playbooks without metadata or custom configurations:
 
 ### Implemented
 
-- **AdGuard Home** (`playbooks/services/adguard.yml`) - DNS-level ad blocking
+- **AdGuard Home** (`playbooks/services/adguard-deploy.yml`) - DNS-level ad blocking and filtering
+- **AdGuard DNS Configuration** (`playbooks/services/adguard-configure-dns.yml`) - Configure system to use AdGuard DNS
+
+### In Development
+
+- **OPNsense Deployment** (`playbooks/services/deploy-opnsense-from-template.yml`) - Deploy OPNsense VM from template
+- **OPNsense Configuration** (`playbooks/services/opnsense-configure-*.yml`) - Various OPNsense configuration playbooks
 
 ### Planned
 
@@ -140,35 +144,19 @@ For playbooks without metadata or custom configurations:
 
 ## Configuration
 
-### Global Settings
+### Service Configuration
 
-Edit `group_vars/all/main.yml` and `group_vars/all/containers.yml` for global configuration.
+All service configuration is contained within each playbook. Variables have sensible defaults and can be overridden through Semaphore's survey variables when running job templates.
 
-### Service-Specific Settings
-
-Edit `group_vars/privatebox/main.yml` to configure individual services:
-
-```yaml
-# Enable/disable services
-enable_adguard: true
-enable_pihole: false
-
-# AdGuard configuration
-adguard_web_port: 8080
-adguard_dns_port: 53
-adguard_memory_limit: "512M"
-```
-
-### Environment-Specific Settings
-
-- Development: `inventories/development/hosts.yml`
-- Production: `inventories/production/hosts.yml`
 
 ## Adding New Services
 
-1. **Copy the template playbook**:
+Each service playbook is self-contained, including all necessary variables, tasks, and configurations within a single file. This design prioritizes simplicity and maintainability.
+
+1. **Create a new service playbook**:
    ```bash
-   cp playbooks/services/_template.yml playbooks/services/newservice.yml
+   # Create your service playbook directly - no template needed
+   vim playbooks/services/newservice.yml
    ```
 
 2. **Create a Quadlet template**:
@@ -176,14 +164,14 @@ adguard_memory_limit: "512M"
    cp files/quadlet/_template.container.j2 files/quadlet/newservice.container.j2
    ```
 
-3. **Update variables** in `group_vars/privatebox/main.yml`:
+3. **Define variables** in your playbook:
    ```yaml
-   # New Service Configuration
-   newservice_enabled: true
-   newservice_image: "vendor/newservice"
-   newservice_version: "latest"
-   newservice_port: 8082
-   newservice_data_dir: "{{ container_data_root }}/newservice"
+   vars:
+     service_name: "New Service"
+     newservice_image: "vendor/newservice"
+     newservice_version: "latest"
+     newservice_port: 8082
+     newservice_data_dir: "/opt/privatebox/data/newservice"
    ```
 
 4. **Edit the playbook** and template with service-specific details
@@ -200,12 +188,9 @@ adguard_memory_limit: "512M"
        semaphore_description: "Confirm deployment of New Service"
    ```
 
-6. **Test deployment**:
-   ```bash
-   ansible-playbook -i inventories/development/hosts.yml playbooks/services/newservice.yml
-   ```
+6. **Sync to Semaphore**: Run "Generate Templates" to create the job template automatically
 
-7. **Sync to Semaphore**: Run "Generate Templates" to create the job template automatically
+7. **Test deployment**: Run the job template through Semaphore UI
 
 ## Podman Quadlet
 
@@ -238,9 +223,9 @@ sudo systemctl stop adguard-container
 
 ### Container Defaults
 
-See `group_vars/all/containers.yml` for:
+Each playbook defines its own container settings:
 - Container runtime settings
-- Resource limits
+- Resource limits  
 - Security defaults
 - Network configuration
 
@@ -262,14 +247,14 @@ Each service has variables following this pattern:
 
 After deploying a service:
 
-1. Check service status:
+1. SSH to the container host to check service status:
    ```bash
-   ansible privatebox -i inventories/development/hosts.yml -m systemd -a "name=adguard-container"
+   sudo systemctl status adguard-container
    ```
 
 2. Verify container is running:
    ```bash
-   ansible privatebox -i inventories/development/hosts.yml -m command -a "podman ps"
+   sudo podman ps
    ```
 
 3. Test service endpoint:
@@ -279,7 +264,7 @@ After deploying a service:
 
 ### Automated Testing
 
-See `documentation/features/ansible-container-services/testing.md` for comprehensive testing strategy.
+Testing is performed through Semaphore job templates. Create test playbooks and sync them using the template generation process.
 
 ## Troubleshooting
 
@@ -304,10 +289,7 @@ See `documentation/features/ansible-container-services/testing.md` for comprehen
 
 ### Debug Mode
 
-Run playbooks with increased verbosity:
-```bash
-ansible-playbook -i inventories/development/hosts.yml playbooks/services/adguard.yml -vvv
-```
+Enable verbose output in Semaphore job templates by adding `-vvv` to the CLI arguments field.
 
 ## Security Considerations
 
