@@ -24,10 +24,7 @@ Create the following directory:
 - `/documentation/archive/` - For historical/completed documentation
 
 ### 2. Move Root-Level Documentation
-Move these files to `/documentation/archive/`:
-- `privatebox-handoff-prompt-20250125-complete.md` - Completed YAML fixes handoff
-- `privatebox-test-log-20250124.md` - Historical test execution log  
-- `template-generation-investigation.md` - Investigation notes (likely resolved)
+**Update**: These files have already been moved to `/documentation/archive/`
 
 ### 3. Consolidate Test Scripts
 Move test scripts to `/ansible/playbooks/tests/`:
@@ -38,17 +35,7 @@ Ensure scripts remain executable after moving.
 
 ### 4. Archive Completed Phase Documentation
 
-**Phase 0 (COMPLETE)**:
-- Move `/documentation/phase-0-completion-report.md` to `/documentation/archive/phase-0/`
-- Move `/documentation/phase-0-implementation-summary.md` to `/documentation/archive/phase-0/`
-
-**Phase 2 (COMPLETE - Planning Only)**:
-- Move entire `/documentation/phase-2-planning/` directory to `/documentation/archive/`
-- Move `/documentation/phase-2-handover.md` to `/documentation/archive/phase-2/`
-
-**Phase 3 (KEEP FOR NOW)**:
-- Leave `/documentation/phase-3-implementation/` in place
-- Status unclear - may have incomplete tasks
+**Update**: All phase documentation has been deleted per project owner directive. Phases are obsolete.
 
 ### 5. Update References
 After moving files:

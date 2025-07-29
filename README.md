@@ -4,7 +4,7 @@ Your privacy-focused network appliance - automated deployment of privacy-enhanci
 
 ## What is PrivateBox?
 
-PrivateBox transforms a mini PC running Proxmox into a comprehensive privacy protection system for your network. It automatically deploys and manages services like ad-blocking, secure DNS, and firewall protection with just one command.
+PrivateBox transforms a mini PC running Proxmox into a comprehensive privacy protection system for your network. It automatically deploys and manages services like ad-blocking and secure DNS with just one command.
 
 **Key Features:**
 - 🛡️ **Privacy Protection**: Ad-blocking, DNS privacy, and firewall in one solution
@@ -58,9 +58,9 @@ sudo bash quickstart.sh --help
 ## What's Included
 
 ### Privacy Services
-- **AdGuard Home**: Network-wide ad and tracker blocking
-- **OPNsense**: Enterprise-grade firewall and router (coming soon)
-- **Unbound DNS**: Privacy-focused recursive DNS resolver (coming soon)
+- **AdGuard Home**: Network-wide ad and tracker blocking (Available)
+- **OPNsense**: Enterprise-grade firewall and router (Planned - In Development)
+- **Unbound DNS**: Privacy-focused recursive DNS resolver (Planned)
 
 ### Management Tools
 - **Portainer**: Simple container management with web UI
@@ -192,51 +192,33 @@ vars_prompt:
 
 ## Current Status
 
-### ✅ Phase 0: Prerequisites & Information Gathering (2025-07-24)
-**Successfully completed all Phase 0 objectives:**
-- **VM Hostname Resolution**: Fixed cloud-init configuration to prevent "sudo: unable to resolve host" errors
-- **Podman Quadlet Networking**: Documented container binding behavior (binds to VM IP, not localhost)
-- **AdGuard API Documentation**: Created comprehensive test scripts and documented all API endpoints
-- **100% Hands-Off Deployment**: AdGuard now deploys and configures automatically via Ansible
-- **Health Check Fix**: Updated to use VM IP address instead of localhost
-- **Automatic Configuration**: Integrated AdGuard setup into main playbook with proper port handling
-- **DNS Integration**: System automatically uses AdGuard for DNS after deployment
+### ✅ Working Features
+- **Bootstrap System**: One-command VM creation with all management tools
+- **Container Management**: Portainer for easy container administration
+- **Automation Platform**: Semaphore with automatic template synchronization
+- **AdGuard Home**: Fully automated deployment via Semaphore templates
+- **SSH Key Management**: Automatic configuration for both Proxmox and container hosts
 
-### ✅ Fully Automated Bootstrap (2025-07-21)
-- **100% Hands-Off Deployment**: Complete automation from start to finish (~3 minutes)
-- **Network Auto-Discovery**: Automatic detection and configuration of network settings
-- **Management Tools**: Portainer and Semaphore automatically installed and configured
-- **Template Synchronization**: All service templates generated automatically from playbook metadata
-- **Quick Start Script**: One-line installation with full automation
-- **SSH Key Management**: VM can self-manage via Ansible with proper authorization
-- **API Integration**: Simplified authentication with JSON-safe password generation
+### 🚧 In Development
+- **OPNsense Integration**: Firewall and router functionality
+- **Network Segmentation**: VLAN-based network isolation (design phase)
+- **Additional Privacy Services**: Unbound DNS, WireGuard VPN
 
-### 🚧 In Progress
-- **Phase 1 Network Architecture**: Ready to implement OPNsense and network segmentation
-- **SSH Authentication**: Resolving Ansible SSH access from Semaphore (tracked separately)
-- **Additional Services**: OPNSense, Unbound DNS, and other privacy services planned
 
-### 📋 Planned
-- **Secrets Management**: Secure handling of credentials and sensitive data
-- **Multi-VLAN Support**: Network segregation for enhanced security
+
+### 📋 Future Features
+- **Consumer Dashboard**: User-friendly web interface for non-technical users
 - **Backup/Restore**: Automated configuration backup and recovery
+- **Additional Services**: Pi-hole, WireGuard VPN, Nginx Proxy Manager
 
-## Next Steps
 
-- Begin Phase 1: Implement OPNsense VM creation and network architecture
-- Resolve SSH authentication issue for Ansible playbook execution from Semaphore
-- Deploy additional privacy services (Unbound DNS, VPN services)
-- Implement secure secrets management with Ansible Vault
-- Create monitoring and health check dashboards
-- Document production deployment best practices
-
-## Where to Find More
+## Documentation
 
 For more detailed information:
 
-- **Technical Bootstrap Details**: See [bootstrap/README.md](bootstrap/README.md) for in-depth installation documentation
-- **Development Information**: See [CLAUDE.md](CLAUDE.md) for architecture decisions and development guidelines  
-- **Service Documentation**: Check [documentation/](documentation/) for deployment guides and technical references
+- **Bootstrap Details**: See [bootstrap/README.md](bootstrap/README.md) for technical installation documentation
+- **Service Deployment**: See [ansible/README.md](ansible/README.md) for service deployment via Semaphore
+- **Development Guide**: See [CLAUDE.md](CLAUDE.md) for contributing and development guidelines
 
 ## Contributing
 
