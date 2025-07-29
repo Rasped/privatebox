@@ -80,15 +80,15 @@
         qm importdisk {{ vm_id }} {{ temp_dir }}/opnsense-template.qcow2 {{ vm_storage }}
       register: import_result
 
-    - name: Extract imported disk name
-      set_fact:
-        imported_disk: "{{ import_result.stdout | regex_search('unused0:([^\\s]+)', '\\1') | first }}"
+    - name: Debug import output
+      debug:
+        var: import_result.stdout
       when: import_result.rc == 0
 
     - name: Attach imported disk as boot device
       command: |
         qm set {{ vm_id }} \
-          --scsi0 {{ imported_disk }} \
+          --scsi0 {{ vm_storage }}:vm-{{ vm_id }}-disk-0 \
           --scsihw virtio-scsi-pci \
           --boot order=scsi0
 
