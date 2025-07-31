@@ -124,7 +124,7 @@ After bootstrap completes:
 ### Troubleshooting
 
 If template sync fails:
-- Check Semaphore logs: `podman logs semaphore-ui`
+- Check Semaphore logs: `podman logs semaphore`
 - Verify API token is valid in `/root/.credentials/semaphore_credentials.txt`
 - Ensure "Default Inventory" and "PrivateBox" repository exist in Semaphore
 - Check Python script output in task execution history
