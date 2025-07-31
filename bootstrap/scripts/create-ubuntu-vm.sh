@@ -494,6 +494,7 @@ packages:
   - buildah
   - skopeo
   - openssh-server
+  - ufw
 
 # Post-installation setup script
 write_files:
