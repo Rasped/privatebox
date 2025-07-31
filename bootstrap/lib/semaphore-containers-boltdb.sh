@@ -105,7 +105,7 @@ display_setup_completion_message() {
     log_info "  Password: $SEMAPHORE_ADMIN_PASSWORD"
     log_info ""
     log_info "Database: BoltDB (embedded)"
-    log_info "Data Location: /opt/semaphore/data/database.boltdb"
+    log_info "Data Location: /opt/semaphore/data"
     log_info ""
     log_info "Service Management:"
     log_info "  Status: systemctl status semaphore"
@@ -166,7 +166,7 @@ RequiresMountsFor=/opt/semaphore/data /opt/semaphore/config
 ContainerName=semaphore
 Image=docker.io/semaphoreui/semaphore:latest
 Environment=SEMAPHORE_DB_DIALECT=bolt
-Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
+Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore
 Environment=SEMAPHORE_ADMIN_PASSWORD="$SEMAPHORE_ADMIN_PASSWORD"
 Environment=SEMAPHORE_ADMIN_NAME=admin
 Environment=SEMAPHORE_ADMIN_EMAIL=admin@localhost
