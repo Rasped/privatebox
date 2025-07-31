@@ -24,7 +24,7 @@ create_semaphore_config() {
     cat > /opt/semaphore/config/config.json <<EOF
 {
   "bolt": {
-    "host": "/var/lib/semaphore"
+    "host": "/var/lib/semaphore/database.boltdb"
   },
   "dialect": "bolt",
   "port": "3000",
@@ -223,7 +223,7 @@ RequiresMountsFor=/opt/semaphore/data /opt/semaphore/config
 ContainerName=semaphore
 Image=docker.io/semaphoreui/semaphore:latest
 Environment=SEMAPHORE_DB_DIALECT=bolt
-Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore
+Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
 Environment=SEMAPHORE_ADMIN_PASSWORD="$SEMAPHORE_ADMIN_PASSWORD"
 Environment=SEMAPHORE_ADMIN_NAME=admin
 Environment=SEMAPHORE_ADMIN_EMAIL=admin@localhost
