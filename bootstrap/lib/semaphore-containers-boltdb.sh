@@ -152,7 +152,40 @@ wait_for_services_ready() {
         return 1
     fi
     
+    # Create admin user after API is ready
+    create_admin_user
+    
     return 0
+}
+
+# Create admin user for BoltDB setup
+create_admin_user() {
+    log_info "Creating admin user for Semaphore..."
+    
+    # Stop service to access database
+    systemctl stop semaphore.service
+    sleep 2
+    
+    # Create admin user using container
+    if podman run --rm \
+        -v /opt/semaphore/config:/etc/semaphore:Z \
+        -v /opt/semaphore/data:/var/lib/semaphore:Z \
+        docker.io/semaphoreui/semaphore:latest \
+        semaphore user add \
+        --admin \
+        --login admin \
+        --name Admin \
+        --email admin@localhost \
+        --password "$SEMAPHORE_ADMIN_PASSWORD" \
+        --config /etc/semaphore/config.json >/dev/null 2>&1; then
+        log_info "Admin user created successfully"
+    else
+        log_warn "Admin user creation failed - may already exist"
+    fi
+    
+    # Restart service
+    systemctl start semaphore.service
+    sleep 3
 }
 
 # Display setup completion message
