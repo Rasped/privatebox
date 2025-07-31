@@ -232,9 +232,11 @@ Environment=SEMAPHORE_ACCESS_KEY_ENCRYPTION="$SEMAPHORE_ACCESS_KEY_ENCRYPTION_KE
 Environment=SEMAPHORE_PLAYBOOK_PATH=/tmp/semaphore/
 Environment=TZ=UTC
 Environment=SEMAPHORE_APPS='{"python":{"active":true,"priority":500}}'
+Environment=SEMAPHORE_CONFIG_PATH=/etc/semaphore/config.json
 Volume=/opt/semaphore/data:/var/lib/semaphore:Z
 Volume=/opt/semaphore/config:/etc/semaphore:Z
 PublishPort=3000:3000
+Exec=semaphore server --config=/etc/semaphore/config.json
 
 [Service]
 Restart=always
