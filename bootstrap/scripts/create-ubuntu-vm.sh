@@ -615,7 +615,7 @@ ${semaphore_setup_content}
           PORTAINER_OK=true
       fi
       
-      if wait_for_service "semaphore-ui.service" "3000" 180; then
+      if wait_for_service "semaphore.service" "3000" 180; then
           SEMAPHORE_OK=true
       fi
       
