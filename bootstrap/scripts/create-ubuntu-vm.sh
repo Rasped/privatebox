@@ -417,17 +417,17 @@ function generate_cloud_init() {
     fi
     
     # Read semaphore lib files
-    if [[ -f "${SCRIPT_DIR}/../lib/semaphore-credentials.sh" ]]; then
-        semaphore_credentials_content=$(cat "${SCRIPT_DIR}/../lib/semaphore-credentials.sh" | sed 's/^/      /')
+    if [[ -f "${SCRIPT_DIR}/../lib/semaphore-credentials-boltdb.sh" ]]; then
+        semaphore_credentials_content=$(cat "${SCRIPT_DIR}/../lib/semaphore-credentials-boltdb.sh" | sed 's/^/      /')
     else
-        log_error "Cannot find semaphore-credentials.sh"
+        log_error "Cannot find semaphore-credentials-boltdb.sh"
         return 1
     fi
     
-    if [[ -f "${SCRIPT_DIR}/../lib/semaphore-containers.sh" ]]; then
-        semaphore_containers_content=$(cat "${SCRIPT_DIR}/../lib/semaphore-containers.sh" | sed 's/^/      /')
+    if [[ -f "${SCRIPT_DIR}/../lib/semaphore-containers-boltdb.sh" ]]; then
+        semaphore_containers_content=$(cat "${SCRIPT_DIR}/../lib/semaphore-containers-boltdb.sh" | sed 's/^/      /')
     else
-        log_error "Cannot find semaphore-containers.sh"
+        log_error "Cannot find semaphore-containers-boltdb.sh"
         return 1
     fi
     
@@ -453,10 +453,10 @@ function generate_cloud_init() {
         return 1
     fi
     
-    if [[ -f "${SCRIPT_DIR}/semaphore-setup.sh" ]]; then
-        semaphore_setup_content=$(cat "${SCRIPT_DIR}/semaphore-setup.sh" | sed 's/^/      /')
+    if [[ -f "${SCRIPT_DIR}/semaphore-setup-boltdb.sh" ]]; then
+        semaphore_setup_content=$(cat "${SCRIPT_DIR}/semaphore-setup-boltdb.sh" | sed 's/^/      /')
     else
-        log_error "Cannot find semaphore-setup.sh at ${SCRIPT_DIR}/semaphore-setup.sh"
+        log_error "Cannot find semaphore-setup-boltdb.sh at ${SCRIPT_DIR}/semaphore-setup-boltdb.sh"
         return 1
     fi
     
@@ -539,11 +539,11 @@ ${ssh_manager_content}
     permissions: '0644'
     content: |
 ${config_manager_content}
-  - path: /usr/local/lib/semaphore-credentials.sh
+  - path: /usr/local/lib/semaphore-credentials-boltdb.sh
     permissions: '0644'
     content: |
 ${semaphore_credentials_content}
-  - path: /usr/local/lib/semaphore-containers.sh
+  - path: /usr/local/lib/semaphore-containers-boltdb.sh
     permissions: '0644'
     content: |
 ${semaphore_containers_content}
@@ -561,7 +561,7 @@ ${initial_setup_content}
     permissions: '0755'
     content: |
 ${portainer_setup_content}
-  - path: /usr/local/bin/semaphore-setup.sh
+  - path: /usr/local/bin/semaphore-setup-boltdb.sh
     permissions: '0755'
     content: |
 ${semaphore_setup_content}
