@@ -1,5 +1,5 @@
 ---
-- name: "AdGuard: Deploy DNS Filter"
+- name: "AdGuard: Deploy Container Service"
   hosts: container-host
   become: true
   gather_facts: true

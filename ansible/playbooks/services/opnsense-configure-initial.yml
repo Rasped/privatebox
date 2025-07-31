@@ -1,5 +1,5 @@
 ---
-- name: "OPNsense: Initial Configuration and API Setup"
+- name: "OPNsense: Initial Setup & API"
   hosts: localhost
   gather_facts: false
   
