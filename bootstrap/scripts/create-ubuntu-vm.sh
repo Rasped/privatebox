@@ -707,9 +707,9 @@ ${semaphore_setup_content}
       trap - ERR
       
       # Create completion marker with detailed status
-      echo "COMPLETED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/privatebox-cloud-init-complete
+      echo "COMPLETED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
       echo "PORTAINER_STATUS=\$(systemctl is-active portainer.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
-      echo "SEMAPHORE_STATUS=\$(systemctl is-active semaphore-ui.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
+      echo "SEMAPHORE_STATUS=\$(systemctl is-active semaphore.service 2>/dev/null || echo 'not-found')" >> /etc/privatebox-cloud-init-complete
       
       # Check if ports are actually listening
       if command -v nc >/dev/null 2>&1; then
@@ -935,7 +935,7 @@ function wait_for_cloud_init() {
                 
                 # Check actual service status
                 local portainer_status=$(ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "systemctl is-active portainer.service 2>/dev/null || echo 'not-found'" 2>/dev/null || echo "unreachable")
-                local semaphore_status=$(ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "systemctl is-active semaphore-ui.service 2>/dev/null || echo 'not-found'" 2>/dev/null || echo "unreachable")
+                local semaphore_status=$(ssh $SSH_OPTS "${VM_USERNAME}@${STATIC_IP}" "systemctl is-active semaphore.service 2>/dev/null || echo 'not-found'" 2>/dev/null || echo "unreachable")
                 
                 # Only show detailed status every 30 seconds
                 if [ $((ATTEMPT % 3)) -eq 0 ]; then
