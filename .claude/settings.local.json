@@ -62,7 +62,9 @@
       "WebFetch(domain:pkg.opnsense.org)",
       "Bash(ping:*)",
       "Bash(nmap:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "WebFetch(domain:documentation.ubuntu.com)",
+      "Bash(git mv:*)"
     ],
     "deny": []
   }

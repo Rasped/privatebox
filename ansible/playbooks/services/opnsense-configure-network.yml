@@ -1,5 +1,5 @@
 ---
-- name: "OPNsense: Configure Network Interfaces"
+- name: "OPNsense: Configure Interfaces"
   hosts: container-host
   gather_facts: false
   

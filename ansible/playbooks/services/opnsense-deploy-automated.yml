@@ -15,7 +15,7 @@
 # Usage:
 #   ansible-playbook -i inventory.yml opnsense-deploy-automated.yml
 
-- name: "OPNsense: Automated Installation via qm sendkey"
+- name: "OPNsense: Automated Installation"
   hosts: proxmox
   become: false # Already root on Proxmox
   gather_facts: true
