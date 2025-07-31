@@ -8,6 +8,9 @@ setup_storage_directories() {
     mkdir -p /opt/semaphore/config
     chmod -R 755 /opt/semaphore
     
+    # Set ownership for container user (UID 1001 for semaphore)
+    chown -R 1001:1001 /opt/semaphore/data
+    
     # Create directory for Ansible projects
     mkdir -p /opt/semaphore/projects
     
