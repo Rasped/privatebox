@@ -142,8 +142,8 @@ if [[ ! $UBUNTU_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
 fi
 
 # Construct URLs based on version
-CLOUD_IMG_URL="${CLOUD_IMG_BASE_URL:-https://cloud-images.ubuntu.com/releases}/${UBUNTU_VERSION}/release/ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
-IMAGE_NAME="ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
+CLOUD_IMG_URL="https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img"
+IMAGE_NAME="ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img"
 
 # Validate configuration
 if ! validate_config; then
