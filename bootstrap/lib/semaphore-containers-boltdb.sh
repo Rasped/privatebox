@@ -11,7 +11,64 @@ setup_storage_directories() {
     # Create directory for Ansible projects
     mkdir -p /opt/semaphore/projects
     
+    # Create config.json to bypass setup wizard
+    create_semaphore_config
+    
     log_info "Storage directories created."
+}
+
+# Create Semaphore config.json file
+create_semaphore_config() {
+    log_info "Creating Semaphore config.json..."
+    
+    cat > /opt/semaphore/config/config.json <<EOF
+{
+  "bolt": {
+    "host": "/var/lib/semaphore"
+  },
+  "dialect": "bolt",
+  "port": "3000",
+  "interface": "",
+  "tmp_path": "/tmp/semaphore",
+  "cookie_hash": "$(head -c16 /dev/urandom | base64)",
+  "cookie_encryption": "$(head -c16 /dev/urandom | base64)",
+  "access_key_encryption": "$SEMAPHORE_ACCESS_KEY_ENCRYPTION_KEY",
+  "email_sender": "",
+  "email_host": "",
+  "email_port": "",
+  "web_host": "",
+  "ldap_binddn": "",
+  "ldap_bindpassword": "",
+  "ldap_server": "",
+  "ldap_searchdn": "",
+  "ldap_searchfilter": "",
+  "ldap_mappings": {
+    "dn": "",
+    "mail": "",
+    "uid": "",
+    "cn": ""
+  },
+  "telegram_chat": "",
+  "telegram_token": "",
+  "slack_url": "",
+  "rocketchat_url": "",
+  "microsoft_teams_url": "",
+  "max_parallel_tasks": 0,
+  "email_secure": false,
+  "email_alert": false,
+  "telegram_alert": false,
+  "slack_alert": false,
+  "rocketchat_alert": false,
+  "microsoft_teams_alert": false,
+  "ldap_enable": false,
+  "ldap_needtls": false,
+  "ssh_config_path": "/etc/semaphore",
+  "demo_mode": false
+}
+EOF
+    
+    chmod 644 /opt/semaphore/config/config.json
+    log_info "Semaphore config.json created"
 }
 
 # Check and remove manually created containers
