@@ -155,10 +155,10 @@ else
     error_exit "portainer-setup.sh not found" ${EXIT_MISSING_DEPS}
 fi
 
-if [[ -f /usr/local/bin/semaphore-setup.sh ]]; then
-    source /usr/local/bin/semaphore-setup.sh
+if [[ -f /usr/local/bin/semaphore-setup-boltdb.sh ]]; then
+    source /usr/local/bin/semaphore-setup-boltdb.sh
 else
-    error_exit "semaphore-setup.sh not found" ${EXIT_MISSING_DEPS}
+    error_exit "semaphore-setup-boltdb.sh not found" ${EXIT_MISSING_DEPS}
 fi
 
 log_info "Starting VM post-installation setup..."
@@ -335,13 +335,10 @@ if ! systemctl start portainer.service; then
     fi
 fi
 
-# Verify Semaphore services are running (they should be started by semaphore-setup.sh)
-log_info "Verifying Semaphore services..."
-if ! systemctl is-active --quiet semaphore-ui.service; then
-    log_warn "Semaphore UI service is not active - it should have been started by semaphore-setup.sh"
-fi
-if ! systemctl is-active --quiet semaphore-db.service; then
-    log_warn "Semaphore DB service is not active - it should have been started by semaphore-setup.sh"
+# Verify Semaphore service is running (it should be started by semaphore-setup-boltdb.sh)
+log_info "Verifying Semaphore service..."
+if ! systemctl is-active --quiet semaphore.service; then
+    log_warn "Semaphore service is not active - it should have been started by semaphore-setup-boltdb.sh"
 fi
 
 log_info "Systemd services created and enabled"
