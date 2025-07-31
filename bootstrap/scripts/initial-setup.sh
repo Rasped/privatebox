@@ -360,8 +360,7 @@ log_info "VM setup completed successfully!"
 # Collect final status information
 FINAL_STATUS="SUCCESS"
 PORTAINER_STATUS=$(systemctl is-active portainer.service 2>/dev/null || echo "failed")
-SEMAPHORE_UI_STATUS=$(systemctl is-active semaphore-ui.service 2>/dev/null || echo "failed")
-SEMAPHORE_DB_STATUS=$(systemctl is-active semaphore-db.service 2>/dev/null || echo "failed")
+SEMAPHORE_STATUS=$(systemctl is-active semaphore.service 2>/dev/null || echo "failed")
 
 # Write detailed status report
 cat >> "$SETUP_LOG" <<EOF
@@ -371,8 +370,7 @@ Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Overall Status: $FINAL_STATUS
 Services:
   - Portainer: $PORTAINER_STATUS
-  - Semaphore UI: $SEMAPHORE_UI_STATUS
-  - Semaphore DB: $SEMAPHORE_DB_STATUS
+  - Semaphore: $SEMAPHORE_STATUS
 
 Exit Code: 0
 Log Files:
@@ -387,7 +385,7 @@ if [[ -w /etc/privatebox-cloud-init-complete ]]; then
     echo "POST_INSTALL_EXIT_CODE=0" >> /etc/privatebox-cloud-init-complete
     echo "POST_INSTALL_LOG=$SETUP_LOG" >> /etc/privatebox-cloud-init-complete
     echo "POST_INSTALL_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
-    echo "POST_INSTALL_SERVICES=portainer:$PORTAINER_STATUS,semaphore-ui:$SEMAPHORE_UI_STATUS,semaphore-db:$SEMAPHORE_DB_STATUS" >> /etc/privatebox-cloud-init-complete
+    echo "POST_INSTALL_SERVICES=portainer:$PORTAINER_STATUS,semaphore:$SEMAPHORE_STATUS" >> /etc/privatebox-cloud-init-complete
 fi
 
 # Copy logs to a persistent location
