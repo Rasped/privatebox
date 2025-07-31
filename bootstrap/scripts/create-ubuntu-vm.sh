@@ -106,7 +106,7 @@ else
     UBUNTU_VERSION="24.04"
     VM_USERNAME="ubuntuadmin"
     VM_PASSWORD="Changeme123"
-    VM_MEMORY=4096
+    VM_MEMORY=2048
     VM_CORES=2
     STATIC_IP="192.168.1.22"
     GATEWAY="192.168.1.3"
@@ -748,7 +748,7 @@ function create_base_vm() {
     # Create the VM with base configuration
     if ! qm create "${VMID}" \
         --name "container-host" \
-        --memory 4096 \
+        --memory ${VM_MEMORY} \
         --cores 2 \
         --cpu host \
         --net0 "virtio,bridge=${NET_BRIDGE}" \
