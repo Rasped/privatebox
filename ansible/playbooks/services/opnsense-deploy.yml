@@ -10,7 +10,7 @@
 #   vm_id: ID for the new VM (default: 100)
 #   vm_name: Name for the new VM (default: opnsense-prod)
 
-- name: Deploy OPNsense from Template Image
+- name: "OPNsense: Deploy"
   hosts: proxmox
   become: false
   gather_facts: true
