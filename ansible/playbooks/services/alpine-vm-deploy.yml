@@ -261,10 +261,8 @@
           register: vm_ip_result
 
         - name: Get VM IP address (DHCP)
-          shell: |
-            # Get the VM's MAC address
-            MAC=$(qm config {{ vm_id }} | grep net0 | grep -oE 'virtio=[A-F0-9:]+' | cut -d= -f2)
-            # Use nmap to find the IP
+          shell: >
+            MAC=$(qm config {{ vm_id }} | grep net0 | grep -oE 'virtio=[A-F0-9:]+' | cut -d= -f2) &&
             nmap -sn 192.168.1.0/24 | grep -B2 "$MAC" | grep "Nmap scan report" | awk '{print $5}' | head -1
           when: vm_ip | length == 0
           register: vm_ip_result
