@@ -1,0 +1,265 @@
+---
+# Deploy Alpine Linux VM with Cloud-Init
+# This playbook creates an Alpine Linux VM using cloud-init for automated setup
+#
+# Usage:
+#   ansible-playbook -i inventory.yml alpine-vm-deploy.yml
+#
+# Variables:
+#   vm_id: ID for the new VM (default: 102)
+#   vm_name: Name for the new VM (default: alpine-vm)
+#   vm_ip: Static IP address (optional, uses DHCP if not set)
+
+- name: "Alpine Linux VM: Deploy with Cloud-Init"
+  hosts: proxmox
+  become: false
+  gather_facts: true
+
+  vars:
+    # Alpine cloud image URL
+    alpine_version: "3.22.1"
+    alpine_image_url: "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/cloud/nocloud_alpine-{{ alpine_version }}-x86_64-bios-tiny-r0.qcow2"
+    
+    # VM Configuration
+    vm_id: 102
+    vm_name: "alpine-vm"
+    vm_memory: 1024
+    vm_cores: 1
+    vm_storage: "local-lvm"
+    vm_disk_size: "10G"
+    
+    # Network Configuration
+    vm_bridge: "vmbr0"
+    vm_ip: ""  # Leave empty for DHCP, or set like "192.168.1.30"
+    vm_gateway: "{{ ansible_default_ipv4.gateway | default('192.168.1.1') }}"
+    vm_dns: "8.8.8.8"
+    
+    # User Configuration
+    vm_username: "alpineadmin"
+    vm_password: "$6$rounds=4096$saltsalt$Ky7ULvnrqDKdT3pE3PRZ.kThagXW4lY0DdJrPVLKgD7VdOWZLqTjkCG5kqQ1hZHZMhFeeY0T5oHNYG16iMHkm."  # changeme123
+    
+    # Working directories
+    work_dir: "/tmp/alpine-deploy"
+    snippets_dir: "/var/lib/vz/snippets"
+    
+    # Options
+    start_vm: true
+    wait_for_cloud_init: false
+
+  tasks:
+    # Check and cleanup existing VM
+    - name: "Alpine VM - Check existing VM"
+      tags: [alpine, check]
+      block:
+        - name: Check if VM exists
+          command: qm status {{ vm_id }}
+          register: vm_exists
+          failed_when: false
+          changed_when: false
+
+        - name: Stop existing VM if running
+          command: qm stop {{ vm_id }}
+          when: vm_exists.rc == 0
+          failed_when: false
+          register: stop_result
+
+        - name: Wait for VM to stop
+          pause:
+            seconds: 5
+          when: 
+            - vm_exists.rc == 0
+            - stop_result is not skipped
+
+        - name: Destroy existing VM
+          command: qm destroy {{ vm_id }}
+          when: vm_exists.rc == 0
+
+    # Create working directories
+    - name: "Alpine VM - Create directories"
+      tags: [alpine, dirs]
+      block:
+        - name: Create working directory
+          file:
+            path: "{{ work_dir }}"
+            state: directory
+            mode: "0755"
+
+        - name: Ensure snippets directory exists
+          file:
+            path: "{{ snippets_dir }}"
+            state: directory
+            mode: "0755"
+
+    # Download Alpine cloud image
+    - name: "Alpine VM - Download cloud image"
+      tags: [alpine, download]
+      block:
+        - name: Check if image already downloaded
+          stat:
+            path: "{{ work_dir }}/alpine-cloud.qcow2"
+          register: image_exists
+
+        - name: Download Alpine cloud image
+          get_url:
+            url: "{{ alpine_image_url }}"
+            dest: "{{ work_dir }}/alpine-cloud.qcow2"
+            mode: "0644"
+            timeout: 300
+          when: not image_exists.stat.exists
+
+    # Generate cloud-init configuration
+    - name: "Alpine VM - Configure cloud-init"
+      tags: [alpine, cloudinit]
+      block:
+        - name: Get SSH public key from Proxmox host
+          slurp:
+            src: /root/.ssh/id_rsa.pub
+          register: ssh_public_key
+
+        - name: Generate cloud-init user-data
+          copy:
+            dest: "{{ snippets_dir }}/user-data-{{ vm_id }}.yaml"
+            mode: "0644"
+            content: |
+              #cloud-config
+              hostname: {{ vm_name }}
+              manage_etc_hosts: true
+              
+              users:
+                - name: {{ vm_username }}
+                  groups: wheel
+                  sudo: ALL=(ALL) NOPASSWD:ALL
+                  shell: /bin/ash
+                  passwd: "{{ vm_password }}"
+                  lock_passwd: false
+                  ssh_authorized_keys:
+                    - {{ ssh_public_key.content | b64decode | trim }}
+                - name: alpine
+                  ssh_authorized_keys:
+                    - {{ ssh_public_key.content | b64decode | trim }}
+              
+              {% if vm_ip %}
+              # Static network configuration
+              write_files:
+                - path: /etc/network/interfaces
+                  content: |
+                    auto lo
+                    iface lo inet loopback
+                    
+                    auto eth0
+                    iface eth0 inet static
+                      address {{ vm_ip }}/24
+                      gateway {{ vm_gateway }}
+                      dns-nameservers {{ vm_dns }}
+              {% endif %}
+              
+              # Package installation
+              packages:
+                - openssh
+                - sudo
+                - bash
+                - curl
+                - wget
+                - ca-certificates
+              
+              # Enable and start SSH
+              runcmd:
+                - rc-update add sshd default
+                - rc-service sshd start
+                {% if vm_ip %}
+                - rc-service networking restart
+                {% endif %}
+                - echo "Cloud-init completed at $(date)" > /etc/cloud-init-done
+              
+              # Final message
+              final_message: "Alpine Linux VM ready after $UPTIME seconds"
+
+    # Create and configure VM
+    - name: "Alpine VM - Create VM"
+      tags: [alpine, create]
+      block:
+        - name: Create VM
+          command: |
+            qm create {{ vm_id }} \
+              --name {{ vm_name }} \
+              --memory {{ vm_memory }} \
+              --cores {{ vm_cores }} \
+              --cpu host \
+              --ostype l26 \
+              --net0 virtio,bridge={{ vm_bridge }} \
+              --scsihw virtio-scsi-pci \
+              --onboot 0
+
+        - name: Import disk image
+          command: |
+            qm importdisk {{ vm_id }} {{ work_dir }}/alpine-cloud.qcow2 {{ vm_storage }}
+          register: import_result
+
+        - name: Configure imported disk
+          command: |
+            qm set {{ vm_id }} \
+              --scsi0 {{ vm_storage }}:vm-{{ vm_id }}-disk-0 \
+              --boot order=scsi0
+
+        - name: Resize disk
+          command: |
+            qm resize {{ vm_id }} scsi0 {{ vm_disk_size }}
+
+        - name: Add cloud-init drive
+          command: |
+            qm set {{ vm_id }} --ide2 {{ vm_storage }}:cloudinit
+
+        - name: Configure cloud-init
+          command: |
+            qm set {{ vm_id }} \
+              --serial0 socket --vga serial0 \
+              {% if vm_ip %}
+              --ipconfig0 ip={{ vm_ip }}/24,gw={{ vm_gateway }} \
+              {% else %}
+              --ipconfig0 ip=dhcp \
+              {% endif %}
+              --cicustom "user=local:snippets/user-data-{{ vm_id }}.yaml"
+
+    # Start VM
+    - name: "Alpine VM - Start VM"
+      tags: [alpine, start]
+      command: qm start {{ vm_id }}
+      when: start_vm | bool
+
+    # Clean up temporary files
+    - name: "Alpine VM - Cleanup"
+      tags: [alpine, cleanup]
+      file:
+        path: "{{ work_dir }}"
+        state: absent
+      when: false  # Keep files for debugging, set to true to clean
+
+    # Display summary
+    - name: "Alpine VM - Display summary"
+      tags: [alpine, summary]
+      debug:
+        msg:
+          - "========================================"
+          - "Alpine Linux VM Deployed Successfully!"
+          - "========================================"
+          - ""
+          - "VM ID: {{ vm_id }}"
+          - "VM Name: {{ vm_name }}"
+          - "Memory: {{ vm_memory }}MB"
+          - "Cores: {{ vm_cores }}"
+          - "Disk: {{ vm_disk_size }}"
+          - ""
+          - "Network Configuration:"
+          - "  Bridge: {{ vm_bridge }}"
+          - "  IP: {{ vm_ip | default('DHCP') }}"
+          - ""
+          - "Access Information:"
+          - "  Username: {{ vm_username }}"
+          - "  Password: changeme123"
+          - "  SSH: ssh {{ vm_username }}@{{ vm_ip | default('<dhcp-ip>') }}"
+          - ""
+          - "Notes:"
+          - "  - Cloud-init will configure the VM on first boot"
+          - "  - SSH keys from Proxmox host are automatically added"
+          - "  - Default alpine user also has SSH access"
+          - "========================================"
