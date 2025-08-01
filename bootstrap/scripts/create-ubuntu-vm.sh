@@ -731,6 +731,12 @@ ${semaphore_setup_content}
 runcmd:
   # Execute the main cloud-init script with bash
   - ['/bin/bash', '/usr/local/bin/cloud-init-main.sh']
+  # Remove commercial/marketing bloat
+  - apt-get remove -y ubuntu-advantage-tools || true
+  - systemctl disable ua-timer.timer || true
+  - systemctl disable motd-news.timer || true
+  - systemctl stop motd-news.timer || true
+  - sed -i 's/ENABLED=1/ENABLED=0/g' /etc/default/motd-news || true
 EOF
 
     # Ensure proper permissions on the user-data file
