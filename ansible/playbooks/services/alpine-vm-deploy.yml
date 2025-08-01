@@ -50,6 +50,10 @@
     start_vm: true
     wait_for_cloud_init: true
     register_with_semaphore: true
+    install_caddy: true
+    
+    # Ubuntu VM for backend services
+    ubuntu_vm_ip: "192.168.1.20"
     
     # Semaphore configuration from environment
     semaphore_url: "{{ SEMAPHORE_URL }}"
@@ -402,6 +406,111 @@
               - "  SSH Key ID: {{ ssh_key_result.json.id }}"
               - "  Inventory ID: {{ inventory_result.json.id }}"
 
+    # Install and configure Caddy
+    - name: "Alpine VM - Install Caddy Reverse Proxy"
+      tags: [alpine, caddy]
+      when: 
+        - alpine_vm_ip is defined
+        - install_caddy | default(true) | bool
+      block:
+        - name: Install Caddy on Alpine VM
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo apk update && sudo apk add caddy curl"
+          register: caddy_install
+          
+        - name: Create Caddy directories
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo mkdir -p /etc/caddy /var/lib/caddy /var/log/caddy && \
+                 sudo chown caddy:caddy /etc/caddy /var/lib/caddy /var/log/caddy"
+                 
+        - name: Check if services registry exists
+          delegate_to: localhost
+          stat:
+            path: "{{ playbook_dir }}/../../group_vars/all/services.yml"
+          register: services_file
+          
+        - name: Load services configuration
+          when: services_file.stat.exists
+          include_vars:
+            file: "{{ playbook_dir }}/../../group_vars/all/services.yml"
+            
+        - name: Set default services if not defined
+          when: not services_file.stat.exists or privatebox_services is not defined
+          set_fact:
+            privatebox_services:
+              - name: adguard
+                backend_host: "{{ ubuntu_vm_ip }}"
+                backend_port: 8080
+                domain: adguard.lan
+                description: "AdGuard Home - DNS-level ad blocking"
+              - name: semaphore
+                backend_host: "{{ ubuntu_vm_ip }}"
+                backend_port: 3000
+                domain: semaphore.lan
+                description: "Semaphore - Ansible UI"
+              - name: portainer
+                backend_host: "{{ ubuntu_vm_ip }}"
+                backend_port: 9000
+                domain: portainer.lan
+                description: "Portainer - Container Management"
+        
+        - name: Generate Caddyfile from template
+          template:
+            src: ../../../files/caddy/Caddyfile.j2
+            dest: "{{ work_dir }}/Caddyfile"
+            mode: "0644"
+          vars:
+            backend_host: "{{ ubuntu_vm_ip | default('192.168.1.20') }}"
+            
+        - name: Copy Caddyfile to Alpine VM
+          command: |
+            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ work_dir }}/Caddyfile \
+                {{ vm_username }}@{{ alpine_vm_ip }}:/tmp/Caddyfile
+                
+        - name: Install Caddyfile and validate
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && \
+                 sudo caddy validate --config /etc/caddy/Caddyfile"
+                 
+        - name: Enable and start Caddy service
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo rc-update add caddy default && \
+                 sudo rc-service caddy start"
+                 
+        - name: Configure firewall for Caddy
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo apk add iptables && \
+                 sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT && \
+                 sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT && \
+                 sudo rc-service iptables save || true"
+          failed_when: false
+          
+        - name: Test Caddy health endpoint
+          uri:
+            url: "http://{{ alpine_vm_ip }}/health"
+            status_code: 200
+            timeout: 10
+          register: caddy_health
+          retries: 3
+          delay: 5
+          until: caddy_health.status == 200
+          failed_when: false
+          
+        - name: Note Caddy installation status
+          set_fact:
+            caddy_installed: "{{ caddy_health.status | default(0) == 200 }}"
+
     # Clean up temporary files
     - name: "Alpine VM - Cleanup"
       tags: [alpine, cleanup]
@@ -439,8 +548,14 @@
           - "  {% if ssh_key_result is defined %}SSH Key ID: {{ ssh_key_result.json.id }}{% endif %}"
           - "  {% if inventory_result is defined %}Inventory ID: {{ inventory_result.json.id }}{% endif %}"
           - ""
+          - "Caddy Reverse Proxy:"
+          - "  {% if caddy_installed | default(false) %}✓ Installed and running{% else %}✗ Not installed{% endif %}"
+          - "  {% if caddy_installed | default(false) %}HTTPS endpoint: https://{{ alpine_vm_ip | default(vm_ip) | default('<dhcp-ip>') }}{% endif %}"
+          - "  {% if caddy_installed | default(false) %}Backend host: {{ ubuntu_vm_ip }}{% endif %}"
+          - ""
           - "Notes:"
           - "  - Cloud-init will configure the VM on first boot"
           - "  - SSH keys from Proxmox host are automatically added"
           - "  - Default alpine user also has SSH access"
+          - "  {% if caddy_installed | default(false) %}- Caddy is configured to proxy PrivateBox services{% endif %}"
           - "========================================"
