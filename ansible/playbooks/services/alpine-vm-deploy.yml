@@ -333,6 +333,7 @@
               ssh:
                 login: "{{ vm_username }}"
                 private_key: "{{ vm_ssh_private_key.stdout }}"
+            status_code: [200, 201]
           register: ssh_key_result
 
         - name: Create inventory for Alpine VM
