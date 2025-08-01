@@ -259,7 +259,7 @@ def parse_playbook(playbook_path):
             'name': play.get('name', 'Unnamed playbook'),
             'hosts': hosts,
             'vars': semaphore_vars,
-            'template_config': {}
+            'template_config': vars_section.get('template_config', {})
         }
     
     except Exception as e:

@@ -164,6 +164,12 @@ create_semaphore_api_environment() {
     local api_token="$2"
     local admin_session="$3"
     
+    # Get VM IP dynamically
+    local vm_ip=$(hostname -I | awk '{print $1}')
+    if [[ -z "$vm_ip" ]]; then
+        vm_ip="${STATIC_IP:-192.168.1.20}"
+    fi
+    
     log_info "Creating SemaphoreAPI environment for project $project_id..." >&2
     log_info "API Token (FULL): $api_token" >&2
     
@@ -172,7 +178,7 @@ create_semaphore_api_environment() {
     local env_payload=$(jq -n \
         --arg name "SemaphoreAPI" \
         --argjson pid "$project_id" \
-        --arg url "http://localhost:3000" \
+        --arg url "http://${vm_ip}:3000" \
         --arg token "$api_token" \
         '{
             name: $name,
