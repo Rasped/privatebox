@@ -39,14 +39,8 @@
     # Default values for hands-off deployment
     confirm_deploy: true
     
-  vars_prompt:
-    - name: confirm_deploy
-      prompt: "Deploy Caddy on Alpine VM? (yes/no)"
-      default: "yes"
-      private: no
-      # Semaphore metadata
-      semaphore_type: boolean
-      semaphore_description: "Confirm deployment of Caddy reverse proxy"
+  # Note: vars_prompt is not used in Semaphore execution
+  # The playbook runs with confirm_deploy: true by default
 
   tasks:
     # Pre-deployment validation
