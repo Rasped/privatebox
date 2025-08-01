@@ -43,7 +43,7 @@
     vm_dns: "1.1.1.1,8.8.8.8"
     
     # SSH Configuration
-    ssh_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_rsa.pub"
+    ssh_public_key_file: "/root/.ssh/id_rsa.pub"
     alpine_user: "alpine"
     
     # Caddy Configuration
