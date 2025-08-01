@@ -430,7 +430,7 @@
             name=\"Caddy Web Server\"
             description=\"Fast, multi-platform web server with automatic HTTPS\"
             
-            command=\"/usr/bin/caddy\"
+            command=\"/usr/sbin/caddy\"
             command_args=\"start --config /etc/caddy/Caddyfile\"
             command_background=true
             pidfile=\"/run/caddy.pid\"
