@@ -23,7 +23,7 @@
     tls internal
 
     # Reverse proxy to service
-    reverse_proxy localhost:{{ service.port }} {
+    reverse_proxy 127.0.0.1:{{ service.port }} {
         # Add common headers
         header_up Host {host}
         header_up X-Real-IP {remote}
