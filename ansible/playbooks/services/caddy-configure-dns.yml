@@ -38,22 +38,10 @@
     # Default values for hands-off deployment
     confirm_deploy: true
     
-  vars_prompt:
-    - name: confirm_deploy
-      prompt: "Configure DNS entries for Caddy? (yes/no)"
-      default: "yes"
-      private: no
-      # Semaphore metadata
-      semaphore_type: boolean
-      semaphore_description: "Confirm DNS configuration for Caddy reverse proxy"
-      
-    - name: caddy_vm_ip
-      prompt: "Alpine VM IP address (Caddy)"
-      default: "192.168.1.195"
-      private: no
-      semaphore_type: text
-      semaphore_description: "IP address of the Alpine VM running Caddy"
-      semaphore_required: true
+  # Note: vars_prompt is not used in Semaphore execution
+  # The playbook runs with default values:
+  #   confirm_deploy: true
+  #   caddy_vm_ip: 192.168.1.195
 
   tasks:
     # Load service registry
