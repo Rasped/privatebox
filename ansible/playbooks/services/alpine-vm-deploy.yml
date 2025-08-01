@@ -477,13 +477,21 @@
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && \
-                 sudo caddy validate --config /etc/caddy/Caddyfile"
+                 sudo chown caddy:caddy /etc/caddy/Caddyfile && \
+                 sudo -u caddy caddy validate --config /etc/caddy/Caddyfile"
                  
         - name: Enable Caddy service at boot
           command: |
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo rc-update add caddy default"
+                
+        - name: Ensure log files have correct permissions
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo rm -f /var/log/caddy/*.log && \
+                 sudo chown -R caddy:caddy /var/log/caddy"
                 
         - name: Start Caddy service
           command: |
