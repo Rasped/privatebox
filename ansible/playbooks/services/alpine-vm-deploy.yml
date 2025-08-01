@@ -336,6 +336,10 @@
             status_code: [200, 201]
           register: ssh_key_result
 
+        - name: Debug SSH key result
+          debug:
+            var: ssh_key_result.json
+
         - name: Create inventory for Alpine VM
           uri:
             url: "{{ semaphore_url }}/api/project/1/inventory"
@@ -359,6 +363,12 @@
               type: "static"
             status_code: [200, 201]
           register: inventory_result
+          ignore_errors: yes
+
+        - name: Debug inventory creation error
+          debug:
+            var: inventory_result
+          when: inventory_result.failed | default(false)
 
         - name: Display Semaphore registration results
           debug:
