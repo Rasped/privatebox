@@ -420,38 +420,6 @@
                 "sudo apk update && sudo apk add caddy curl"
           register: caddy_install
           
-        - name: Create Caddy startup script
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                {{ vm_username }}@{{ alpine_vm_ip }} \
-                "sudo tee /usr/local/bin/start-caddy.sh << 'EOF'
-            #!/bin/sh
-            # Caddy startup script for Alpine
-            
-            # Kill any existing Caddy processes
-            pkill -f caddy || true
-            sleep 1
-            
-            # Ensure directories exist
-            mkdir -p /run/caddy /var/log/caddy /var/lib/caddy
-            chown -R caddy:caddy /run/caddy /var/log/caddy /var/lib/caddy
-            
-            # Start Caddy in background
-            su -s /bin/sh caddy -c 'nohup caddy start --config /etc/caddy/Caddyfile > /var/log/caddy/startup.log 2>&1 &'
-            
-            # Save PID
-            sleep 2
-            pgrep -f 'caddy start' > /run/caddy.pid
-            
-            echo 'Caddy started successfully'
-            EOF"
-            
-        - name: Make startup script executable
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                {{ vm_username }}@{{ alpine_vm_ip }} \
-                "sudo chmod +x /usr/local/bin/start-caddy.sh"
-          
         - name: Create Caddy directories
           command: |
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -511,17 +479,17 @@
                 "sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && \
                  sudo caddy validate --config /etc/caddy/Caddyfile"
                  
-        - name: Add Caddy startup to boot process
+        - name: Enable Caddy service at boot
           command: |
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
-                "echo '@reboot /usr/local/bin/start-caddy.sh' | sudo crontab -"
+                "sudo rc-update add caddy default"
                 
-        - name: Start Caddy using startup script
+        - name: Start Caddy service
           command: |
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
-                "sudo /usr/local/bin/start-caddy.sh"
+                "sudo rc-service caddy start"
                  
         - name: Wait for Caddy to fully start
           pause:
