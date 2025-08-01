@@ -44,7 +44,13 @@
     
     # Options
     start_vm: true
-    wait_for_cloud_init: false
+    wait_for_cloud_init: true
+    register_with_semaphore: true
+    
+    # Semaphore configuration
+    semaphore_url: "http://192.168.1.21:3000"
+    semaphore_admin_user: "admin"
+    semaphore_admin_password: "+dBUAa3WqO(5)Ht2)JhhSD3suDp5Co23"
 
   tasks:
     # Check and cleanup existing VM
@@ -169,6 +175,18 @@
                 {% if vm_ip %}
                 - rc-service networking restart
                 {% endif %}
+                # Generate SSH key for this VM
+                - mkdir -p /home/{{ vm_username }}/.ssh
+                - ssh-keygen -t ed25519 -f /home/{{ vm_username }}/.ssh/id_ed25519 -N '' -C '{{ vm_name }}@{{ vm_ip | default("dhcp") }}'
+                - chown -R {{ vm_username }}:{{ vm_username }} /home/{{ vm_username }}/.ssh
+                - chmod 700 /home/{{ vm_username }}/.ssh
+                - chmod 600 /home/{{ vm_username }}/.ssh/id_ed25519
+                - chmod 644 /home/{{ vm_username }}/.ssh/id_ed25519.pub
+                # Also generate host SSH key for root
+                - ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N '' -C 'root@{{ vm_name }}'
+                - chmod 700 /root/.ssh
+                - chmod 600 /root/.ssh/id_ed25519
+                - chmod 644 /root/.ssh/id_ed25519.pub
                 - echo "Cloud-init completed at $(date)" > /etc/cloud-init-done
               
               # Final message
@@ -226,6 +244,138 @@
       command: qm start {{ vm_id }}
       when: start_vm | bool
 
+    # Wait for cloud-init to complete
+    - name: "Alpine VM - Wait for cloud-init"
+      tags: [alpine, wait]
+      when: 
+        - start_vm | bool
+        - wait_for_cloud_init | bool
+      block:
+        - name: Wait for VM to get IP address
+          pause:
+            seconds: 30
+
+        - name: Get VM IP address
+          shell: |
+            # Try to get IP from VM config first
+            {% if vm_ip %}
+            echo "{{ vm_ip }}"
+            {% else %}
+            # Otherwise scan for the VM's MAC address
+            MAC=$(qm config {{ vm_id }} | grep net0 | grep -oE 'virtio=[A-F0-9:]+' | cut -d= -f2)
+            # Use nmap to find the IP
+            nmap -sn 192.168.1.0/24 | grep -B2 "$MAC" | grep "Nmap scan report" | awk '{print $5}' | head -1
+            {% endif %}
+          register: vm_ip_result
+          retries: 6
+          delay: 10
+          until: vm_ip_result.stdout | length > 0
+
+        - name: Set VM IP address fact
+          set_fact:
+            alpine_vm_ip: "{{ vm_ip_result.stdout | trim }}"
+
+        - name: Wait for SSH to be available
+          wait_for:
+            host: "{{ alpine_vm_ip }}"
+            port: 22
+            delay: 10
+            timeout: 300
+
+        - name: Wait for cloud-init to complete
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "test -f /etc/cloud-init-done"
+          register: cloud_init_check
+          retries: 30
+          delay: 10
+          until: cloud_init_check.rc == 0
+
+    # Register with Semaphore
+    - name: "Alpine VM - Register with Semaphore"
+      tags: [alpine, semaphore]
+      when: 
+        - register_with_semaphore | bool
+        - wait_for_cloud_init | bool
+        - alpine_vm_ip is defined
+      block:
+        - name: Retrieve SSH public key from VM
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "cat /home/{{ vm_username }}/.ssh/id_ed25519.pub"
+          register: vm_ssh_public_key
+
+        - name: Retrieve SSH private key from VM
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo cat /home/{{ vm_username }}/.ssh/id_ed25519"
+          register: vm_ssh_private_key
+          no_log: true
+
+        - name: Login to Semaphore API
+          uri:
+            url: "{{ semaphore_url }}/api/auth/login"
+            method: POST
+            body_format: json
+            body:
+              auth: "{{ semaphore_admin_user }}"
+              password: "{{ semaphore_admin_password }}"
+            status_code: 204
+          register: semaphore_login
+
+        - name: Extract session cookie
+          set_fact:
+            semaphore_cookie: "{{ semaphore_login.set_cookie | regex_search('semaphore=[^;]+') }}"
+
+        - name: Create SSH key in Semaphore
+          uri:
+            url: "{{ semaphore_url }}/api/project/1/keys"
+            method: POST
+            headers:
+              Cookie: "{{ semaphore_cookie }}"
+            body_format: json
+            body:
+              name: "{{ vm_name }}-key"
+              type: "ssh"
+              project_id: 1
+              ssh:
+                login: "{{ vm_username }}"
+                private_key: "{{ vm_ssh_private_key.stdout }}"
+          register: ssh_key_result
+
+        - name: Create inventory for Alpine VM
+          uri:
+            url: "{{ semaphore_url }}/api/project/1/inventory"
+            method: POST
+            headers:
+              Cookie: "{{ semaphore_cookie }}"
+            body_format: json
+            body:
+              name: "{{ vm_name }}"
+              project_id: 1
+              inventory: |
+                all:
+                  hosts:
+                    {{ vm_name }}:
+                      ansible_host: {{ alpine_vm_ip }}
+                      ansible_user: {{ vm_username }}
+                      ansible_become: true
+                      ansible_become_method: sudo
+                      ansible_python_interpreter: /usr/bin/python3
+              ssh_key_id: "{{ ssh_key_result.json.id }}"
+              type: "static"
+          register: inventory_result
+
+        - name: Display Semaphore registration results
+          debug:
+            msg:
+              - "VM registered with Semaphore:"
+              - "  SSH Key ID: {{ ssh_key_result.json.id }}"
+              - "  Inventory ID: {{ inventory_result.json.id }}"
+
     # Clean up temporary files
     - name: "Alpine VM - Cleanup"
       tags: [alpine, cleanup]
@@ -251,12 +401,17 @@
           - ""
           - "Network Configuration:"
           - "  Bridge: {{ vm_bridge }}"
-          - "  IP: {{ vm_ip | default('DHCP') }}"
+          - "  IP: {{ alpine_vm_ip | default(vm_ip) | default('DHCP') }}"
           - ""
           - "Access Information:"
           - "  Username: {{ vm_username }}"
           - "  Password: changeme123"
-          - "  SSH: ssh {{ vm_username }}@{{ vm_ip | default('<dhcp-ip>') }}"
+          - "  SSH: ssh {{ vm_username }}@{{ alpine_vm_ip | default(vm_ip) | default('<dhcp-ip>') }}"
+          - ""
+          - "Semaphore Registration:"
+          - "  {% if register_with_semaphore and ssh_key_result is defined %}✓ Registered with Semaphore{% else %}✗ Not registered{% endif %}"
+          - "  {% if ssh_key_result is defined %}SSH Key ID: {{ ssh_key_result.json.id }}{% endif %}"
+          - "  {% if inventory_result is defined %}Inventory ID: {{ inventory_result.json.id }}{% endif %}"
           - ""
           - "Notes:"
           - "  - Cloud-init will configure the VM on first boot"
