@@ -352,18 +352,17 @@
               - "  Full inventory string:"
               - "{{ 'all:\\n  hosts:\\n    ' + vm_name + ':\\n      ansible_host: ' + alpine_vm_ip + '\\n      ansible_user: ' + vm_username + '\\n      ansible_become: true\\n      ansible_become_method: sudo\\n      ansible_python_interpreter: /usr/bin/python3' }}"
 
-        - name: Set inventory body
-          set_fact:
-            inventory_body:
-              name: "{{ vm_name }}"
-              project_id: 1
-              inventory: "all:\n  hosts:\n    {{ vm_name }}:\n      ansible_host: {{ alpine_vm_ip }}\n      ansible_user: {{ vm_username }}\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3"
-              ssh_key_id: {{ ssh_key_result.json.id | int }}
-              type: "static"
-
-        - name: Debug full inventory body
+        - name: Debug final inventory body JSON
           debug:
-            msg: "{{ inventory_body | to_json }}"
+            msg: >-
+              {{
+                {
+                  "name": vm_name,
+                  "project_id": 1,
+                  "inventory": "all:\n  hosts:\n    " + vm_name + ":\n      ansible_host: " + alpine_vm_ip + "\n      ansible_user: " + vm_username + "\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3",
+                  "type": "static"
+                } | combine({"ssh_key_id": ssh_key_result.json.id | int}) | to_json
+              }}
 
         - name: Create inventory for Alpine VM
           uri:
@@ -372,7 +371,15 @@
             headers:
               Authorization: "Bearer {{ semaphore_api_token }}"
             body_format: json
-            body: "{{ inventory_body }}"
+            body: >-
+              {{
+                {
+                  "name": vm_name,
+                  "project_id": 1,
+                  "inventory": "all:\n  hosts:\n    " + vm_name + ":\n      ansible_host: " + alpine_vm_ip + "\n      ansible_user: " + vm_username + "\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3",
+                  "type": "static"
+                } | combine({"ssh_key_id": ssh_key_result.json.id | int})
+              }}
             status_code: [200, 201]
           register: inventory_result
           ignore_errors: yes
