@@ -352,6 +352,19 @@
               - "  Full inventory string:"
               - "{{ 'all:\\n  hosts:\\n    ' + vm_name + ':\\n      ansible_host: ' + alpine_vm_ip + '\\n      ansible_user: ' + vm_username + '\\n      ansible_become: true\\n      ansible_become_method: sudo\\n      ansible_python_interpreter: /usr/bin/python3' }}"
 
+        - name: Set inventory body
+          set_fact:
+            inventory_body:
+              name: "{{ vm_name }}"
+              project_id: 1
+              inventory: "all:\n  hosts:\n    {{ vm_name }}:\n      ansible_host: {{ alpine_vm_ip }}\n      ansible_user: {{ vm_username }}\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3"
+              ssh_key_id: "{{ ssh_key_result.json.id | int }}"
+              type: "static"
+
+        - name: Debug full inventory body
+          debug:
+            msg: "{{ inventory_body | to_json }}"
+
         - name: Create inventory for Alpine VM
           uri:
             url: "{{ semaphore_url }}/api/project/1/inventory"
@@ -359,12 +372,7 @@
             headers:
               Authorization: "Bearer {{ semaphore_api_token }}"
             body_format: json
-            body:
-              name: "{{ vm_name }}"
-              project_id: 1
-              inventory: "all:\n  hosts:\n    {{ vm_name }}:\n      ansible_host: {{ alpine_vm_ip }}\n      ansible_user: {{ vm_username }}\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3"
-              ssh_key_id: "{{ ssh_key_result.json.id | int }}"
-              type: "static"
+            body: "{{ inventory_body }}"
             status_code: [200, 201]
           register: inventory_result
           ignore_errors: yes
