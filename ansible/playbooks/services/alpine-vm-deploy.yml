@@ -310,7 +310,7 @@
           command: |
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
-                "sudo cat /home/{{ vm_username }}/.ssh/id_ed25519"
+                "cat /home/{{ vm_username }}/.ssh/id_ed25519"
           register: vm_ssh_private_key
           no_log: true
 
