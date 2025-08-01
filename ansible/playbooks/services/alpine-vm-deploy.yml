@@ -255,17 +255,18 @@
           pause:
             seconds: 30
 
-        - name: Get VM IP address
+        - name: Get VM IP address (static)
+          shell: echo "{{ vm_ip }}"
+          when: vm_ip | length > 0
+          register: vm_ip_result
+
+        - name: Get VM IP address (DHCP)
           shell: |
-            # Try to get IP from VM config first
-            {% if vm_ip %}
-            echo "{{ vm_ip }}"
-            {% else %}
-            # Otherwise scan for the VM's MAC address
+            # Get the VM's MAC address
             MAC=$(qm config {{ vm_id }} | grep net0 | grep -oE 'virtio=[A-F0-9:]+' | cut -d= -f2)
             # Use nmap to find the IP
             nmap -sn 192.168.1.0/24 | grep -B2 "$MAC" | grep "Nmap scan report" | awk '{print $5}' | head -1
-            {% endif %}
+          when: vm_ip | length == 0
           register: vm_ip_result
           retries: 6
           delay: 10
