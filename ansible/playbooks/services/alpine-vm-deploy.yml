@@ -355,8 +355,9 @@
                       ansible_become: true
                       ansible_become_method: sudo
                       ansible_python_interpreter: /usr/bin/python3
-              ssh_key_id: "{{ ssh_key_result.json.id }}"
+              ssh_key_id: {{ ssh_key_result.json.id | int }}
               type: "static"
+            status_code: [200, 201]
           register: inventory_result
 
         - name: Display Semaphore registration results
