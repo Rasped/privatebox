@@ -1,0 +1,329 @@
+---
+- name: "Caddy: Deploy Reverse Proxy Service"
+  hosts: container-host
+  become: true
+  gather_facts: true
+  
+  vars:
+    service_name: "Caddy Reverse Proxy"
+    service_description: "HTTPS reverse proxy for all PrivateBox services"
+    service_tag: "caddy"
+    
+    # Caddy configuration
+    caddy_image: "caddy"
+    caddy_version: "alpine"
+    caddy_http_port: 80
+    caddy_https_port: 443
+    caddy_config_dir: "/opt/privatebox/config/caddy"
+    caddy_data_dir: "/opt/privatebox/data/caddy"
+    
+    # Default services to proxy
+    privatebox_services:
+      - name: adguard
+        port: 8080
+        domain: adguard.lan
+        description: "AdGuard Home DNS Filter"
+      - name: semaphore
+        port: 3000
+        domain: semaphore.lan
+        description: "Semaphore Ansible UI"
+      - name: portainer
+        port: 9000
+        domain: portainer.lan
+        description: "Portainer Container Management"
+    
+    # Quadlet configuration
+    use_system_quadlet: true
+    quadlet_system_path: "/etc/containers/systemd"
+    quadlet_user_path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+    
+    # Container configuration
+    container_image_registry: "docker.io"
+    volume_mount_options: "Z"
+    timezone: "UTC"
+    
+    # Health check configuration
+    health_check_enabled: true
+    health_check_interval: "30s"
+    health_check_retries: 3
+    health_check_start_period: "60s"
+    health_check_timeout: "10s"
+    
+    # Container management
+    container_log_driver: "journald"
+    container_pull_policy: "missing"
+    container_restart_policy: "always"
+    container_restart_sec: 30
+    
+    # Systemd configuration
+    systemd_timeout_start_sec: 300
+    systemd_timeout_stop_sec: 90
+
+  tasks:
+    # Pre-deployment validation
+    - name: "{{ service_name }} - Pre-deployment checks"
+      tags: [caddy, preflight]
+      block:
+        - name: Check system requirements
+          assert:
+            that:
+              - ansible_distribution == "Ubuntu"
+              - ansible_distribution_version is version('22.04', '>=')
+            fail_msg: "This playbook requires Ubuntu 22.04 or later"
+            
+        - name: Check if Podman is installed
+          command: which podman
+          register: podman_check
+          changed_when: false
+          failed_when: false
+          
+        - name: Fail if Podman not installed
+          fail:
+            msg: "Podman is required but not installed"
+          when: podman_check.rc != 0
+          
+        - name: Check for port conflicts
+          wait_for:
+            port: "{{ item }}"
+            state: stopped
+            timeout: 1
+          loop:
+            - "{{ caddy_http_port }}"
+            - "{{ caddy_https_port }}"
+          ignore_errors: true
+          register: port_check
+          
+        - name: Warn about port conflicts
+          debug:
+            msg: "WARNING: Port {{ item.item }} appears to be in use. Service may fail to start."
+          loop: "{{ port_check.results }}"
+          when: item.failed is defined and not item.failed
+
+    # Main deployment
+    - name: "{{ service_name }} - Deployment"
+      tags: [caddy, deploy]
+      block:
+        - name: Create directory structure
+          file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner | default('root') }}"
+            group: "{{ item.group | default('root') }}"
+            mode: "{{ item.mode | default('0755') }}"
+          loop:
+            - { path: "{{ caddy_config_dir }}" }
+            - { path: "{{ caddy_data_dir }}" }
+            - { path: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}" }
+            
+        - name: Deploy Caddyfile
+          template:
+            src: ../../files/caddy/Caddyfile.j2
+            dest: "{{ caddy_config_dir }}/Caddyfile"
+            owner: root
+            group: root
+            mode: '0644'
+          register: caddyfile_deployed
+          
+        - name: Deploy Quadlet unit file
+          template:
+            src: ../../files/quadlet/caddy.container.j2
+            dest: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}/caddy.container"
+            owner: root
+            group: root
+            mode: '0644'
+          register: quadlet_deployed
+          
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+          when: quadlet_deployed.changed or caddyfile_deployed.changed
+            
+        - name: Enable Caddy service
+          systemd:
+            name: caddy.service
+            enabled: true
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+            
+        - name: Start Caddy service
+          systemd:
+            name: caddy.service
+            state: started
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_start
+          
+        - name: Wait for Caddy to be ready
+          uri:
+            url: "https://{{ ansible_default_ipv4.address }}"
+            status_code: [200, 404]  # 404 is ok - no default site
+            validate_certs: false
+            timeout: 10
+          register: caddy_ready
+          until: caddy_ready.status in [200, 404]
+          retries: 6
+          delay: 10
+          when: service_start.changed
+
+        - name: Configure firewall for Caddy
+          block:
+            - name: Check if ufw is installed
+              command: which ufw
+              register: ufw_check
+              changed_when: false
+              failed_when: false
+              
+            - name: Configure ufw firewall rules
+              when: ufw_check.rc == 0
+              block:
+                - name: Allow HTTP traffic
+                  ufw:
+                    rule: allow
+                    port: "{{ caddy_http_port }}"
+                    proto: tcp
+                    comment: "Caddy HTTP"
+                    
+                - name: Allow HTTPS traffic
+                  ufw:
+                    rule: allow
+                    port: "{{ caddy_https_port }}"
+                    proto: tcp
+                    comment: "Caddy HTTPS"
+                    
+                - name: Note firewall configuration
+                  debug:
+                    msg: "Firewall rules configured for Caddy reverse proxy"
+              rescue:
+                - name: Note firewall configuration failure
+                  debug:
+                    msg: "Warning: Failed to configure firewall rules. Please configure manually if needed."
+
+    # Post-deployment validation
+    - name: "{{ service_name }} - Post-deployment validation"
+      tags: [caddy, validate]
+      block:
+        - name: Check service status
+          systemd:
+            name: caddy.service
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_status
+          
+        - name: Verify service is active
+          assert:
+            that:
+              - service_status.status.ActiveState == "active"
+            fail_msg: "Caddy service is not active"
+            
+        - name: Check container status
+          command: podman ps --filter "name=caddy" --format json
+          register: container_status
+          changed_when: false
+          
+        - name: Parse container info
+          set_fact:
+            container_info: "{{ container_status.stdout | from_json | first | default({}) }}"
+          when: container_status.stdout
+          
+        - name: Display container status
+          debug:
+            msg:
+              - "Container: {{ container_info.Names | default(['Not found']) | first }}"
+              - "Status: {{ container_info.State | default('Unknown') }}"
+              - "Image: {{ container_info.Image | default('Unknown') }}"
+          when: container_info is defined
+          
+        - name: Test service endpoints
+          uri:
+            url: "https://{{ item.domain }}"
+            status_code: [200, 302, 502]  # 502 is ok if backend not ready
+            validate_certs: false
+            timeout: 5
+          loop: "{{ privatebox_services }}"
+          register: service_tests
+          failed_when: false
+          
+        - name: Display service test results
+          debug:
+            msg: "{{ item.item.name }}: {{ 'Available' if item.status in [200, 302] else 'Backend not ready' }}"
+          loop: "{{ service_tests.results }}"
+
+    # Display access information
+    - name: "{{ service_name }} - Access information"
+      tags: [caddy, info]
+      block:
+        - name: Get Caddy root certificate
+          command: |
+            podman exec caddy cat /data/caddy/pki/authorities/local/root.crt
+          register: root_cert
+          changed_when: false
+          failed_when: false
+          
+        - name: Display access information
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "Service Status: {{ 'Active' if service_status.status.ActiveState == 'active' else 'Inactive' }}"
+              - ""
+              - "HTTPS Services Available:"
+              - "{% for svc in privatebox_services %}"
+              - "  - https://{{ svc.domain }} - {{ svc.description }}"
+              - "{% endfor %}"
+              - ""
+              - "Direct Service Access (bypass proxy):"
+              - "{% for svc in privatebox_services %}"
+              - "  - http://{{ ansible_default_ipv4.address }}:{{ svc.port }} - {{ svc.name }}"
+              - "{% endfor %}"
+              - ""
+              - "Certificate Warning:"
+              - "  Caddy uses self-signed certificates for .lan domains"
+              - "  You will see a browser warning on first access"
+              - "  Accept the certificate to proceed"
+              - ""
+              - "To trust certificates permanently:"
+              - "  1. Save the root CA certificate from the container"
+              - "  2. Install it as a trusted CA on your devices"
+              - ""
+              - "Service Management:"
+              - "  - Status: sudo systemctl status caddy"
+              - "  - Logs: sudo podman logs caddy"
+              - "  - Restart: sudo systemctl restart caddy"
+              - "  - Reload config: podman exec caddy caddy reload --config /etc/caddy/Caddyfile"
+              - "=========================================="
+              
+        - name: Save deployment info
+          copy:
+            content: |
+              {{ service_name }} Deployment Information
+              =====================================
+              Deployed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+              
+              HTTPS Services:
+              {% for svc in privatebox_services %}
+              - https://{{ svc.domain }} → localhost:{{ svc.port }}
+              {% endfor %}
+              
+              Service: caddy.service
+              Container: caddy
+              
+              Config Directory: {{ caddy_config_dir }}
+              Data Directory: {{ caddy_data_dir }}
+              
+              To add new services:
+              1. Edit {{ caddy_config_dir }}/Caddyfile
+              2. Reload: podman exec caddy caddy reload --config /etc/caddy/Caddyfile
+            dest: "/opt/privatebox/deployment-info-caddy.txt"
+            mode: '0644'
+
+  handlers:
+    - name: restart caddy
+      systemd:
+        name: caddy.service
+        state: restarted
+        scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+        
+    - name: reload caddy config
+      command: podman exec caddy caddy reload --config /etc/caddy/Caddyfile
+      register: reload_result
+      failed_when: reload_result.rc != 0 and "container is not running" not in reload_result.stderr
