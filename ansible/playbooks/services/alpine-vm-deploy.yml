@@ -170,6 +170,8 @@
                 - curl
                 - wget
                 - ca-certificates
+                - python3
+                - py3-pip
               
               # Enable and start SSH
               runcmd:
@@ -178,6 +180,10 @@
                 {% if vm_ip %}
                 - rc-service networking restart
                 {% endif %}
+                # Fix sudo configuration for Alpine
+                - echo '%wheel ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/wheel
+                - chmod 440 /etc/sudoers.d/wheel
+                - adduser {{ vm_username }} wheel
                 # Generate SSH key for this VM
                 - mkdir -p /home/{{ vm_username }}/.ssh
                 - ssh-keygen -t ed25519 -f /home/{{ vm_username }}/.ssh/id_ed25519 -N '' -C '{{ vm_name }}@{{ vm_ip | default("dhcp") }}'
