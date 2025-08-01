@@ -16,6 +16,10 @@
   gather_facts: true
 
   vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "SemaphoreAPI"
+    
     # Alpine cloud image URL
     alpine_version: "3.22.1"
     alpine_image_url: "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/cloud/nocloud_alpine-{{ alpine_version }}-x86_64-bios-tiny-r0.qcow2"
@@ -47,10 +51,9 @@
     wait_for_cloud_init: true
     register_with_semaphore: true
     
-    # Semaphore configuration
-    semaphore_url: "http://192.168.1.21:3000"
-    semaphore_admin_user: "admin"
-    semaphore_admin_password: "+dBUAa3WqO(5)Ht2)JhhSD3suDp5Co23"
+    # Semaphore configuration from environment
+    semaphore_url: "{{ SEMAPHORE_URL }}"
+    semaphore_api_token: "{{ SEMAPHORE_API_TOKEN }}"
 
   tasks:
     # Check and cleanup existing VM
@@ -314,27 +317,14 @@
           register: vm_ssh_private_key
           no_log: true
 
-        - name: Login to Semaphore API
-          uri:
-            url: "{{ semaphore_url }}/api/auth/login"
-            method: POST
-            body_format: json
-            body:
-              auth: "{{ semaphore_admin_user }}"
-              password: "{{ semaphore_admin_password }}"
-            status_code: 204
-          register: semaphore_login
-
-        - name: Extract session cookie
-          set_fact:
-            semaphore_cookie: "{{ semaphore_login.set_cookie | regex_search('semaphore=[^;]+') }}"
+        # No login needed - using API token directly
 
         - name: Create SSH key in Semaphore
           uri:
             url: "{{ semaphore_url }}/api/project/1/keys"
             method: POST
             headers:
-              Cookie: "{{ semaphore_cookie }}"
+              Authorization: "Bearer {{ semaphore_api_token }}"
             body_format: json
             body:
               name: "{{ vm_name }}-key"
@@ -350,7 +340,7 @@
             url: "{{ semaphore_url }}/api/project/1/inventory"
             method: POST
             headers:
-              Cookie: "{{ semaphore_cookie }}"
+              Authorization: "Bearer {{ semaphore_api_token }}"
             body_format: json
             body:
               name: "{{ vm_name }}"
