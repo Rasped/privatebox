@@ -1,0 +1,57 @@
+---
+# PrivateBox Ansible Inventory
+# This inventory defines all hosts used by PrivateBox playbooks
+
+all:
+  children:
+    # Proxmox host for VM creation
+    proxmox:
+      hosts:
+        proxmox-host:
+          ansible_host: 192.168.1.10
+          ansible_user: root
+          ansible_python_interpreter: /usr/bin/python3
+    
+    # Container host VM (Ubuntu 24.04)
+    containers:
+      hosts:
+        container-host:
+          ansible_host: 192.168.1.22
+          ansible_user: ubuntuadmin
+          ansible_become: true
+          ansible_python_interpreter: /usr/bin/python3
+    
+    # Caddy reverse proxy VM (Alpine Linux)
+    caddy_proxy:
+      hosts:
+        caddy-vm:
+          ansible_host: 192.168.1.23
+          ansible_user: alpine
+          ansible_become: true
+          ansible_python_interpreter: /usr/bin/python3
+    
+    # OPNsense firewall (when deployed)
+    firewalls:
+      hosts:
+        opnsense:
+          ansible_host: 192.168.1.1
+          ansible_user: root
+          # OPNsense uses a different Python path
+          ansible_python_interpreter: /usr/local/bin/python3
+
+  # Global variables
+  vars:
+    # Network settings
+    network_subnet: "192.168.1.0/24"
+    network_gateway: "192.168.1.1"
+    
+    # DNS servers
+    dns_servers:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    
+    # SSH key location
+    ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+    
+    # Common Python interpreter for most systems
+    ansible_python_interpreter: /usr/bin/python3
