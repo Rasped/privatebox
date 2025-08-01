@@ -1,0 +1,264 @@
+---
+# Configure DNS entries in AdGuard for Caddy reverse proxy
+# This playbook adds DNS rewrites in AdGuard to point service domains to the Alpine VM
+#
+# Usage:
+#   ansible-playbook -i inventories/development/hosts.yml caddy-configure-dns.yml
+#
+# Requirements:
+#   - AdGuard must be deployed and accessible
+#   - Alpine VM with Caddy must be deployed
+
+- name: "Caddy: Configure DNS entries in AdGuard"
+  hosts: container-host
+  become: false
+  gather_facts: true
+  
+  vars:
+    service_name: "Caddy DNS Configuration"
+    service_description: "Configure DNS rewrites in AdGuard for Caddy reverse proxy"
+    
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_template_name: "Caddy: Configure DNS in AdGuard"
+      semaphore_template_desc: "Add DNS entries in AdGuard for Caddy reverse proxy domains"
+      semaphore_inventory: "container-host"
+      semaphore_environment: "Default"
+    
+    # AdGuard configuration
+    adguard_host: "{{ ansible_default_ipv4.address }}"
+    adguard_port: 8080
+    adguard_username: "admin"
+    # Read password from file (created during AdGuard deployment)
+    adguard_password: "{{ lookup('file', '/etc/privatebox-adguard-password', errors='ignore') | default('admin', true) }}"
+    
+    # Alpine VM IP (Caddy reverse proxy)
+    caddy_vm_ip: "192.168.1.195"
+    
+    # Default values for hands-off deployment
+    confirm_deploy: true
+    
+  vars_prompt:
+    - name: confirm_deploy
+      prompt: "Configure DNS entries for Caddy? (yes/no)"
+      default: "yes"
+      private: no
+      # Semaphore metadata
+      semaphore_type: boolean
+      semaphore_description: "Confirm DNS configuration for Caddy reverse proxy"
+      
+    - name: caddy_vm_ip
+      prompt: "Alpine VM IP address (Caddy)"
+      default: "192.168.1.195"
+      private: no
+      semaphore_type: text
+      semaphore_description: "IP address of the Alpine VM running Caddy"
+      semaphore_required: true
+
+  tasks:
+    # Load service registry
+    - name: Load services configuration
+      include_vars:
+        file: "{{ playbook_dir }}/../../group_vars/all/services.yml"
+      tags: [dns, load]
+      
+    # Pre-flight checks
+    - name: "{{ service_name }} - Pre-deployment checks"
+      when: confirm_deploy | bool
+      tags: [dns, preflight]
+      block:
+        - name: Check if AdGuard is accessible
+          uri:
+            url: "http://{{ adguard_host }}:{{ adguard_port }}/control/status"
+            method: GET
+            user: "{{ adguard_username }}"
+            password: "{{ adguard_password }}"
+            force_basic_auth: yes
+            status_code: 200
+            timeout: 10
+          register: adguard_status
+          failed_when: false
+          
+        - name: Verify AdGuard is running
+          assert:
+            that:
+              - adguard_status.status == 200
+            fail_msg: "AdGuard is not accessible at {{ adguard_host }}:{{ adguard_port }}"
+            
+        - name: Test connectivity to Alpine VM
+          wait_for:
+            host: "{{ caddy_vm_ip }}"
+            port: 443
+            timeout: 10
+          register: caddy_test
+          failed_when: false
+          
+        - name: Display warning if Caddy not reachable
+          debug:
+            msg: "Warning: Caddy may not be running yet on {{ caddy_vm_ip }}:443"
+          when: caddy_test is failed
+
+    # Configure DNS rewrites
+    - name: "{{ service_name }} - Configure DNS rewrites"
+      when: confirm_deploy | bool
+      tags: [dns, configure]
+      block:
+        # First, get existing rewrites to avoid duplicates
+        - name: Get current DNS rewrites
+          uri:
+            url: "http://{{ adguard_host }}:{{ adguard_port }}/control/rewrite/list"
+            method: GET
+            user: "{{ adguard_username }}"
+            password: "{{ adguard_password }}"
+            force_basic_auth: yes
+            status_code: 200
+          register: existing_rewrites
+          
+        - name: Extract existing domain list
+          set_fact:
+            existing_domains: "{{ existing_rewrites.json | map(attribute='domain') | list }}"
+          
+        # Add wildcard entry for all .lan domains
+        - name: Add wildcard .lan DNS rewrite
+          uri:
+            url: "http://{{ adguard_host }}:{{ adguard_port }}/control/rewrite/add"
+            method: POST
+            user: "{{ adguard_username }}"
+            password: "{{ adguard_password }}"
+            force_basic_auth: yes
+            body_format: json
+            body:
+              domain: "*.lan"
+              answer: "{{ caddy_vm_ip }}"
+            status_code: [200, 400]  # 400 if already exists
+          register: wildcard_result
+          when: "'*.lan' not in existing_domains"
+          
+        # Add individual service entries as fallback
+        - name: Add DNS rewrite for each service
+          uri:
+            url: "http://{{ adguard_host }}:{{ adguard_port }}/control/rewrite/add"
+            method: POST
+            user: "{{ adguard_username }}"
+            password: "{{ adguard_password }}"
+            force_basic_auth: yes
+            body_format: json
+            body:
+              domain: "{{ item.domain }}"
+              answer: "{{ caddy_vm_ip }}"
+            status_code: [200, 400]  # 400 if already exists
+          loop: "{{ privatebox_services }}"
+          when: 
+            - item.domain not in existing_domains
+            - item.domain is defined
+          register: dns_results
+          
+        # Add public domains if defined
+        - name: Add DNS rewrite for public domains
+          uri:
+            url: "http://{{ adguard_host }}:{{ adguard_port }}/control/rewrite/add"
+            method: POST
+            user: "{{ adguard_username }}"
+            password: "{{ adguard_password }}"
+            force_basic_auth: yes
+            body_format: json
+            body:
+              domain: "{{ item.public_domain }}"
+              answer: "{{ caddy_vm_ip }}"
+            status_code: [200, 400]  # 400 if already exists
+          loop: "{{ privatebox_services }}"
+          when: 
+            - item.public_domain is defined
+            - item.public_domain not in existing_domains
+          register: public_dns_results
+
+    # Verify configuration
+    - name: "{{ service_name }} - Verify DNS configuration"
+      when: confirm_deploy | bool
+      tags: [dns, verify]
+      block:
+        - name: Get updated DNS rewrites
+          uri:
+            url: "http://{{ adguard_host }}:{{ adguard_port }}/control/rewrite/list"
+            method: GET
+            user: "{{ adguard_username }}"
+            password: "{{ adguard_password }}"
+            force_basic_auth: yes
+            status_code: 200
+          register: final_rewrites
+          
+        - name: Display configured DNS entries
+          debug:
+            msg:
+              - "DNS rewrites configured:"
+              - "{% for rewrite in final_rewrites.json %}"
+              - "  {{ rewrite.domain }} → {{ rewrite.answer }}"
+              - "{% endfor %}"
+
+    # Test DNS resolution
+    - name: "{{ service_name }} - Test DNS resolution"
+      when: confirm_deploy | bool
+      tags: [dns, test]
+      block:
+        - name: Install dig for DNS testing
+          become: true
+          package:
+            name: dnsutils
+            state: present
+          when: ansible_os_family == "Debian"
+          
+        - name: Test DNS resolution for each service
+          command: "dig +short {{ item.domain }} @{{ adguard_host }}"
+          loop: "{{ privatebox_services }}"
+          register: dns_tests
+          changed_when: false
+          failed_when: false
+          
+        - name: Display DNS test results
+          debug:
+            msg:
+              - "DNS Resolution Tests:"
+              - "{% for result in dns_tests.results %}"
+              - "  {{ result.item.domain }}: {{ result.stdout | default('No response') }}"
+              - "{% endfor %}"
+
+    # Display summary
+    - name: "{{ service_name }} - Display summary"
+      when: confirm_deploy | bool
+      tags: [dns, summary]
+      block:
+        - name: Count configured entries
+          set_fact:
+            total_entries: "{{ final_rewrites.json | length }}"
+            service_entries: "{{ privatebox_services | length }}"
+            
+        - name: Display configuration summary
+          debug:
+            msg:
+              - "========================================"
+              - "DNS Configuration Complete!"
+              - "========================================"
+              - ""
+              - "AdGuard Host: {{ adguard_host }}:{{ adguard_port }}"
+              - "Caddy VM IP: {{ caddy_vm_ip }}"
+              - ""
+              - "Configured Entries:"
+              - "  - Wildcard: *.lan → {{ caddy_vm_ip }}"
+              - "{% for service in privatebox_services %}"
+              - "  - {{ service.domain }} → {{ caddy_vm_ip }}"
+              - "{% if service.public_domain is defined %}"
+              - "  - {{ service.public_domain }} → {{ caddy_vm_ip }}"
+              - "{% endif %}"
+              - "{% endfor %}"
+              - ""
+              - "Total DNS entries: {{ total_entries }}"
+              - ""
+              - "Next Steps:"
+              - "  1. Ensure Caddy is running on Alpine VM"
+              - "  2. Configure clients to use AdGuard DNS"
+              - "  3. Access services via https://service.lan"
+              - ""
+              - "Client DNS Configuration:"
+              - "  Primary DNS: {{ adguard_host }}"
+              - "  Secondary DNS: 1.1.1.1 (fallback)"
+              - "========================================"
