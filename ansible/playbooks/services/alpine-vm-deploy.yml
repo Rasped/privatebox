@@ -460,7 +460,7 @@
         
         - name: Generate Caddyfile from template
           template:
-            src: ../../../files/caddy/Caddyfile.j2
+            src: ../../files/caddy/Caddyfile.j2
             dest: "{{ work_dir }}/Caddyfile"
             mode: "0644"
           vars:
