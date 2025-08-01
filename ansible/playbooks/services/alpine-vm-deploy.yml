@@ -420,6 +420,39 @@
                 "sudo apk update && sudo apk add caddy curl"
           register: caddy_install
           
+        - name: Create custom Caddy init script
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo tee /etc/init.d/caddy-custom << 'EOF'
+            #!/sbin/openrc-run
+            
+            name=\"Caddy Web Server\"
+            description=\"Fast, multi-platform web server with automatic HTTPS\"
+            
+            command=\"/usr/bin/caddy\"
+            command_args=\"start --config /etc/caddy/Caddyfile\"
+            command_background=true
+            pidfile=\"/run/caddy.pid\"
+            start_stop_daemon_args=\"--background --make-pidfile --user caddy --group caddy\"
+            
+            depend() {
+                need net
+                after firewall
+            }
+            
+            start_pre() {
+                checkpath --directory --owner caddy:caddy --mode 0755 /var/log/caddy
+                checkpath --directory --owner caddy:caddy --mode 0755 /var/lib/caddy
+            }
+            EOF"
+            
+        - name: Make custom init script executable
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo chmod +x /etc/init.d/caddy-custom"
+          
         - name: Create Caddy directories
           command: |
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -479,12 +512,21 @@
                 "sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && \
                  sudo caddy validate --config /etc/caddy/Caddyfile"
                  
-        - name: Enable and start Caddy service
+        - name: Enable custom Caddy service at boot
           command: |
             ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
-                "sudo rc-update add caddy default && \
-                 sudo rc-service caddy start"
+                "sudo rc-update add caddy-custom default"
+                
+        - name: Start Caddy service
+          command: |
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo rc-service caddy-custom start"
+                 
+        - name: Wait for Caddy to fully start
+          pause:
+            seconds: 3
                  
         - name: Configure firewall for Caddy
           command: |
