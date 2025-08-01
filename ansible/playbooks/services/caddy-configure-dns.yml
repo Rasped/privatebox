@@ -33,7 +33,7 @@
     adguard_password: "{{ lookup('file', '/etc/privatebox-adguard-password', errors='ignore') | default('admin', true) }}"
     
     # Alpine VM IP (Caddy reverse proxy)
-    caddy_vm_ip: "192.168.1.196"
+    caddy_vm_ip: "192.168.1.111"
     
     # Default values for hands-off deployment
     confirm_deploy: true
