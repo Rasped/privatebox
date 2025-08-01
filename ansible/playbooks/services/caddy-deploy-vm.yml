@@ -43,7 +43,6 @@
     vm_dns: "1.1.1.1,8.8.8.8"
     
     # SSH Configuration
-    ssh_public_key_file: "/root/.ssh/id_rsa.pub"
     alpine_user: "alpine"
     
     # Caddy Configuration
@@ -142,7 +141,7 @@
               users:
                 - name: {{ alpine_user }}
                   ssh_authorized_keys:
-                    - {{ lookup('file', ssh_public_key_file) }}
+                    - "{{ ansible_ssh_public_key }}"
                   sudo: ALL=(ALL) NOPASSWD:ALL
                   shell: /bin/ash
                   

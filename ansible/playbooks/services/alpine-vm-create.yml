@@ -80,7 +80,7 @@
               sudo: ALL=(ALL) NOPASSWD:ALL
               shell: /bin/ash
               lock_passwd: false
-              passwd: {{ alpine_password | password_hash('sha512') }}
+              plain_text_passwd: {{ alpine_password }}
               
           # Enable password authentication
           ssh_pwauth: true
