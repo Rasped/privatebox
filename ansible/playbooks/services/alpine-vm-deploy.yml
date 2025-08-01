@@ -340,6 +340,18 @@
           debug:
             var: ssh_key_result.json
 
+        - name: Debug inventory payload
+          debug:
+            msg:
+              - "Creating inventory with:"
+              - "  Name: {{ vm_name }}"
+              - "  Project ID: 1"
+              - "  SSH Key ID: {{ ssh_key_result.json.id | int }}"
+              - "  VM IP: {{ alpine_vm_ip }}"
+              - "  Username: {{ vm_username }}"
+              - "  Full inventory string:"
+              - "{{ 'all:\\n  hosts:\\n    ' + vm_name + ':\\n      ansible_host: ' + alpine_vm_ip + '\\n      ansible_user: ' + vm_username + '\\n      ansible_become: true\\n      ansible_become_method: sudo\\n      ansible_python_interpreter: /usr/bin/python3' }}"
+
         - name: Create inventory for Alpine VM
           uri:
             url: "{{ semaphore_url }}/api/project/1/inventory"
