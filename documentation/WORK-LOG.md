@@ -22,6 +22,7 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 
 ## Nice to Have (P3)
 
+- [Task] Add service and admin passwords to Semaphore as secrets/variables (pending)
 - [Bug] Port binding inconsistency - some services bind to IP, others to 0.0.0.0 (pending)
 - [Docs] Write basic user documentation (pending)
 
