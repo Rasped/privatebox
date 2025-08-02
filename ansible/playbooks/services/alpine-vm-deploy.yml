@@ -373,7 +373,19 @@
                 {
                   "name": vm_name,
                   "project_id": 1,
-                  "inventory": "all:\n  hosts:\n    " + vm_name + ":\n      ansible_host: " + alpine_vm_ip + "\n      ansible_user: " + vm_username + "\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3",
+                  "inventory": {
+                    "all": {
+                      "hosts": {
+                        vm_name: {
+                          "ansible_host": alpine_vm_ip,
+                          "ansible_user": vm_username,
+                          "ansible_become": true,
+                          "ansible_become_method": "sudo",
+                          "ansible_python_interpreter": "/usr/bin/python3"
+                        }
+                      }
+                    }
+                  } | to_yaml,
                   "type": "static"
                 } | combine({"ssh_key_id": ssh_key_result.json.id | int}) | to_json
               }}
@@ -390,7 +402,19 @@
                 {
                   "name": vm_name,
                   "project_id": 1,
-                  "inventory": "all:\n  hosts:\n    " + vm_name + ":\n      ansible_host: " + alpine_vm_ip + "\n      ansible_user: " + vm_username + "\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3",
+                  "inventory": {
+                    "all": {
+                      "hosts": {
+                        vm_name: {
+                          "ansible_host": alpine_vm_ip,
+                          "ansible_user": vm_username,
+                          "ansible_become": true,
+                          "ansible_become_method": "sudo",
+                          "ansible_python_interpreter": "/usr/bin/python3"
+                        }
+                      }
+                    }
+                  } | to_yaml,
                   "type": "static"
                 } | combine({"ssh_key_id": ssh_key_result.json.id | int})
               }}
