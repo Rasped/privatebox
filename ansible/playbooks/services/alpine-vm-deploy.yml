@@ -379,14 +379,14 @@
             body_format: json
             body: >-
               {% set inventory_yaml -%}
-              all:
-                hosts:
-                  {{ vm_name }}:
-                    ansible_host: {{ alpine_vm_ip }}
-                    ansible_user: {{ vm_username }}
-                    ansible_become: true
-                    ansible_become_method: sudo
-                    ansible_python_interpreter: /usr/bin/python3
+all:
+  hosts:
+    {{ vm_name }}:
+      ansible_host: {{ alpine_vm_ip }}
+      ansible_user: {{ vm_username }}
+      ansible_become: true
+      ansible_become_method: sudo
+      ansible_python_interpreter: /usr/bin/python3
               {%- endset %}
               {{
                 {
@@ -410,7 +410,8 @@
             msg:
               - "VM registered with Semaphore:"
               - "  SSH Key ID: {{ ssh_key_result.json.id }}"
-              - "  Inventory ID: {{ inventory_result.json.id }}"
+              - "  Inventory ID: {{ inventory_result.json.id | default('Failed to create') }}"
+          when: not (inventory_result.failed | default(false))
 
     # Install and configure Caddy
     - name: "Alpine VM - Install Caddy Reverse Proxy"
