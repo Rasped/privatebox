@@ -10,11 +10,10 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 
 - [Investigation] Research OPNsense VM deployment methods (starting - need template approach)
 - [Task] Integrate config-based installation into bootstrap scripts (in progress - see documentation/features/config-based-installation/config-design.md)
-  - Sub-task: Update create-ubuntu-vm.sh to use generated passwords (pending)
   - Sub-task: Update common.sh to use new password generator (pending)
   - Sub-task: Test full bootstrap with new config approach (pending)
-  - [Bug] Generated IPs (CONTAINER_HOST_IP, CADDY_HOST_IP, OPNSENSE_IP) not being used - VM uses SERVER_IP instead
-  - [Bug] Generated SERVICES_PASSWORD not being used - VM still created with hardcoded Changeme123
+  - [Bug] Generated IPs (CONTAINER_HOST_IP, CADDY_HOST_IP, OPNSENSE_IP) not being used - VM uses CONTAINER_HOST_IP now
+  - [Note] SERVICES_PASSWORD is generated but not used - need to determine purpose (services vs user password?)
 - [Task] Deploy OPNsense VM with VLAN configuration (pending - see documentation/network-architecture/vlan-design.md) 
 - [Task] Update service IPs to match VLAN design 10.10.20.x (pending - see documentation/network-architecture/vlan-design.md)
 
