@@ -1,8 +1,8 @@
 ---
 # Semaphore metadata for template generation
-# metadata:
-#   description: "Deploy AdGuard Home DNS filtering service"
-#   semaphore_environment: "ServicePasswords"
+metadata:
+  description: "Deploy AdGuard Home DNS filtering service"
+  semaphore_environment: "ServicePasswords"
 
 - name: "AdGuard: Deploy Container Service"
   hosts: container-host
