@@ -377,7 +377,7 @@
                 body_format: json
                 body:
                   web:
-                    port: "{{ custom_web_port | int }}"
+                    port: 3001
                     ip: "0.0.0.0"
                   dns:
                     port: "{{ adguard_dns_port }}"
@@ -394,7 +394,7 @@
                 body_format: json
                 body:
                   web:
-                    port: "{{ custom_web_port | int }}"
+                    port: 3001
                     ip: "0.0.0.0"
                   dns:
                     port: "{{ adguard_dns_port }}"
