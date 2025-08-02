@@ -46,8 +46,8 @@ setup_semaphore() {
     # Step 4: Wait for services to be ready
     wait_for_services_ready
 
-    # Step 5: Create users and projects
-    create_automation_user_and_projects
+    # Step 5: Create default projects
+    create_default_projects
 
     log_info "Semaphore setup process completed."
     
