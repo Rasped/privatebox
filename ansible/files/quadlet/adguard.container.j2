@@ -13,15 +13,12 @@ Before=multi-user.target
 Image={{ container_image_registry | default('docker.io') }}/{{ adguard_image }}:{{ adguard_version }}
 ContainerName=adguard-home
 
-# Command to use port 3001 instead of default 3000
-Exec=--web-addr 0.0.0.0:3001
-
 # Network configuration
-PublishPort={{ ansible_default_ipv4.address }}:{{ custom_web_port | default(adguard_web_port) }}:3001
+PublishPort={{ ansible_default_ipv4.address }}:{{ custom_web_port | default(adguard_web_port) }}:3000
 PublishPort={{ ansible_default_ipv4.address }}:{{ adguard_dns_port }}:53/tcp
 PublishPort={{ ansible_default_ipv4.address }}:{{ adguard_dns_port_udp }}:53/udp
 {% if adguard_setup_port is defined %}
-PublishPort={{ ansible_default_ipv4.address }}:{{ adguard_setup_port }}:3001
+PublishPort={{ ansible_default_ipv4.address }}:{{ adguard_setup_port }}:3000
 {% endif %}
 {% if adguard_dns_over_tls is defined %}
 PublishPort={{ ansible_default_ipv4.address }}:{{ adguard_dns_over_tls }}:853/tcp
@@ -60,7 +57,7 @@ UserNS={{ container_user_namespace }}
 {% endif %}
 
 # Health check
-HealthCmd=/bin/sh -c "wget -q --spider http://localhost:3001 || exit 1"
+HealthCmd=/bin/sh -c "wget -q --spider http://localhost:3000 || exit 1"
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}
