@@ -9,6 +9,10 @@
     service_description: "Network-wide ads & trackers blocking DNS server"
     service_tag: "adguard"
     
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "ServicePasswords"
+    
     # AdGuard default configuration - can be overridden by group_vars
     adguard_image: "adguard/adguardhome"
     adguard_version: "latest"
