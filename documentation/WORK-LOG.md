@@ -9,11 +9,13 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 ## Critical (P1) - v1 Blockers
 
 - [Investigation] Research OPNsense VM deployment methods (starting - need template approach)
-- [Task] Integrate config-based installation into bootstrap scripts (pending - see documentation/features/config-based-installation/config-design.md)
-  - Sub-task: Update network-discovery.sh to use config-manager.sh
-  - Sub-task: Update create-ubuntu-vm.sh to use generated passwords
-  - Sub-task: Update common.sh to use new password generator
-  - Sub-task: Test full bootstrap with new config approach
+- [Task] Integrate config-based installation into bootstrap scripts (in progress - see documentation/features/config-based-installation/config-design.md)
+  - Sub-task: Update network-discovery.sh to use config-manager.sh (completed)
+  - Sub-task: Update create-ubuntu-vm.sh to use generated passwords (pending)
+  - Sub-task: Update common.sh to use new password generator (pending)
+  - Sub-task: Test full bootstrap with new config approach (pending)
+  - [Bug] Generated IPs (CONTAINER_HOST_IP, CADDY_HOST_IP, OPNSENSE_IP) not being used - VM uses SERVER_IP instead
+  - [Bug] Generated SERVICES_PASSWORD not being used - VM still created with hardcoded Changeme123
 - [Task] Deploy OPNsense VM with VLAN configuration (pending - see documentation/network-architecture/vlan-design.md) 
 - [Task] Update service IPs to match VLAN design 10.10.20.x (pending - see documentation/network-architecture/vlan-design.md)
 
