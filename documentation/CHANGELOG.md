@@ -10,6 +10,10 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-02: [Fix] Fixed config-generator subshell issue - passwords now save correctly to config
+- 2025-08-02: [Fix] Renamed config-manager.sh to config-generator.sh to avoid confusion with config_manager.sh
+- 2025-08-02: [Fix] Fixed unbound SEMAPHORE_ADMIN_PASSWORD variable in create-ubuntu-vm.sh
+- 2025-08-02: [Task] Completed config-based installation integration - all passwords flow correctly
 - 2025-08-02: [Config] Removed unused automation user code from Semaphore setup
 - 2025-08-02: [Config] Centralized all password generation in config-generator.sh
 - 2025-08-02: [Fix] Removed password generation from common.sh - all passwords from config
