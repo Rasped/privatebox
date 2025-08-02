@@ -31,7 +31,8 @@
     # AdGuard admin credentials
     adguard_admin_username: "admin"
     # Use SERVICES_PASSWORD from Semaphore environment
-    adguard_admin_password: "{{ lookup('env', 'SERVICES_PASSWORD') }}"
+    # Semaphore passes environment secrets as Ansible extra vars
+    adguard_admin_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
     
     # Quadlet configuration
     use_system_quadlet: true
