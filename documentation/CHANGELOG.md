@@ -11,19 +11,19 @@ Newest entries at top. Archive old entries annually.
 ### August
 
 - 2025-08-02: [Config] Removed unused automation user code from Semaphore setup
-- 2025-08-02: [Config] Centralized all password generation in config-manager.sh
+- 2025-08-02: [Config] Centralized all password generation in config-generator.sh
 - 2025-08-02: [Fix] Removed password generation from common.sh - all passwords from config
-- 2025-08-02: [Config] Removed network-discovery.sh in favor of config-manager.sh
+- 2025-08-02: [Config] Removed network-discovery.sh in favor of config-generator.sh
 - 2025-08-02: [Feature] Enhanced config-manager with full network detection capabilities
 - 2025-08-02: [Fix] Updated VM creation to use ADMIN_PASSWORD from config
 - 2025-08-02: [Config] SERVICES_PASSWORD now used for Semaphore admin user
-- 2025-08-02: [Config] Integrated network-discovery.sh with config-manager.sh for unified configuration
-- 2025-08-02: [Fix] Fixed config-manager.sh argument consumption issue when sourced by other scripts
+- 2025-08-02: [Config] Integrated network-discovery.sh with config-generator.sh for unified configuration
+- 2025-08-02: [Fix] Fixed config-generator.sh argument consumption issue when sourced by other scripts
 - 2025-08-02: [Fix] Added STORAGE variable to config-manager for legacy compatibility
 - 2025-08-02: [Fix] Fixed VM_PASSWORD display error in bootstrap.sh completion message
 - 2025-08-02: [Feature] Replaced custom wordlist with EFF large wordlist (7,776 words) for better security
 - 2025-08-02: [Feature] Implemented phonetic password generator with 350 5-letter words
-- 2025-08-02: [Feature] Created config-manager.sh for config-based installation
+- 2025-08-02: [Feature] Created config-generator.sh for config-based installation
 - 2025-08-02: [Docs] Redesigned password management as config-based installation
 - 2025-08-02: [Docs] Documented current password management state and target behavior
 - 2025-08-02: [Feature] Created /track slash command for work tracking

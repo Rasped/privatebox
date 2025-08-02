@@ -58,7 +58,7 @@ bootstrap/
 ├── scripts/         # All bootstrap scripts
 ├── lib/            # Common functions and utilities
 │   ├── common.sh          # Logging, error handling, utilities
-│   ├── config-manager.sh  # Configuration and network detection
+│   ├── config-generator.sh  # Configuration and network detection
 │   └── password-generator.sh  # Secure password generation
 └── config/         # Configuration files
 ```
