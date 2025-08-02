@@ -318,24 +318,11 @@ See [documentation/DEPLOYMENT-STATUS.md](../documentation/DEPLOYMENT-STATUS.md) 
 
 ## Work Tracking
 
-### Use `/track` Command
-Track all work in `documentation/WORK-LOG.md` and `documentation/CHANGELOG.md`:
+### Important Files
+- **`documentation/WORK-LOG.md`** - Active work tracking (read for instructions)
+- **`documentation/CHANGELOG.md`** - Completed work history (read for format)
 
-```bash
-/track  # Updates both files, commits, and pushes
-```
-
-### Work Log Structure
-- **Critical (P1)**: v1 blockers
-- **Important (P2)**: Should have
-- **Nice to Have (P3)**: Can wait
-- **Uncategorized**: Needs triage
-
-### Rules
-- Add new work to WORK-LOG
-- Move completed to CHANGELOG with date
-- Commit message = actual work done, not "update logs"
-- Keep entries short and clear
+Use `/track` command to update both files.
 
 ---
 
