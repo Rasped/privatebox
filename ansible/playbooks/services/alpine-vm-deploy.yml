@@ -40,7 +40,7 @@
     
     # User Configuration
     vm_username: "alpineadmin"
-    vm_password: "$6$rounds=4096$saltsalt$Ky7ULvnrqDKdT3pE3PRZ.kThagXW4lY0DdJrPVLKgD7VdOWZLqTjkCG5kqQ1hZHZMhFeeY0T5oHNYG16iMHkm."  # changeme123
+    vm_password: "changeme123"  # Temporary password - will be updated by alpine-vm-password-update.yml
     
     # Working directories
     work_dir: "/tmp/alpine-deploy"
@@ -143,13 +143,17 @@
                   groups: wheel
                   sudo: ALL=(ALL) NOPASSWD:ALL
                   shell: /bin/ash
-                  passwd: "{{ vm_password }}"
+                  plain_text_passwd: "{{ vm_password }}"
                   lock_passwd: false
                   ssh_authorized_keys:
                     - {{ ssh_public_key.content | b64decode | trim }}
                 - name: alpine
                   ssh_authorized_keys:
                     - {{ ssh_public_key.content | b64decode | trim }}
+              
+              # Ensure password doesn't expire
+              chpasswd:
+                expire: false
               
               {% if vm_ip %}
               # Static network configuration

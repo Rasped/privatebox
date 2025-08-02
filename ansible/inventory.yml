@@ -21,6 +21,15 @@ all:
           ansible_become: true
           ansible_python_interpreter: /usr/bin/python3
     
+    # Alpine VM (created by alpine-vm-deploy.yml)
+    alpine_vms:
+      hosts:
+        alpine-vm:
+          ansible_host: 192.168.1.102  # Default, will be updated by deployment
+          ansible_user: alpineadmin
+          ansible_become: true
+          ansible_python_interpreter: /usr/bin/python3
+    
     # Caddy reverse proxy VM (Alpine Linux)
     caddy_proxy:
       hosts:
