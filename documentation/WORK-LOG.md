@@ -10,7 +10,6 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 
 - [Investigation] Research OPNsense VM deployment methods (starting - need template approach)
 - [Task] Integrate config-based installation into bootstrap scripts (in progress - see documentation/features/config-based-installation/config-design.md)
-  - Sub-task: Update network-discovery.sh to use config-manager.sh (completed)
   - Sub-task: Update create-ubuntu-vm.sh to use generated passwords (pending)
   - Sub-task: Update common.sh to use new password generator (pending)
   - Sub-task: Test full bootstrap with new config approach (pending)
