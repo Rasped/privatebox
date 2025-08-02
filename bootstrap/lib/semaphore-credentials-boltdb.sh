@@ -48,15 +48,9 @@ generate_vm_ssh_key_pair() {
 generate_and_save_credentials() {
     log_info "Generating secure credentials..."
 
-    # Check if Semaphore admin password was provided (from cloud-init)
-    if [[ -f /etc/privatebox-semaphore-password ]]; then
-        source /etc/privatebox-semaphore-password
-        log_info "Using provided Semaphore admin password"
-    fi
-
     # No MySQL passwords needed for BoltDB version
     
-    # Use SERVICES_PASSWORD for Semaphore admin if provided
+    # Use SERVICES_PASSWORD for Semaphore admin if provided via environment
     if [[ -n "${SERVICES_PASSWORD:-}" ]]; then
         SEMAPHORE_ADMIN_PASSWORD="${SERVICES_PASSWORD}"
         log_info "Using SERVICES_PASSWORD for Semaphore admin"

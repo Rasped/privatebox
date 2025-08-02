@@ -376,6 +376,114 @@ run_semaphore_task() {
     return 1
 }
 
+# Create ServicePasswords environment with admin and service passwords
+create_password_environment() {
+    local project_id="$1"
+    local admin_session="$2"
+    
+    # Use environment variables directly
+    local services_password="${SERVICES_PASSWORD}"
+    local admin_password="${ADMIN_PASSWORD}"
+    
+    if [[ -z "$services_password" ]] || [[ -z "$admin_password" ]]; then
+        log_error "Passwords not found in environment variables"
+        log_error "SERVICES_PASSWORD present: $([ -n "$SERVICES_PASSWORD" ] && echo "yes" || echo "no")"
+        log_error "ADMIN_PASSWORD present: $([ -n "$ADMIN_PASSWORD" ] && echo "yes" || echo "no")"
+        return 1
+    fi
+    
+    log_info "Creating ServicePasswords environment for project $project_id..." >&2
+    log_info "Passwords found in environment variables" >&2
+    
+    # Create environment payload with password secrets
+    local env_payload=$(jq -n \
+        --arg name "ServicePasswords" \
+        --argjson pid "$project_id" \
+        --arg admin_pass "$admin_password" \
+        --arg services_pass "$services_password" \
+        '{
+            name: $name,
+            project_id: $pid,
+            json: "{}",
+            env: "{}",
+            secrets: [
+                {
+                    type: "var",
+                    name: "ADMIN_PASSWORD",
+                    secret: $admin_pass,
+                    operation: "create"
+                },
+                {
+                    type: "var",
+                    name: "SERVICES_PASSWORD",
+                    secret: $services_pass,
+                    operation: "create"
+                }
+            ]
+        }')
+    
+    log_info "Environment payload created with 2 secrets" >&2
+    
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/environment" \
+        "$env_payload" "$admin_session" "Creating ServicePasswords environment")
+    
+    if [ $? -ne 0 ]; then
+        log_error "API request failed for password environment creation"
+        return 1
+    fi
+    
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    
+    log_info "Password environment creation response - Status: $status_code" >&2
+    
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
+        if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
+            log_info "✓ ServicePasswords environment created successfully with ID: $env_id" >&2
+            echo "$env_id"
+            return 0
+        else
+            log_info "WARNING: Environment created but couldn't extract ID" >&2
+            log_info "Response body: $response_body" >&2
+            # Check if environment already exists
+            local existing_env=$(make_api_request "GET" \
+                "http://localhost:3000/api/project/$project_id/environment" \
+                "" "$admin_session" "Checking existing environments")
+            if [ $? -eq 0 ]; then
+                local envs=$(echo "$existing_env" | cut -d'|' -f2-)
+                local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="ServicePasswords") | .id' 2>/dev/null)
+                if [ -n "$found_id" ] && [ "$found_id" != "null" ]; then
+                    log_info "Found existing ServicePasswords environment with ID: $found_id" >&2
+                    echo "$found_id"
+                    return 0
+                fi
+            fi
+        fi
+    elif [ -n "$response_body" ] && (echo "$response_body" | jq -e '.error' 2>/dev/null | grep -q "already exists" || \
+         echo "$response_body" | jq -e '.message' 2>/dev/null | grep -q "already exists"); then
+        log_info "ServicePasswords environment already exists, looking up ID..." >&2
+        # Get the existing environment ID
+        local existing_env=$(make_api_request "GET" \
+            "http://localhost:3000/api/project/$project_id/environment" \
+            "" "$admin_session" "Getting existing environments")
+        if [ $? -eq 0 ]; then
+            local envs=$(echo "$existing_env" | cut -d'|' -f2-)
+            local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="ServicePasswords") | .id' 2>/dev/null)
+            if [ -n "$found_id" ] && [ "$found_id" != "null" ]; then
+                log_info "Using existing ServicePasswords environment with ID: $found_id" >&2
+                echo "$found_id"
+                return 0
+            fi
+        fi
+    else
+        log_error "Failed to create password environment. Status: $status_code"
+        log_error "Full response: $response_body"
+        return 1
+    fi
+}
+
 # Setup template synchronization infrastructure
 setup_template_synchronization() {
     local project_id="$1"
@@ -1150,6 +1258,13 @@ create_infrastructure_project_with_ssh_key() {
             if ! create_repository "$project_id" "PrivateBox" "$PRIVATEBOX_GIT_URL" "$admin_session"; then
                 log_error "Failed to create PrivateBox repository - template sync will not work"
                 # Continue anyway to set up other components
+            fi
+            
+            # Create password environment
+            log_info "Creating password environment..."
+            if ! create_password_environment "$project_id" "$admin_session"; then
+                log_error "Failed to create password environment - playbooks will need manual password configuration"
+                # Continue anyway as this is not critical for initial setup
             fi
             
             # Setup template synchronization
