@@ -1,8 +1,6 @@
 #!/bin/bash
 # Semaphore API interaction library
 
-# Global variable for automation user password
-AUTOMATION_USER_PASSWORD=""
 
 # Get repository ID by name
 get_repository_id_by_name() {
@@ -457,36 +455,20 @@ setup_template_synchronization() {
     return 0
 }
 
-# Create automation user and default projects
-create_automation_user_and_projects() {
-    log_info "Setting up automation user and projects..."
+# Create default projects and add SSH key
+create_default_projects() {
+    log_info "Setting up default projects..."
     
     # Ensure tools are installed and API is ready (do this once for all operations)
     ensure_semaphore_tools || return 1
     wait_for_semaphore_api || return 1
     
     # Get admin session once for all operations
-    local admin_session=$(get_admin_session "user and project setup")
+    local admin_session=$(get_admin_session "project setup")
     if [ $? -ne 0 ]; then
         log_error "Failed to get admin session for setup"
         return 1
     fi
-    
-    # Generate secure password for automation user (assign to global variable)
-    # This is an internal service password, not user-facing
-    if [[ -f "/usr/local/lib/password-generator.sh" ]]; then
-        source /usr/local/lib/password-generator.sh
-        AUTOMATION_USER_PASSWORD=$(generate_password automation)
-    else
-        # Fallback to simple generation
-        AUTOMATION_USER_PASSWORD=$(tr -dc 'A-Za-z0-9@*()_+=-' < /dev/urandom | head -c 32)
-    fi
-    
-    # Create automation user
-    create_semaphore_user "automation" "$AUTOMATION_USER_PASSWORD" "auto@example.com" "Automation User" "$admin_session"
-    
-    # Save automation user credentials to the secure file
-    echo "Automation User Password: $AUTOMATION_USER_PASSWORD" >> /root/.credentials/semaphore_credentials.txt
     
     # Create PrivateBox project and add SSH key
     create_infrastructure_project_with_ssh_key "$admin_session"
@@ -1093,7 +1075,7 @@ create_infrastructure_project_with_ssh_key() {
     
     # Create the project first
     local project_name="PrivateBox"
-    local project_description="PrivateBox infrastructure automation"
+    local project_description="PrivateBox infrastructure management"
     
     # If admin session not provided, get it
     if [ -z "$admin_session" ]; then
