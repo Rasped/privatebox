@@ -10,6 +10,7 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-02: [Docs] Documented current password management state and target behavior
 - 2025-08-02: [Feature] Created /track slash command for work tracking
 - 2025-08-02: [Docs] Updated DEPLOYMENT-STATUS.md with v1 release requirements  
 - 2025-08-02: [Config] Cleaned up old archive files and scripts
