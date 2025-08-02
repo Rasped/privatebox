@@ -14,6 +14,8 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 
 ## Important (P2) - Should Have
 
+- [Bug] Playbook metadata format is incorrect - needs proper YAML structure for template generator (high priority - breaking ServicePasswords environment)
+
 - [Task] Configure Caddy with Let's Encrypt SSL (pending)
 - [Task] Create internal DNS entries *.privatebox.local (pending)
 - [Task] Write update playbooks for all services (pending)
