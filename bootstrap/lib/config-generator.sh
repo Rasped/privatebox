@@ -317,46 +317,44 @@ main() {
                 log_info "No configuration found, will generate defaults"
             fi
             
-            # Generate missing fields
-            # Note: We need to capture the output AND ensure variables are set
-            local generated_output=$(generate_missing_config)
-            local generated=()
-            if [[ -n "$generated_output" ]]; then
-                mapfile -t generated <<< "$generated_output"
-            fi
+            # Track what we had before generation
+            local had_admin_pass=$(field_exists "ADMIN_PASSWORD" && echo "true" || echo "false")
+            local had_services_pass=$(field_exists "SERVICES_PASSWORD" && echo "true" || echo "false")
             
-            # Re-run generation to set variables in current shell
+            # Generate missing fields and write immediately
             generate_missing_config >/dev/null
+            write_config
             
-            if [[ ${#generated[@]} -gt 0 ]]; then
-                echo ""
-                echo "Generated missing fields:"
-                local show_admin_pass=""
-                local show_services_pass=""
-                for field in "${generated[@]}"; do
-                    echo "  $field"
-                    # Extract passwords for display
-                    if [[ "$field" =~ ^ADMIN_PASSWORD=(.*)$ ]]; then
-                        show_admin_pass="${BASH_REMATCH[1]}"
-                    elif [[ "$field" =~ ^SERVICES_PASSWORD=(.*)$ ]]; then
-                        show_services_pass="${BASH_REMATCH[1]}"
-                    fi
-                done
-                echo ""
-                
-                # Write configuration
-                write_config
-                log_success "Configuration updated: $CONFIG_FILE"
-                
-                if [[ -n "$show_admin_pass" ]] || [[ -n "$show_services_pass" ]]; then
-                    echo ""
-                    echo "IMPORTANT: Please save these passwords securely!"
-                    [[ -n "$show_admin_pass" ]] && echo "  Admin Password: $show_admin_pass"
-                    [[ -n "$show_services_pass" ]] && echo "  Services Password: $show_services_pass"
+            # Reload config to get all values
+            source "$CONFIG_FILE"
+            
+            # Show what was generated
+            local generated_something=false
+            echo ""
+            echo "Configuration status:"
+            
+            # Show all key fields
+            echo "  Gateway: $GATEWAY"
+            echo "  Container Host IP: $CONTAINER_HOST_IP"
+            echo "  Caddy Host IP: $CADDY_HOST_IP"
+            echo "  OPNsense IP: $OPNSENSE_IP"
+            echo ""
+            
+            # Check if passwords were newly generated
+            if [[ "$had_admin_pass" == "false" ]] || [[ "$had_services_pass" == "false" ]]; then
+                generated_something=true
+                echo "Generated passwords:"
+                if [[ "$had_admin_pass" == "false" ]]; then
+                    echo "  Admin Password: $ADMIN_PASSWORD"
                 fi
-            else
-                log_success "All required fields are present"
+                if [[ "$had_services_pass" == "false" ]]; then
+                    echo "  Services Password: $SERVICES_PASSWORD"
+                fi
+                echo ""
+                echo "IMPORTANT: Please save these passwords securely!"
             fi
+            
+            log_success "Configuration updated: $CONFIG_FILE"
             ;;
             
         show|--show)
