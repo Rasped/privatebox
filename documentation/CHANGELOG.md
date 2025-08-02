@@ -10,6 +10,10 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-02: [Config] Integrated network-discovery.sh with config-manager.sh for unified configuration
+- 2025-08-02: [Fix] Fixed config-manager.sh argument consumption issue when sourced by other scripts
+- 2025-08-02: [Fix] Added STORAGE variable to config-manager for legacy compatibility
+- 2025-08-02: [Fix] Fixed VM_PASSWORD display error in bootstrap.sh completion message
 - 2025-08-02: [Feature] Replaced custom wordlist with EFF large wordlist (7,776 words) for better security
 - 2025-08-02: [Feature] Implemented phonetic password generator with 350 5-letter words
 - 2025-08-02: [Feature] Created config-manager.sh for config-based installation
