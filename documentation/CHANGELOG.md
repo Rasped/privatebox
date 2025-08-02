@@ -10,8 +10,10 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
-- 2025-08-02: [Docs] Updated DEPLOYMENT-STATUS.md with v1 release requirements
+- 2025-08-02: [Feature] Created /track slash command for work tracking
+- 2025-08-02: [Docs] Updated DEPLOYMENT-STATUS.md with v1 release requirements  
 - 2025-08-02: [Config] Cleaned up old archive files and scripts
+- 2025-08-02: [Config] Restored handovers folder while removing other archives
 - 2025-08-01: [Fix] Updated DNS configuration to use correct Alpine VM IP
 - 2025-08-01: [Fix] Ensured Caddy log files have correct permissions
 - 2025-08-01: [Fix] Used Alpine's built-in caddy service instead of custom scripts
