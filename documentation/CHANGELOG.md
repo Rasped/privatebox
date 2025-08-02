@@ -10,6 +10,7 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-02: [Task] Implemented password storage in Semaphore as ServicePasswords environment - passwords now stored as encrypted secrets
 - 2025-08-02: [Fix] Fixed config-generator subshell issue - passwords now save correctly to config
 - 2025-08-02: [Fix] Renamed config-manager.sh to config-generator.sh to avoid confusion with config_manager.sh
 - 2025-08-02: [Fix] Fixed unbound SEMAPHORE_ADMIN_PASSWORD variable in create-ubuntu-vm.sh
