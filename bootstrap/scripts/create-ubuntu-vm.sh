@@ -501,10 +501,6 @@ packages:
 
 # Post-installation setup script
 write_files:
-  - path: /etc/privatebox-semaphore-password
-    permissions: '0600'
-    content: |
-      SERVICES_PASSWORD="${SERVICES_PASSWORD}"
   - path: /root/.credentials/proxmox_ssh_key
     permissions: '0600'
     owner: root:root
@@ -690,6 +686,7 @@ ${semaphore_setup_content}
       # Main setup script
       echo "Executing post-installation setup script..."
       export SERVICES_PASSWORD="${SERVICES_PASSWORD}"
+      export ADMIN_PASSWORD="${ADMIN_PASSWORD}"
       export STATIC_IP="${STATIC_IP}"
       /bin/bash /usr/local/bin/initial-setup.sh
       setup_exit_code=\$?
