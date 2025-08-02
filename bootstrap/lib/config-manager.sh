@@ -46,6 +46,7 @@ declare -A OPTIONAL_FIELDS=(
     ["VM_USERNAME"]="ubuntuadmin"
     ["VM_STORAGE"]="local-lvm"
     ["VM_NET_BRIDGE"]="vmbr0"
+    ["STORAGE"]="local-lvm"  # Legacy compatibility
 )
 
 # Detect network configuration
@@ -169,6 +170,9 @@ VM_CORES="${VM_CORES:-2}"
 VM_DISK_SIZE="${VM_DISK_SIZE:-40G}"
 VM_STORAGE="${VM_STORAGE:-local-lvm}"
 VM_NET_BRIDGE="${VM_NET_BRIDGE:-vmbr0}"
+
+# Legacy fields for compatibility
+STORAGE="${STORAGE:-local-lvm}"
 EOF
     
     # Set secure permissions
