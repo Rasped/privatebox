@@ -387,6 +387,11 @@
                 status_code: 200
               register: config_check
               
+            - name: Debug password variable
+              debug:
+                msg: "Password length: {{ adguard_admin_password | length }}, First char: {{ adguard_admin_password[0] | default('EMPTY') }}"
+              no_log: false
+                
             - name: Apply AdGuard configuration
               uri:
                 url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/install/configure"
