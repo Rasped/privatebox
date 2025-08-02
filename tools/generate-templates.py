@@ -537,13 +537,10 @@ def main():
         # Get template configuration
         config = playbook_info.get('template_config', {})
         
-        # Look up resource IDs based on configuration or defaults
-        # Determine inventory based on playbook hosts
+        # Look up resource IDs - use exact inventory name matching
+        # Use hosts field directly as inventory name, or from template config
         hosts = playbook_info.get('hosts', 'all')
-        if hosts in ['proxmox-host', 'proxmox']:
-            inventory_name = config.get('semaphore_inventory', 'proxmox')
-        else:
-            inventory_name = config.get('semaphore_inventory', 'container-host')
+        inventory_name = config.get('semaphore_inventory', hosts)
         
         repository_name = config.get('semaphore_repository', 'PrivateBox')
         environment_name = config.get('semaphore_environment')
