@@ -56,9 +56,20 @@ generate_and_save_credentials() {
 
     # No MySQL passwords needed for BoltDB version
     
-    # Generate password if not provided
-    if [[ -z "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
-        SEMAPHORE_ADMIN_PASSWORD=$(generate_password)
+    # Use SERVICES_PASSWORD for Semaphore admin if provided
+    if [[ -n "${SERVICES_PASSWORD:-}" ]]; then
+        SEMAPHORE_ADMIN_PASSWORD="${SERVICES_PASSWORD}"
+        log_info "Using SERVICES_PASSWORD for Semaphore admin"
+    elif [[ -z "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
+        # Generate password if not provided
+        # Source password generator if available
+        if [[ -f "/usr/local/lib/password-generator.sh" ]]; then
+            source /usr/local/lib/password-generator.sh
+            SEMAPHORE_ADMIN_PASSWORD=$(generate_password semaphore-admin)
+        else
+            # Fallback to simple generation if password generator not available
+            SEMAPHORE_ADMIN_PASSWORD=$(tr -dc 'A-Za-z0-9@*()_+=-' < /dev/urandom | head -c 32)
+        fi
         log_info "Generated new Semaphore admin password"
     fi
     
