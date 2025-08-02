@@ -80,17 +80,17 @@ done
 # Load configuration file
 CONFIG_FILE="$(dirname "${BASH_SOURCE[0]}")/../config/privatebox.conf"
 
-# Run config-manager if requested or if config doesn't exist
+# Run config-generator if requested or if config doesn't exist
 if [[ "$AUTO_DISCOVER" == "true" ]] || [[ ! -f "$CONFIG_FILE" ]]; then
     log_info "Running configuration check..."
-    CONFIG_MANAGER_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/../lib/config-manager.sh"
+    CONFIG_GENERATOR_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/../lib/config-generator.sh"
     
-    if [[ -f "$CONFIG_MANAGER_SCRIPT" ]]; then
-        # Run config-manager to check and generate config
-        bash "$CONFIG_MANAGER_SCRIPT" check || check_result $? "Configuration generation failed"
+    if [[ -f "$CONFIG_GENERATOR_SCRIPT" ]]; then
+        # Run config-generator to check and generate config
+        bash "$CONFIG_GENERATOR_SCRIPT" check || check_result $? "Configuration generation failed"
         log_info "Configuration check completed successfully"
     else
-        log_error "Config manager script not found: $CONFIG_MANAGER_SCRIPT"
+        log_error "Config generator script not found: $CONFIG_GENERATOR_SCRIPT"
         exit ${EXIT_ERROR}
     fi
 fi
@@ -118,7 +118,7 @@ fi
 VMID="${VMID:-9000}"
 UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
 VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
-# Use ADMIN_PASSWORD from config-manager if available, otherwise fall back to VM_PASSWORD or default
+# Use ADMIN_PASSWORD from config-generator if available, otherwise fall back to VM_PASSWORD or default
 VM_PASSWORD="${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
 
 # Services password will be used for Semaphore admin
