@@ -10,6 +10,9 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-02: [Feature] Implemented phonetic password generator with 350 5-letter words
+- 2025-08-02: [Feature] Created config-manager.sh for config-based installation
+- 2025-08-02: [Docs] Redesigned password management as config-based installation
 - 2025-08-02: [Docs] Documented current password management state and target behavior
 - 2025-08-02: [Feature] Created /track slash command for work tracking
 - 2025-08-02: [Docs] Updated DEPLOYMENT-STATUS.md with v1 release requirements  

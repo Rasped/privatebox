@@ -9,7 +9,11 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 ## Critical (P1) - v1 Blockers
 
 - [Investigation] Research OPNsense VM deployment methods (starting - need template approach)
-- [Task] Streamline password generation and setting, start with config file (active - see documentation/features/password-management/current-state.md)
+- [Task] Integrate config-based installation into bootstrap scripts (pending - see documentation/features/config-based-installation/config-design.md)
+  - Sub-task: Update network-discovery.sh to use config-manager.sh
+  - Sub-task: Update create-ubuntu-vm.sh to use generated passwords
+  - Sub-task: Update common.sh to use new password generator
+  - Sub-task: Test full bootstrap with new config approach
 - [Task] Deploy OPNsense VM with VLAN configuration (pending - see documentation/network-architecture/vlan-design.md) 
 - [Task] Update service IPs to match VLAN design 10.10.20.x (pending - see documentation/network-architecture/vlan-design.md)
 
