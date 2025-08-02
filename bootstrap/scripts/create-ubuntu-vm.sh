@@ -105,7 +105,7 @@ else
     VMID=9000
     UBUNTU_VERSION="24.04"
     VM_USERNAME="ubuntuadmin"
-    VM_PASSWORD="Changeme123"
+    VM_PASSWORD=""  # Will be set from ADMIN_PASSWORD
     VM_MEMORY=2048
     VM_CORES=2
     STATIC_IP="192.168.1.22"
@@ -118,7 +118,8 @@ fi
 VMID="${VMID:-9000}"
 UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
 VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
-VM_PASSWORD="${VM_PASSWORD:-Changeme123}"
+# Use ADMIN_PASSWORD from config-manager if available, otherwise fall back to VM_PASSWORD or default
+VM_PASSWORD="${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
 
 # Generate Semaphore admin password if not already set
 if [[ -z "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
