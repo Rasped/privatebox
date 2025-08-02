@@ -126,27 +126,8 @@ execute() {
     fi
 }
 
-# Generate secure password (wrapper for backward compatibility)
-generate_password() {
-    local length="${1:-${PASSWORD_LENGTH:-32}}"
-    local password=""
-    
-    # Ensure we have required character types
-    # Note: Using only JSON-safe and shell-safe special characters
-    # Excluded: % $ \ ^ < > ! ? # " ' ` | { } [ ] ; & ~ space
-    local upper=$(tr -dc 'A-Z' < /dev/urandom | head -c 1)
-    local lower=$(tr -dc 'a-z' < /dev/urandom | head -c 1)
-    local digit=$(tr -dc '0-9' < /dev/urandom | head -c 1)
-    local special=$(tr -dc '@*()_+=-' < /dev/urandom | head -c 1)
-    
-    # Generate remaining characters
-    local remaining=$((length - 4))
-    local rest=$(tr -dc 'A-Za-z0-9@*()_+=-' < /dev/urandom | head -c "${remaining}")
-    
-    # Combine and shuffle
-    password="${upper}${lower}${digit}${special}${rest}"
-    echo "${password}" | fold -w1 | shuf | tr -d '\n'
-}
+# Password generation removed - all passwords should come from config
+# Use config-manager.sh to generate and manage passwords
 
 # Get Linux distribution info
 get_distro_info() {
@@ -225,7 +206,6 @@ export -f log log_info log_warn log_error log_debug log_success
 export -f error_exit
 export -f check_command check_root backup_file
 export -f retry_with_backoff is_dry_run execute
-export -f generate_password
 export -f get_distro_info get_distro_version is_proxmox
 export -f save_credentials
 
