@@ -27,3 +27,5 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 - [Task] Update playbooks to use ServicePasswords environment (pending - low priority)
 
 ## Uncategorized - Needs Triage
+
+- [Bug] Alpine VM deployment uses hardcoded password instead of ADMIN_PASSWORD from environment
