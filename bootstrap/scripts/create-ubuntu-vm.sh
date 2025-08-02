@@ -121,16 +121,11 @@ VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
 # Use ADMIN_PASSWORD from config-manager if available, otherwise fall back to VM_PASSWORD or default
 VM_PASSWORD="${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
 
-# Generate Semaphore admin password if not already set
+# Semaphore admin password should come from config
 if [[ -z "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
-    SEMAPHORE_ADMIN_PASSWORD=$(generate_password)
-    log_info "Generated Semaphore admin password"
-    
-    # Save to config file if it exists
-    if [[ -f "$CONFIG_FILE" ]]; then
-        echo "SEMAPHORE_ADMIN_PASSWORD=\"${SEMAPHORE_ADMIN_PASSWORD}\"" >> "$CONFIG_FILE"
-        log_info "Saved Semaphore password to config file"
-    fi
+    log_error "SEMAPHORE_ADMIN_PASSWORD not set in configuration"
+    log_error "Run config-manager.sh to generate required passwords"
+    exit ${EXIT_ERROR}
 fi
 
 # Fixed values
