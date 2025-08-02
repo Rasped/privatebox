@@ -9,7 +9,7 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 ## Critical (P1) - v1 Blockers
 
 - [Investigation] Research OPNsense VM deployment methods (starting - need template approach)
-- [Task] Implement Ansible Vault for password management (pending)
+- [Task] Streamline password generation and setting, start with config file (pending)
 - [Task] Deploy OPNsense VM with VLAN configuration (pending) 
 - [Task] Update service IPs to match VLAN design 10.10.20.x (pending)
 
