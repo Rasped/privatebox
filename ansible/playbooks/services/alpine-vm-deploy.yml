@@ -377,25 +377,20 @@
             headers:
               Authorization: "Bearer {{ semaphore_api_token }}"
             body_format: json
-            body: >-
-              {% set inventory_yaml -%}
-all:
-  hosts:
-    {{ vm_name }}:
-      ansible_host: {{ alpine_vm_ip }}
-      ansible_user: {{ vm_username }}
-      ansible_become: true
-      ansible_become_method: sudo
-      ansible_python_interpreter: /usr/bin/python3
-              {%- endset %}
-              {{
-                {
-                  "name": vm_name,
-                  "project_id": 1,
-                  "inventory": inventory_yaml | trim,
-                  "type": "static"
-                } | combine({"ssh_key_id": ssh_key_result.json.id | int})
-              }}
+            body:
+              name: "{{ vm_name }}"
+              project_id: 1
+              inventory: |
+                all:
+                  hosts:
+                    {{ vm_name }}:
+                      ansible_host: {{ alpine_vm_ip }}
+                      ansible_user: {{ vm_username }}
+                      ansible_become: true
+                      ansible_become_method: sudo
+                      ansible_python_interpreter: /usr/bin/python3
+              type: "static"
+              ssh_key_id: "{{ ssh_key_result.json.id | int }}"
             status_code: [200, 201]
           register: inventory_result
           ignore_errors: yes
