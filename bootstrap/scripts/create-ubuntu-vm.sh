@@ -121,11 +121,9 @@ VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
 # Use ADMIN_PASSWORD from config-manager if available, otherwise fall back to VM_PASSWORD or default
 VM_PASSWORD="${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
 
-# Semaphore admin password should come from config
-if [[ -z "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
-    log_error "SEMAPHORE_ADMIN_PASSWORD not set in configuration"
-    log_error "Run config-manager.sh to generate required passwords"
-    exit ${EXIT_ERROR}
+# Services password will be used for Semaphore admin
+if [[ -z "${SERVICES_PASSWORD:-}" ]]; then
+    log_warn "SERVICES_PASSWORD not set - Semaphore will generate its own password"
 fi
 
 # Fixed values
@@ -351,6 +349,7 @@ function generate_cloud_init() {
     local service_manager_content
     local ssh_manager_content
     local config_manager_content
+    local password_generator_content
     local semaphore_credentials_content
     local semaphore_containers_content
     local semaphore_api_content
@@ -409,6 +408,14 @@ function generate_cloud_init() {
         config_manager_content=$(cat "${SCRIPT_DIR}/../lib/config_manager.sh" | sed 's/^/      /')
     else
         log_error "Cannot find config_manager.sh"
+        return 1
+    fi
+    
+    # Read password generator
+    if [[ -f "${SCRIPT_DIR}/../lib/password-generator.sh" ]]; then
+        password_generator_content=$(cat "${SCRIPT_DIR}/../lib/password-generator.sh" | sed 's/^/      /')
+    else
+        log_error "Cannot find password-generator.sh"
         return 1
     fi
     
@@ -497,7 +504,7 @@ write_files:
   - path: /etc/privatebox-semaphore-password
     permissions: '0600'
     content: |
-      SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD}"
+      SERVICES_PASSWORD="${SERVICES_PASSWORD}"
   - path: /root/.credentials/proxmox_ssh_key
     permissions: '0600'
     owner: root:root
@@ -535,6 +542,10 @@ ${ssh_manager_content}
     permissions: '0644'
     content: |
 ${config_manager_content}
+  - path: /usr/local/lib/password-generator.sh
+    permissions: '0644'
+    content: |
+${password_generator_content}
   - path: /usr/local/lib/semaphore-credentials-boltdb.sh
     permissions: '0644'
     content: |

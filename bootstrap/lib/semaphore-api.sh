@@ -473,7 +473,14 @@ create_automation_user_and_projects() {
     fi
     
     # Generate secure password for automation user (assign to global variable)
-    AUTOMATION_USER_PASSWORD=$(generate_password)
+    # This is an internal service password, not user-facing
+    if [[ -f "/usr/local/lib/password-generator.sh" ]]; then
+        source /usr/local/lib/password-generator.sh
+        AUTOMATION_USER_PASSWORD=$(generate_password automation)
+    else
+        # Fallback to simple generation
+        AUTOMATION_USER_PASSWORD=$(tr -dc 'A-Za-z0-9@*()_+=-' < /dev/urandom | head -c 32)
+    fi
     
     # Create automation user
     create_semaphore_user "automation" "$AUTOMATION_USER_PASSWORD" "auto@example.com" "Automation User" "$admin_session"
