@@ -126,19 +126,47 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 4. **Password Generation**: AdGuard password created automatically
 5. **Service Persistence**: All services enabled at boot
 
-## Next Steps
+## v1 Release Requirements
 
-1. **Fix DNS Configuration Playbook**
-   - Add authentication to AdGuard API calls
-   - Update caddy-configure-dns.yml
+### Critical (Blockers)
 
-2. **Fix Caddy Proxy Configuration**
-   - Correct backend ports in services.yml
-   - Update health check endpoints
+1. **Secure Password Management**
+   - Implement Ansible Vault for all secrets
+   - One management password (Semaphore/Portainer)
+   - One infrastructure password (Proxmox/VMs)
+   - Remove plaintext passwords from configs
 
-3. **Standardize Port Bindings**
-   - Decide on consistent binding strategy
-   - Update container configurations
+2. **Network Implementation**
+   - Deploy OPNsense VM with VLAN configuration
+   - Implement network design from `/documentation/network-architecture/vlan-design.md`
+   - Migrate services to 10.10.20.0/24 subnet
+
+### Important (Should Have)
+
+1. **SSL & DNS Configuration**
+   - Configure Caddy with Let's Encrypt
+   - Set up *.privatebox.local internal DNS
+   - Replace IP:PORT access with domain names
+
+2. **Update Mechanisms**
+   - Create update playbooks for all services
+   - Create VM update playbooks
+   - Document update procedures
+
+### Bug Fixes
+
+1. Fix DNS config playbook auth headers
+2. Fix Caddy backend configurations (AdGuard/Portainer 503s)
+3. Standardize port bindings to 10.10.20.10
+
+### Deferred to Post-v1
+
+- Consumer Dashboard
+- Unbound DNS
+- WireGuard VPN
+- Performance monitoring
+- Hardware validation
+- Multi-site support
 
 ## Conclusion
 
