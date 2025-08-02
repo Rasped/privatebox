@@ -1,4 +1,9 @@
 ---
+# Semaphore metadata for template generation
+# metadata:
+#   description: "Deploy AdGuard Home DNS filtering service"
+#   semaphore_environment: "ServicePasswords"
+
 - name: "AdGuard: Deploy Container Service"
   hosts: container-host
   become: true
@@ -26,8 +31,8 @@
     
     # AdGuard admin credentials
     adguard_admin_username: "admin"
-    # Generate password if not exists, or use existing
-    adguard_admin_password: "{{ lookup('file', '/etc/privatebox-adguard-password', errors='ignore') | default(lookup('password', '/tmp/adguard-admin-password chars=ascii_letters,digits,!@#$%^&*()_+-= length=20'), true) }}"
+    # Use SERVICES_PASSWORD from Semaphore environment
+    adguard_admin_password: "{{ lookup('env', 'SERVICES_PASSWORD') }}"
     
     # Quadlet configuration
     use_system_quadlet: true
@@ -304,7 +309,7 @@
               - ""
               - "Web Interface: {{ service_info.web_url }}"
               - "Username: {{ adguard_admin_username }}"
-              - "Password: Stored in /etc/privatebox-adguard-password"
+              - "Password: Using SERVICES_PASSWORD from Semaphore"
               - ""
               - "DNS Server: {{ service_info.dns_server }}:{{ service_info.dns_port }}"
               - ""
@@ -343,20 +348,6 @@
       when: confirm_deploy | bool
       tags: [adguard, configure]
       block:
-        - name: Check if password file exists
-          stat:
-            path: /etc/privatebox-adguard-password
-          register: password_file_stat
-          
-        - name: Ensure password file exists
-          copy:
-            content: "{{ adguard_admin_password }}"
-            dest: /etc/privatebox-adguard-password
-            mode: '0600'
-            owner: root
-            group: root
-          when: not password_file_stat.stat.exists
-          
         - name: Wait for AdGuard API to be available
           uri:
             url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
