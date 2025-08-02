@@ -34,7 +34,6 @@ Deploy and test PrivateBox on a remote Proxmox server:
 
 - `create-ubuntu-vm.sh` - Creates Ubuntu 24.04 VM on Proxmox with cloud-init
 - `deploy-to-server.sh` - Deploy bootstrap to remote server and run tests
-- `network-discovery.sh` - Automatic network configuration discovery
 - `initial-setup.sh` - Post-install setup (runs automatically via cloud-init)
 - `portainer-setup.sh` - Container management UI setup
 - `semaphore-setup.sh` - Ansible automation UI setup with automatic template synchronization
@@ -57,7 +56,10 @@ Or use `--auto-discover` to automatically detect network settings and generate t
 ```
 bootstrap/
 ├── scripts/         # All bootstrap scripts
-├── lib/            # Common functions library
+├── lib/            # Common functions and utilities
+│   ├── common.sh          # Logging, error handling, utilities
+│   ├── config-manager.sh  # Configuration and network detection
+│   └── password-generator.sh  # Secure password generation
 └── config/         # Configuration files
 ```
 
