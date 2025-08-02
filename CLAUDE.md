@@ -245,7 +245,7 @@ documentation/           # Comprehensive planning and technical documentation
 - `quickstart.sh` - One-line installer script
 - `bootstrap/bootstrap.sh` - Main bootstrap entry point
 - `bootstrap/scripts/create-ubuntu-vm.sh` - Core VM creation logic
-- `bootstrap/lib/config-manager.sh` - Configuration and network detection
+- `bootstrap/lib/config-generator.sh` - Configuration and network detection
 - `bootstrap/config/privatebox.conf.example` - Configuration template
 - `bootstrap/README.md` - Bootstrap documentation
 
@@ -337,7 +337,7 @@ sudo ./bootstrap/bootstrap.sh
 sudo ./bootstrap/scripts/create-ubuntu-vm.sh --ip 192.168.1.50 --gateway 192.168.1.1
 
 # Test configuration generation
-./bootstrap/lib/config-manager.sh check
+./bootstrap/lib/config-generator.sh check
 
 # Deploy to remote server
 ./bootstrap/deploy-to-server.sh 192.168.1.10 root

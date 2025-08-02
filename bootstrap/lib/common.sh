@@ -127,7 +127,7 @@ execute() {
 }
 
 # Password generation removed - all passwords should come from config
-# Use config-manager.sh to generate and manage passwords
+# Use config-generator.sh to generate and manage passwords
 
 # Get Linux distribution info
 get_distro_info() {
