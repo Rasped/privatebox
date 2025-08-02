@@ -37,6 +37,7 @@ declare -A REQUIRED_FIELDS=(
     ["GATEWAY"]=""
     ["ADMIN_PASSWORD"]=""
     ["SERVICES_PASSWORD"]=""
+    ["SEMAPHORE_ADMIN_PASSWORD"]=""
 )
 
 declare -A OPTIONAL_FIELDS=(
@@ -181,6 +182,11 @@ generate_missing_config() {
         generated_fields+=("SERVICES_PASSWORD=$SERVICES_PASSWORD")
     fi
     
+    if ! field_exists "SEMAPHORE_ADMIN_PASSWORD"; then
+        SEMAPHORE_ADMIN_PASSWORD=$(generate_password semaphore)
+        generated_fields+=("SEMAPHORE_ADMIN_PASSWORD=$SEMAPHORE_ADMIN_PASSWORD")
+    fi
+    
     # Set optional fields to defaults if not set
     for field in "${!OPTIONAL_FIELDS[@]}"; do
         if ! field_exists "$field"; then
@@ -216,6 +222,7 @@ PROXMOX_HOST="${PROXMOX_HOST:-}"
 # Security Configuration
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 SERVICES_PASSWORD="${SERVICES_PASSWORD:-}"
+SEMAPHORE_ADMIN_PASSWORD="${SEMAPHORE_ADMIN_PASSWORD:-}"
 
 # VM Configuration
 VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
@@ -267,6 +274,11 @@ show_config() {
             echo "  Services Password: <set>"
         else
             echo "  Services Password: <not set>"
+        fi
+        if field_exists "SEMAPHORE_ADMIN_PASSWORD"; then
+            echo "  Semaphore Admin Password: <set>"
+        else
+            echo "  Semaphore Admin Password: <not set>"
         fi
         echo ""
         
