@@ -49,26 +49,57 @@ declare -A OPTIONAL_FIELDS=(
     ["STORAGE"]="local-lvm"  # Legacy compatibility
 )
 
-# Detect network configuration
+# Detect network interface and configuration
 detect_network() {
+    local interface=""
+    local host_ip=""
     local gateway=""
     local base_network=""
+    local netmask=""
     
-    # Try to detect gateway
-    if command -v ip >/dev/null 2>&1; then
-        gateway=$(ip route | grep default | head -1 | awk '{print $3}' || true)
+    # Detect best network interface
+    local -a interfaces=()
+    while IFS= read -r line; do
+        local iface=$(echo "${line}" | awk '{print $NF}')  # Last field is interface name
+        local ip=$(echo "${line}" | awk '{print $2}' | cut -d'/' -f1)  # Second field is IP/CIDR
+        
+        # Prioritize Proxmox bridges (vmbr*) for VM networking
+        if [[ "$iface" == vmbr* ]]; then
+            if [[ -n "$ip" ]] && [[ "$ip" != "127.0.0.1" ]]; then
+                interfaces+=("$iface:$ip")
+                break  # Use first vmbr interface found
+            fi
+        elif [[ "$iface" != "lo" ]] && [[ "$iface" != docker* ]] && [[ "$iface" != br-* ]] && [[ "$iface" != veth* ]]; then
+            if [[ -n "$ip" ]] && [[ "$ip" != "127.0.0.1" ]]; then
+                interfaces+=("$iface:$ip")
+            fi
+        fi
+    done < <(ip addr show 2>/dev/null | grep 'inet ' | grep -v '127.0.0.1' || true)
+    
+    # Use first suitable interface found
+    if [[ ${#interfaces[@]} -gt 0 ]]; then
+        interface=$(echo "${interfaces[0]}" | cut -d':' -f1)
+        host_ip=$(echo "${interfaces[0]}" | cut -d':' -f2)
+        base_network=$(echo "$host_ip" | cut -d. -f1-3)
+        
+        # Get gateway for this interface
+        gateway=$(ip route | grep default | grep "$interface" | awk '{print $3}' | head -1 || true)
+        
+        # Get netmask from route table
+        netmask=$(ip route | grep "$interface" | grep "${base_network}\.0/" | head -1 | awk '{print $1}' | cut -d'/' -f2 || echo "24")
     fi
     
-    # Fallback to default if detection fails
+    # Fallback to defaults if detection fails
     if [[ -z "$gateway" ]]; then
         gateway="192.168.1.3"
-        log_warn "Could not detect gateway, using default: $gateway"
+        base_network="192.168.1"
+        interface="vmbr0"
+        host_ip="${base_network}.10"  # Assume .10 as typical Proxmox host
+        netmask="24"
+        log_warn "Could not detect network, using defaults"
     fi
     
-    # Extract base network (e.g., 192.168.1.3 -> 192.168.1)
-    base_network=$(echo "$gateway" | cut -d. -f1-3)
-    
-    echo "$gateway|$base_network"
+    echo "$gateway|$base_network|$interface|$host_ip|$netmask"
 }
 
 # Load existing configuration
@@ -92,14 +123,35 @@ field_exists() {
 # Generate missing configuration
 generate_missing_config() {
     local network_info=$(detect_network)
-    local gateway="${network_info%|*}"
-    local base_network="${network_info#*|}"
+    local gateway=$(echo "$network_info" | cut -d'|' -f1)
+    local base_network=$(echo "$network_info" | cut -d'|' -f2)
+    local interface=$(echo "$network_info" | cut -d'|' -f3)
+    local host_ip=$(echo "$network_info" | cut -d'|' -f4)
+    local netmask=$(echo "$network_info" | cut -d'|' -f5)
     local generated_fields=()
     
     # Set gateway if not already set
     if ! field_exists "GATEWAY"; then
         GATEWAY="$gateway"
         generated_fields+=("GATEWAY=$GATEWAY")
+    fi
+    
+    # Set network interface if not already set
+    if ! field_exists "VM_NET_BRIDGE"; then
+        VM_NET_BRIDGE="$interface"
+        generated_fields+=("VM_NET_BRIDGE=$VM_NET_BRIDGE")
+    fi
+    
+    # Set netmask if not already set
+    if ! field_exists "NETMASK"; then
+        NETMASK="$netmask"
+        generated_fields+=("NETMASK=$NETMASK")
+    fi
+    
+    # Set Proxmox host IP if not already set
+    if ! field_exists "PROXMOX_HOST"; then
+        PROXMOX_HOST="$host_ip"
+        generated_fields+=("PROXMOX_HOST=$PROXMOX_HOST")
     fi
     
     # Generate IPs based on detected network
@@ -155,9 +207,11 @@ write_config() {
 
 # Network Configuration
 GATEWAY="${GATEWAY:-}"
+NETMASK="${NETMASK:-}"
 CONTAINER_HOST_IP="${CONTAINER_HOST_IP:-}"
 CADDY_HOST_IP="${CADDY_HOST_IP:-}"
 OPNSENSE_IP="${OPNSENSE_IP:-}"
+PROXMOX_HOST="${PROXMOX_HOST:-}"
 
 # Security Configuration
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
@@ -173,6 +227,8 @@ VM_NET_BRIDGE="${VM_NET_BRIDGE:-vmbr0}"
 
 # Legacy fields for compatibility
 STORAGE="${STORAGE:-local-lvm}"
+STATIC_IP="${CONTAINER_HOST_IP:-}"  # For create-ubuntu-vm.sh compatibility
+NET_BRIDGE="${VM_NET_BRIDGE:-}"     # For create-ubuntu-vm.sh compatibility
 EOF
     
     # Set secure permissions
@@ -193,6 +249,9 @@ show_config() {
         
         echo "Network Configuration:"
         echo "  Gateway: ${GATEWAY:-<not set>}"
+        echo "  Netmask: ${NETMASK:-<not set>}"
+        echo "  Bridge Interface: ${VM_NET_BRIDGE:-<not set>}"
+        echo "  Proxmox Host IP: ${PROXMOX_HOST:-<not set>}"
         echo "  Container Host IP: ${CONTAINER_HOST_IP:-<not set>}"
         echo "  Caddy Host IP: ${CADDY_HOST_IP:-<not set>}"
         echo "  OPNsense IP: ${OPNSENSE_IP:-<not set>}"
