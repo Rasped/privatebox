@@ -9,11 +9,9 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 ## Critical (P1) - v1 Blockers
 
 - [Investigation] Research OPNsense VM deployment methods (starting - need template approach)
-- [Task] Integrate config-based installation into bootstrap scripts (in progress - see documentation/features/config-based-installation/config-design.md)
-  - Sub-task: Update common.sh to use new password generator (pending)
+- [Task] Integrate config-based installation into bootstrap scripts (mostly complete - see documentation/features/config-based-installation/config-design.md)
   - Sub-task: Test full bootstrap with new config approach (pending)
-  - [Bug] Generated IPs (CONTAINER_HOST_IP, CADDY_HOST_IP, OPNSENSE_IP) not being used - VM uses CONTAINER_HOST_IP now
-  - [Note] SERVICES_PASSWORD is generated but not used - need to determine purpose (services vs user password?)
+  - [Bug] VM creates with different password than config-manager generated (pending - password regeneration issue)
 - [Task] Deploy OPNsense VM with VLAN configuration (pending - see documentation/network-architecture/vlan-design.md) 
 - [Task] Update service IPs to match VLAN design 10.10.20.x (pending - see documentation/network-architecture/vlan-design.md)
 
@@ -32,4 +30,6 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 
 ## Uncategorized - Needs Triage
 
-<!-- New items go here until prioritized -->
+- [Bug] Password displayed during VM creation differs from config-manager generated password (found today)
+- [Note] SERVICES_PASSWORD purpose clarified - used for Semaphore admin login
+- [Note] VM now uses predetermined IPs (.20, .21, .47) instead of searching for available IPs

@@ -10,6 +10,13 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-02: [Config] Removed unused automation user code from Semaphore setup
+- 2025-08-02: [Config] Centralized all password generation in config-manager.sh
+- 2025-08-02: [Fix] Removed password generation from common.sh - all passwords from config
+- 2025-08-02: [Config] Removed network-discovery.sh in favor of config-manager.sh
+- 2025-08-02: [Feature] Enhanced config-manager with full network detection capabilities
+- 2025-08-02: [Fix] Updated VM creation to use ADMIN_PASSWORD from config
+- 2025-08-02: [Config] SERVICES_PASSWORD now used for Semaphore admin user
 - 2025-08-02: [Config] Integrated network-discovery.sh with config-manager.sh for unified configuration
 - 2025-08-02: [Fix] Fixed config-manager.sh argument consumption issue when sourced by other scripts
 - 2025-08-02: [Fix] Added STORAGE variable to config-manager for legacy compatibility
