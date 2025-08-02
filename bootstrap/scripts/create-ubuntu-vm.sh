@@ -80,17 +80,17 @@ done
 # Load configuration file
 CONFIG_FILE="$(dirname "${BASH_SOURCE[0]}")/../config/privatebox.conf"
 
-# Run network discovery if requested or if config doesn't exist
+# Run config-manager if requested or if config doesn't exist
 if [[ "$AUTO_DISCOVER" == "true" ]] || [[ ! -f "$CONFIG_FILE" ]]; then
-    log_info "Running network discovery..."
-    NETWORK_DISCOVERY_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/network-discovery.sh"
+    log_info "Running configuration check..."
+    CONFIG_MANAGER_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/../lib/config-manager.sh"
     
-    if [[ -f "$NETWORK_DISCOVERY_SCRIPT" ]]; then
-        # Run network discovery to generate config
-        "$NETWORK_DISCOVERY_SCRIPT" --auto || check_result $? "Network discovery failed"
-        log_info "Network discovery completed successfully"
+    if [[ -f "$CONFIG_MANAGER_SCRIPT" ]]; then
+        # Run config-manager to check and generate config
+        bash "$CONFIG_MANAGER_SCRIPT" check || check_result $? "Configuration generation failed"
+        log_info "Configuration check completed successfully"
     else
-        log_error "Network discovery script not found: $NETWORK_DISCOVERY_SCRIPT"
+        log_error "Config manager script not found: $CONFIG_MANAGER_SCRIPT"
         exit ${EXIT_ERROR}
     fi
 fi

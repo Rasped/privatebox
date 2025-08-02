@@ -208,7 +208,6 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 bootstrap/                 # Bootstrap infrastructure (FULLY IMPLEMENTED)
 ├── scripts/              # Core installation scripts
 │   ├── create-ubuntu-vm.sh      # Main VM creation with cloud-init
-│   ├── network-discovery.sh     # Automatic network configuration
 │   ├── initial-setup.sh         # Post-install setup (via cloud-init)
 │   ├── portainer-setup.sh       # Container management installation
 │   ├── semaphore-setup.sh       # Ansible UI installation
@@ -246,7 +245,7 @@ documentation/           # Comprehensive planning and technical documentation
 - `quickstart.sh` - One-line installer script
 - `bootstrap/bootstrap.sh` - Main bootstrap entry point
 - `bootstrap/scripts/create-ubuntu-vm.sh` - Core VM creation logic
-- `bootstrap/scripts/network-discovery.sh` - Network auto-detection
+- `bootstrap/lib/config-manager.sh` - Configuration and network detection
 - `bootstrap/config/privatebox.conf.example` - Configuration template
 - `bootstrap/README.md` - Bootstrap documentation
 
@@ -337,8 +336,8 @@ sudo ./bootstrap/bootstrap.sh
 # Create VM with specific network settings
 sudo ./bootstrap/scripts/create-ubuntu-vm.sh --ip 192.168.1.50 --gateway 192.168.1.1
 
-# Test network discovery
-sudo ./bootstrap/scripts/network-discovery.sh
+# Test configuration generation
+./bootstrap/lib/config-manager.sh check
 
 # Deploy to remote server
 ./bootstrap/deploy-to-server.sh 192.168.1.10 root
