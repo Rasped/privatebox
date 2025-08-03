@@ -388,7 +388,6 @@
               }
             status_code: [200, 201]
           register: inventory_result
-          ignore_errors: yes
 
         - name: Debug inventory creation error
           debug:
