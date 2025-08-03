@@ -175,6 +175,9 @@
               # Enable and start SSH
               runcmd:
                 - rc-update add sshd default
+                # Enable password authentication temporarily for registration
+                - echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+                - echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
                 - rc-service sshd start
                 {% if vm_ip %}
                 - rc-service networking restart
@@ -301,7 +304,7 @@
           delay: 10
           until: cloud_init_check.rc == 0
 
-    # Register with Semaphore
+    # Register with Semaphore via self-registration script
     - name: "Alpine VM - Register with Semaphore"
       tags: [alpine, semaphore]
       when: 
@@ -309,101 +312,44 @@
         - wait_for_cloud_init | bool
         - alpine_vm_ip is defined
       block:
-        - name: Retrieve SSH public key from VM using password
+        - name: Copy self-registration script to VM
+          shell: |
+            sshpass -p '{{ vm_password }}' scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ playbook_dir }}/../../scripts/vm-self-register.sh \
+                {{ vm_username }}@{{ alpine_vm_ip }}:/tmp/vm-self-register.sh
+          register: copy_script
+
+        - name: Execute VM self-registration script
           shell: |
             sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
-                "cat /home/{{ vm_username }}/.ssh/id_ed25519.pub"
-          register: vm_ssh_public_key
+                "chmod +x /tmp/vm-self-register.sh && \
+                 SEMAPHORE_URL='{{ semaphore_url }}' /tmp/vm-self-register.sh '{{ semaphore_api_token }}' '{{ vm_name }}' '{{ vm_username }}' '{{ alpine_vm_ip }}'"
+          register: registration_result
 
-        - name: Retrieve SSH private key from VM using password
+        - name: Display registration output
+          debug:
+            var: registration_result.stdout_lines
+
+        - name: Check registration status
           shell: |
             sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
-                "cat /home/{{ vm_username }}/.ssh/id_ed25519"
-          register: vm_ssh_private_key
-          no_log: true
-
-        # No login needed - using API token directly
-
-        - name: Debug SSH key creation payload
-          debug:
-            msg:
-              - "Creating SSH key with:"
-              - "  name: {{ vm_name }}-key"
-              - "  type: ssh"
-              - "  project_id: 1"
-              - "  ssh.login: {{ vm_username }}"
-              - "  ssh.private_key: (hidden)"
-
-        - name: Create SSH key in Semaphore
-          uri:
-            url: "{{ semaphore_url }}/api/project/1/keys"
-            method: POST
-            headers:
-              Authorization: "Bearer {{ semaphore_api_token }}"
-            body_format: json
-            body:
-              name: "{{ vm_name }}-key"
-              type: "ssh"
-              project_id: 1
-              ssh:
-                login: "{{ vm_username }}"
-                private_key: "{{ vm_ssh_private_key.stdout }}"
-            status_code: [200, 201]
-          register: ssh_key_result
-
-        - name: Debug SSH key result
-          debug:
-            var: ssh_key_result.json
-
-        - name: Debug inventory payload
-          debug:
-            msg:
-              - "Creating inventory with:"
-              - "  Name: {{ vm_name }}"
-              - "  Project ID: 1"
-              - "  SSH Key ID: {{ ssh_key_result.json.id | int }}"
-              - "  VM IP: {{ alpine_vm_ip }}"
-              - "  Username: {{ vm_username }}"
-              - "  Full inventory string:"
-              - "{{ 'all:\\n  hosts:\\n    ' + vm_name + ':\\n      ansible_host: ' + alpine_vm_ip + '\\n      ansible_user: ' + vm_username + '\\n      ansible_become: true\\n      ansible_become_method: sudo\\n      ansible_python_interpreter: /usr/bin/python3' }}"
-
-        - name: Debug final inventory body JSON
-          debug:
-            msg: "Creating inventory with properly formatted YAML structure"
-
-        - name: Create inventory for Alpine VM using shell
-          shell: |
-            cat > {{ work_dir }}/inventory.json << 'EOF'
-            {
-              "name": "{{ vm_name }}",
-              "project_id": 1,
-              "inventory": "all:\n  hosts:\n    {{ vm_name }}:\n      ansible_host: {{ alpine_vm_ip }}\n      ansible_user: {{ vm_username }}\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3",
-              "type": "static",
-              "ssh_key_id": {{ ssh_key_result.json.id }}
-            }
-            EOF
-            
-            curl -s -X POST \
-              -H "Authorization: Bearer {{ semaphore_api_token }}" \
-              -H "Content-Type: application/json" \
-              -d @{{ work_dir }}/inventory.json \
-              "{{ semaphore_url }}/api/project/1/inventory"
-          register: inventory_result
-
-        - name: Debug inventory creation error
-          debug:
-            var: inventory_result
-          when: inventory_result.failed | default(false)
+                "test -f ~/.semaphore-registered && cat ~/.semaphore-registered || echo 'Not registered'"
+          register: registration_status
 
         - name: Display Semaphore registration results
           debug:
-            msg:
-              - "VM registered with Semaphore:"
-              - "  SSH Key ID: {{ ssh_key_result.json.id }}"
-              - "  Inventory ID: {{ inventory_result.json.id | default('Failed to create') }}"
-          when: not (inventory_result.failed | default(false))
+            msg: "{{ registration_status.stdout_lines }}"
+
+        - name: Disable password authentication after registration
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                {{ vm_username }}@{{ alpine_vm_ip }} \
+                "sudo sed -i 's/^PasswordAuthentication yes/#PasswordAuthentication yes/g' /etc/ssh/sshd_config && \
+                 sudo sed -i 's/^PermitRootLogin yes/#PermitRootLogin yes/g' /etc/ssh/sshd_config && \
+                 sudo rc-service sshd restart"
+          when: registration_result.rc == 0
 
     # Install and configure Caddy
     - name: "Alpine VM - Install Caddy Reverse Proxy"
