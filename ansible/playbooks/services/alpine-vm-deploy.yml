@@ -370,27 +370,36 @@
           debug:
             msg: "Creating inventory with properly formatted YAML structure"
 
+        - name: Set inventory YAML content
+          set_fact:
+            inventory_yaml: |
+              all:
+                hosts:
+                  {{ vm_name }}:
+                    ansible_host: {{ alpine_vm_ip }}
+                    ansible_user: {{ vm_username }}
+                    ansible_become: true
+                    ansible_become_method: sudo
+                    ansible_python_interpreter: /usr/bin/python3
+
+        - name: Create inventory JSON body
+          set_fact:
+            inventory_body:
+              name: "{{ vm_name }}"
+              project_id: 1
+              inventory: "{{ inventory_yaml }}"
+              type: "static"
+              ssh_key_id: "{{ ssh_key_result.json.id | int }}"
+
         - name: Create inventory for Alpine VM
           uri:
             url: "{{ semaphore_url }}/api/project/1/inventory"
             method: POST
             headers:
               Authorization: "Bearer {{ semaphore_api_token }}"
-            body_format: json
-            body:
-              name: "{{ vm_name }}"
-              project_id: 1
-              inventory: |
-                all:
-                  hosts:
-                    {{ vm_name }}:
-                      ansible_host: {{ alpine_vm_ip }}
-                      ansible_user: {{ vm_username }}
-                      ansible_become: true
-                      ansible_become_method: sudo
-                      ansible_python_interpreter: /usr/bin/python3
-              type: "static"
-              ssh_key_id: "{{ ssh_key_result.json.id | int }}"
+              Content-Type: "application/json"
+            body: "{{ inventory_body | to_json }}"
+            body_format: raw
             status_code: [200, 201]
           register: inventory_result
 
