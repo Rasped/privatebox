@@ -382,18 +382,16 @@
                     ansible_become_method: sudo
                     ansible_python_interpreter: /usr/bin/python3
 
-        - name: Create inventory JSON body
-          set_fact:
-            inventory_body:
-              name: "{{ vm_name }}"
-              project_id: 1
-              inventory: "{{ inventory_yaml }}"
-              type: "static"
-              ssh_key_id: "{{ ssh_key_result.json.id | int }}"
-
-        - name: Debug inventory body JSON
+        - name: Debug inventory creation JSON
           debug:
-            msg: "{{ inventory_body | to_json }}"
+            msg: |
+              {
+                "name": {{ vm_name | to_json }},
+                "project_id": 1,
+                "inventory": {{ inventory_yaml | to_json }},
+                "type": "static",
+                "ssh_key_id": {{ ssh_key_result.json.id }}
+              }
 
         - name: Create inventory for Alpine VM
           uri:
@@ -402,7 +400,14 @@
             headers:
               Authorization: "Bearer {{ semaphore_api_token }}"
               Content-Type: "application/json"
-            body: "{{ inventory_body | to_json }}"
+            body: |
+              {
+                "name": {{ vm_name | to_json }},
+                "project_id": 1,
+                "inventory": {{ inventory_yaml | to_json }},
+                "type": "static",
+                "ssh_key_id": {{ ssh_key_result.json.id }}
+              }
             body_format: raw
             status_code: [200, 201]
           register: inventory_result
