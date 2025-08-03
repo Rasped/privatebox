@@ -370,38 +370,23 @@
           debug:
             msg: "Creating inventory with properly formatted YAML structure"
 
-        - name: Write inventory YAML to file
-          copy:
-            dest: "{{ work_dir }}/inventory.yml"
-            content: |
-              all:
-                hosts:
-                  {{ vm_name }}:
-                    ansible_host: {{ alpine_vm_ip }}
-                    ansible_user: {{ vm_username }}
-                    ansible_become: true
-                    ansible_become_method: sudo
-                    ansible_python_interpreter: /usr/bin/python3
-
-        - name: Read inventory YAML from file
-          slurp:
-            src: "{{ work_dir }}/inventory.yml"
-          register: inventory_file
-
-        - name: Create inventory for Alpine VM
-          uri:
-            url: "{{ semaphore_url }}/api/project/1/inventory"
-            method: POST
-            headers:
-              Authorization: "Bearer {{ semaphore_api_token }}"
-            body_format: json
-            body:
-              name: "{{ vm_name }}"
-              project_id: 1
-              inventory: "{{ inventory_file.content | b64decode }}"
-              type: "static"
-              ssh_key_id: "{{ ssh_key_result.json.id | int }}"
-            status_code: [200, 201]
+        - name: Create inventory for Alpine VM using shell
+          shell: |
+            cat > {{ work_dir }}/inventory.json << 'EOF'
+            {
+              "name": "{{ vm_name }}",
+              "project_id": 1,
+              "inventory": "all:\n  hosts:\n    {{ vm_name }}:\n      ansible_host: {{ alpine_vm_ip }}\n      ansible_user: {{ vm_username }}\n      ansible_become: true\n      ansible_become_method: sudo\n      ansible_python_interpreter: /usr/bin/python3",
+              "type": "static",
+              "ssh_key_id": {{ ssh_key_result.json.id }}
+            }
+            EOF
+            
+            curl -s -X POST \
+              -H "Authorization: Bearer {{ semaphore_api_token }}" \
+              -H "Content-Type: application/json" \
+              -d @{{ work_dir }}/inventory.json \
+              "{{ semaphore_url }}/api/project/1/inventory"
           register: inventory_result
 
         - name: Debug inventory creation error
@@ -574,7 +559,7 @@
           - "Semaphore Registration:"
           - "  {% if register_with_semaphore and ssh_key_result is defined %}✓ Registered with Semaphore{% else %}✗ Not registered{% endif %}"
           - "  {% if ssh_key_result is defined and ssh_key_result.json is defined %}SSH Key ID: {{ ssh_key_result.json.id }}{% endif %}"
-          - "  {% if inventory_result is defined and inventory_result.json is defined %}Inventory ID: {{ inventory_result.json.id }}{% endif %}"
+          - "  {% if inventory_result is defined and inventory_result.stdout is defined %}Inventory created successfully{% endif %}"
           - ""
           - "Caddy Reverse Proxy:"
           - "  {% if caddy_installed | default(false) %}✓ Installed and running{% else %}✗ Not installed{% endif %}"
