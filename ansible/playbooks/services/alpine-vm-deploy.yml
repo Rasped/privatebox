@@ -391,6 +391,10 @@
               type: "static"
               ssh_key_id: "{{ ssh_key_result.json.id | int }}"
 
+        - name: Debug inventory body JSON
+          debug:
+            msg: "{{ inventory_body | to_json }}"
+
         - name: Create inventory for Alpine VM
           uri:
             url: "{{ semaphore_url }}/api/project/1/inventory"
