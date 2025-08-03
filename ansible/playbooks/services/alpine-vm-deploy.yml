@@ -124,11 +124,6 @@
     - name: "Alpine VM - Configure cloud-init"
       tags: [alpine, cloudinit]
       block:
-        - name: Get SSH public key from Proxmox host
-          slurp:
-            src: /root/.ssh/id_rsa.pub
-          register: ssh_public_key
-
         - name: Generate cloud-init user-data
           copy:
             dest: "{{ snippets_dir }}/user-data-{{ vm_id }}.yaml"
@@ -145,11 +140,7 @@
                   shell: /bin/ash
                   plain_text_passwd: "{{ vm_password }}"
                   lock_passwd: false
-                  ssh_authorized_keys:
-                    - {{ ssh_public_key.content | b64decode | trim }}
                 - name: alpine
-                  ssh_authorized_keys:
-                    - {{ ssh_public_key.content | b64decode | trim }}
               
               # Ensure password doesn't expire
               chpasswd:
@@ -195,10 +186,12 @@
                 # Generate SSH key for this VM
                 - mkdir -p /home/{{ vm_username }}/.ssh
                 - ssh-keygen -t ed25519 -f /home/{{ vm_username }}/.ssh/id_ed25519 -N '' -C '{{ vm_name }}@{{ vm_ip | default("dhcp") }}'
+                - cp /home/{{ vm_username }}/.ssh/id_ed25519.pub /home/{{ vm_username }}/.ssh/authorized_keys
                 - chown -R {{ vm_username }}:{{ vm_username }} /home/{{ vm_username }}/.ssh
                 - chmod 700 /home/{{ vm_username }}/.ssh
                 - chmod 600 /home/{{ vm_username }}/.ssh/id_ed25519
                 - chmod 644 /home/{{ vm_username }}/.ssh/id_ed25519.pub
+                - chmod 600 /home/{{ vm_username }}/.ssh/authorized_keys
                 # Also generate host SSH key for root
                 - ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N '' -C 'root@{{ vm_name }}'
                 - chmod 700 /root/.ssh
@@ -299,8 +292,8 @@
             timeout: 300
 
         - name: Wait for cloud-init to complete
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "test -f /etc/cloud-init-done"
           register: cloud_init_check
@@ -316,22 +309,32 @@
         - wait_for_cloud_init | bool
         - alpine_vm_ip is defined
       block:
-        - name: Retrieve SSH public key from VM
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        - name: Retrieve SSH public key from VM using password
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "cat /home/{{ vm_username }}/.ssh/id_ed25519.pub"
           register: vm_ssh_public_key
 
-        - name: Retrieve SSH private key from VM
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        - name: Retrieve SSH private key from VM using password
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "cat /home/{{ vm_username }}/.ssh/id_ed25519"
           register: vm_ssh_private_key
           no_log: true
 
         # No login needed - using API token directly
+
+        - name: Debug SSH key creation payload
+          debug:
+            msg:
+              - "Creating SSH key with:"
+              - "  name: {{ vm_name }}-key"
+              - "  type: ssh"
+              - "  project_id: 1"
+              - "  ssh.login: {{ vm_username }}"
+              - "  ssh.private_key: (hidden)"
 
         - name: Create SSH key in Semaphore
           uri:
@@ -410,15 +413,15 @@
         - install_caddy | default(true) | bool
       block:
         - name: Install Caddy on Alpine VM
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo apk update && sudo apk add caddy curl"
           register: caddy_install
           
         - name: Create Caddy directories
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo mkdir -p /etc/caddy /var/lib/caddy /var/log/caddy && \
                  sudo chown caddy:caddy /etc/caddy /var/lib/caddy /var/log/caddy"
@@ -463,35 +466,35 @@
             backend_host: "{{ ubuntu_vm_ip | default('192.168.1.20') }}"
             
         - name: Copy Caddyfile to Alpine VM
-          command: |
-            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ work_dir }}/Caddyfile \
                 {{ vm_username }}@{{ alpine_vm_ip }}:/tmp/Caddyfile
                 
         - name: Install Caddyfile and validate
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && \
                  sudo chown caddy:caddy /etc/caddy/Caddyfile && \
                  sudo -u caddy caddy validate --config /etc/caddy/Caddyfile"
                  
         - name: Enable Caddy service at boot
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo rc-update add caddy default"
                 
         - name: Ensure log files have correct permissions
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo rm -f /var/log/caddy/*.log && \
                  sudo chown -R caddy:caddy /var/log/caddy"
                 
         - name: Start Caddy service
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo rc-service caddy start"
                  
@@ -500,8 +503,8 @@
             seconds: 3
                  
         - name: Configure firewall for Caddy
-          command: |
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          shell: |
+            sshpass -p '{{ vm_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 {{ vm_username }}@{{ alpine_vm_ip }} \
                 "sudo apk add iptables && \
                  sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT && \
