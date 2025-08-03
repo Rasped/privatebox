@@ -132,6 +132,8 @@
               #cloud-config
               hostname: {{ vm_name }}
               manage_etc_hosts: true
+              ssh_pwauth: true
+              disable_root: false
               
               users:
                 - name: {{ vm_username }}
@@ -176,9 +178,9 @@
               runcmd:
                 - rc-update add sshd default
                 # Enable password authentication temporarily for registration
-                - echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-                - echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
-                - rc-service sshd start
+                - sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+                - sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+                - rc-service sshd restart
                 {% if vm_ip %}
                 - rc-service networking restart
                 {% endif %}
