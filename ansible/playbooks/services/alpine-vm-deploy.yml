@@ -370,9 +370,10 @@
           debug:
             msg: "Creating inventory with properly formatted YAML structure"
 
-        - name: Set inventory YAML content
-          set_fact:
-            inventory_yaml: |
+        - name: Write inventory YAML to file
+          copy:
+            dest: "{{ work_dir }}/inventory.yml"
+            content: |
               all:
                 hosts:
                   {{ vm_name }}:
@@ -381,6 +382,11 @@
                     ansible_become: true
                     ansible_become_method: sudo
                     ansible_python_interpreter: /usr/bin/python3
+
+        - name: Read inventory YAML from file
+          slurp:
+            src: "{{ work_dir }}/inventory.yml"
+          register: inventory_file
 
         - name: Create inventory for Alpine VM
           uri:
@@ -392,7 +398,7 @@
             body:
               name: "{{ vm_name }}"
               project_id: 1
-              inventory: "{{ inventory_yaml }}"
+              inventory: "{{ inventory_file.content | b64decode }}"
               type: "static"
               ssh_key_id: "{{ ssh_key_result.json.id | int }}"
             status_code: [200, 201]
