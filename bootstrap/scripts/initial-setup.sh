@@ -291,19 +291,21 @@ discover_proxmox_host || {
     log_info "Proxmox discovery failed, but continuing with setup"
 }
 
-# Check if Podman is already installed
+# Check if Podman is installed and has Quadlet support
 if command -v podman &> /dev/null; then
     log_info "Podman is already installed: $(podman --version)"
-else
-    # Install Podman
-    log_info "Installing Podman..."
-    apt-get install -y podman
-
-    # Verify Podman installation
-    if ! command -v podman &> /dev/null; then
-        error_exit "Podman installation failed!"
+    
+    # Check if we have Quadlet support (4.4+)
+    PODMAN_VERSION=$(podman --version | awk '{print $3}')
+    MAJOR_VERSION=$(echo $PODMAN_VERSION | cut -d. -f1)
+    MINOR_VERSION=$(echo $PODMAN_VERSION | cut -d. -f2)
+    
+    if [[ $MAJOR_VERSION -lt 4 ]] || [[ $MAJOR_VERSION -eq 4 && $MINOR_VERSION -lt 4 ]]; then
+        error_exit "Podman version $PODMAN_VERSION does not support Quadlet (requires 4.4+)"
     fi
-    log_info "Podman installed successfully: $(podman --version)"
+    log_info "Podman version $PODMAN_VERSION supports Quadlet"
+else
+    error_exit "Podman is not installed! It should have been installed from backports."
 fi
 
 # Create directory for systemd service files (ensure it exists before any setup function that might use it)
