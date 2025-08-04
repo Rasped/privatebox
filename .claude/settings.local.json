@@ -80,7 +80,10 @@
       "Bash(SSHPASS='JoY5TiCk-pAram3ter-buff3r-quOtabL3-th1ng' sshpass -e ssh -o StrictHostKeyChecking=no debian@192.168.1.20 \"sudo systemctl status portainer semaphore | grep -E ''Active:|●''\")",
       "Bash(SSHPASS='JoY5TiCk-pAram3ter-buff3r-quOtabL3-th1ng' sshpass -e ssh -o StrictHostKeyChecking=no debian@192.168.1.20 \"cat /etc/privatebox-cloud-init-complete | grep -E ''POST_INSTALL|ERROR''\")",
       "Bash(bash:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git revert:*)",
+      "Bash(source:*)",
+      "Bash(declare -f)"
     ],
     "deny": []
   }
