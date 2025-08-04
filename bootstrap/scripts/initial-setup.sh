@@ -167,124 +167,10 @@ log_info "Starting VM post-installation setup..."
 log_info "Configuring system settings..."
 # Add your system configurations here
 
-# Function to discover Proxmox host IP
-discover_proxmox_host() {
-    log_info "Attempting to discover Proxmox host IP..."
-    
-    # Get the VM's default gateway as the most likely Proxmox host IP
-    local gateway_ip=$(ip route | grep default | awk '{print $3}' | head -n1)
-    
-    if [[ -z "$gateway_ip" ]]; then
-        log_warn "Unable to determine default gateway IP"
-        return 1
-    fi
-    
-    log_info "Checking if $gateway_ip is a Proxmox host (port 8006)..."
-    
-    # Use timeout and nc to check if port 8006 is open
-    if timeout 5 nc -z "$gateway_ip" 8006 2>/dev/null; then
-        log_info "Found Proxmox web interface on $gateway_ip:8006"
-        
-        # Double-check by trying to fetch the Proxmox API endpoint
-        if curl -k -s --connect-timeout 5 "https://$gateway_ip:8006/api2/json" >/dev/null 2>&1; then
-            log_info "Confirmed: Proxmox host discovered at $gateway_ip"
-            
-            # Store the discovered IP
-            echo "$gateway_ip" > /etc/privatebox-proxmox-host
-            chmod 644 /etc/privatebox-proxmox-host
-            
-            log_success "Proxmox host IP saved to /etc/privatebox-proxmox-host"
-            return 0
-        fi
-    fi
-    
-    # If gateway isn't Proxmox, scan the local network
-    log_info "Gateway is not Proxmox host, scanning local network..."
-    
-    # Get network prefix (assuming /24 for simplicity)
-    local network_prefix=$(echo "$gateway_ip" | cut -d. -f1-3)
-    
-    # First, try common Proxmox IPs (often .10, .20, .100, .200)
-    log_info "Checking common Proxmox host IPs first..."
-    for i in 10 20 100 200 1 2 5 50 254; do
-        local test_ip="${network_prefix}.$i"
-        
-        # Skip if it's our own IP
-        if ip addr show | grep -q "$test_ip"; then
-            continue
-        fi
-        
-        # Check if port 8006 is open (with very short timeout)
-        if timeout 2 nc -z "$test_ip" 8006 2>/dev/null; then
-            log_info "Found potential Proxmox host at $test_ip, verifying..."
-            
-            # Verify it's actually Proxmox with a more generous timeout
-            if curl -k -s --connect-timeout 5 "https://$test_ip:8006/api2/json" >/dev/null 2>&1; then
-                log_info "Confirmed: Proxmox host discovered at $test_ip"
-                
-                # Store the discovered IP
-                echo "$test_ip" > /etc/privatebox-proxmox-host
-                chmod 644 /etc/privatebox-proxmox-host
-                
-                log_success "Proxmox host IP saved to /etc/privatebox-proxmox-host"
-                return 0
-            fi
-        fi
-    done
-    
-    # If common IPs didn't work, do a full scan
-    log_info "Common IPs didn't have Proxmox, performing full network scan..."
-    for i in {1..254}; do
-        local test_ip="${network_prefix}.$i"
-        
-        # Skip if it's our own IP or we already checked it
-        if ip addr show | grep -q "$test_ip"; then
-            continue
-        fi
-        
-        # Skip IPs we already checked
-        case "$i" in
-            10|20|100|200|1|2|5|50|254) continue ;;
-        esac
-        
-        # Check if port 8006 is open (with very short timeout for full scan)
-        if timeout 1 nc -z "$test_ip" 8006 2>/dev/null; then
-            log_info "Found potential Proxmox host at $test_ip, verifying..."
-            
-            # Verify it's actually Proxmox
-            if curl -k -s --connect-timeout 3 "https://$test_ip:8006/api2/json" >/dev/null 2>&1; then
-                log_info "Confirmed: Proxmox host discovered at $test_ip"
-                
-                # Store the discovered IP
-                echo "$test_ip" > /etc/privatebox-proxmox-host
-                chmod 644 /etc/privatebox-proxmox-host
-                
-                log_success "Proxmox host IP saved to /etc/privatebox-proxmox-host"
-                return 0
-            fi
-        fi
-    done
-    
-    log_warn "Unable to discover Proxmox host automatically"
-    log_info "You can manually create /etc/privatebox-proxmox-host with the Proxmox IP"
-    return 1
-}
-
 # Install additional packages
 log_info "Installing additional packages..."
 apt-get update
-apt-get install -y curl git jq htop netcat-openbsd
-
-# Ensure netcat is available before attempting discovery
-log_info "Verifying netcat installation..."
-for i in {1..10}; do
-    if command -v nc >/dev/null 2>&1; then
-        log_info "Netcat is available"
-        break
-    fi
-    log_info "Waiting for netcat to be available... ($i/10)"
-    sleep 1
-done
+apt-get install -y curl jq
 
 # Proxmox host IP is now provided via cloud-init at /etc/privatebox-proxmox-host
 # No need to discover it anymore
@@ -340,14 +226,7 @@ sleep 2
 
 # Start Portainer (Quadlet services are auto-enabled via [Install] section)
 log_info "Starting Portainer service..."
-if ! systemctl start portainer.service; then
-    log_error "Failed to start Portainer service"
-    # Try again after a short delay
-    sleep 3
-    if ! systemctl start portainer.service; then
-        log_error "Failed to start Portainer service on retry"
-    fi
-fi
+systemctl start portainer.service || log_error "Failed to start Portainer service"
 
 # Verify Semaphore service is running (it should be started by semaphore-setup-boltdb.sh)
 log_info "Verifying Semaphore service..."
@@ -356,18 +235,6 @@ if ! systemctl is-active --quiet semaphore.service; then
 fi
 
 log_info "Systemd services created and enabled"
-
-# Clean up old service files
-if [ -f /etc/systemd/system/podman-auto-restart.service ]; then
-    log_info "Removing old systemd service files..."
-    systemctl disable podman-auto-restart.service 2>/dev/null || true
-    rm -f /etc/systemd/system/podman-auto-restart.service
-fi
-
-if [ -f /etc/systemd/system/podman-volumes.service ]; then
-    systemctl disable podman-volumes.service 2>/dev/null || true
-    rm -f /etc/systemd/system/podman-volumes.service
-fi
 
 log_info "VM setup completed successfully!"
 
