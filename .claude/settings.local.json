@@ -69,7 +69,13 @@
       "WebFetch(domain:www.alpinelinux.org)",
       "Bash(for word in bloom coral frost raven stone storm)",
       "Bash(do echo \"=== $word ===\")",
-      "Bash(scp:*)"
+      "Bash(scp:*)",
+      "Bash(-H 'Content-Type: application/json' )",
+      "Bash(-d '{\"\"auth\"\": \"\"admin\"\", \"\"password\"\": \"\"Gr0wl-kaR4oke-impreci5e\"\"}' )",
+      "Bash(http://192.168.1.20:3000/api/auth/login)",
+      "WebFetch(domain:cloud.debian.org)",
+      "WebFetch(domain:cdimage.debian.org)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }
