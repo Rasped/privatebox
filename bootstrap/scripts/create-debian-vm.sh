@@ -227,22 +227,32 @@ function check_and_remove_vm() {
 # Download Ubuntu cloud image
 function download_image() {
     echo "Downloading Debian ${DEBIAN_VERSION} cloud image..."
+    echo "Initial URL: ${CLOUD_IMG_URL}"
     
     # Check if the image URL exists, otherwise try daily build
-    if ! wget --spider "${CLOUD_IMG_URL}" 2>/dev/null; then
+    echo "Checking if stable release exists..."
+    if ! wget --spider --timeout=30 "${CLOUD_IMG_URL}" 2>&1 | tee /tmp/wget-spider.log; then
+        echo "Stable release check failed. Trying daily build..."
         # Try daily build path
         local daily_url="https://cloud.debian.org/images/cloud/${DEBIAN_CODENAME}/daily/latest/debian-${DEBIAN_VERSION}-genericcloud-amd64-daily.qcow2"
-        if wget --spider "${daily_url}" 2>/dev/null; then
+        echo "Daily URL: ${daily_url}"
+        if wget --spider --timeout=30 "${daily_url}" 2>&1 | tee -a /tmp/wget-spider.log; then
             log_info "Stable release not available, using daily build"
             CLOUD_IMG_URL="${daily_url}"
             IMAGE_NAME="debian-${DEBIAN_VERSION}-genericcloud-amd64-daily.qcow2"
         else
             log_error "Neither stable nor daily build found for Debian ${DEBIAN_VERSION} (${DEBIAN_CODENAME})"
+            echo "=== WGET Spider Log ==="
+            cat /tmp/wget-spider.log
+            echo "======================"
             exit ${EXIT_ERROR}
         fi
     else
         log_info "Using stable release image"
     fi
+    
+    echo "Final URL to download: ${CLOUD_IMG_URL}"
+    echo "Image name: ${IMAGE_NAME}"
     
     # Create cache directory if it doesn't exist
     if [[ ! -d "${IMAGE_CACHE_DIR}" ]]; then
@@ -274,7 +284,7 @@ function download_image() {
     # Download with progress and retry support
     for i in {1..3}; do
         echo "Downloading ${IMAGE_NAME} to cache..."
-        if wget -q --continue -O "${cached_image}" "${CLOUD_IMG_URL}"; then
+        if wget --timeout=60 --tries=1 --progress=bar:force --continue -O "${cached_image}" "${CLOUD_IMG_URL}" 2>&1; then
             echo "Download completed."
             break
         fi
