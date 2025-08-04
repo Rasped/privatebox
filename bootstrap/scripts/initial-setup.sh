@@ -304,8 +304,16 @@ if command -v podman &> /dev/null; then
         error_exit "Podman version $PODMAN_VERSION does not support Quadlet (requires 4.4+)"
     fi
     log_info "Podman version $PODMAN_VERSION supports Quadlet"
+    
+    # Enable Podman socket for Docker API compatibility
+    log_info "Enabling Podman socket..."
+    systemctl enable --now podman.socket || {
+        log_error "Failed to enable Podman socket"
+        error_exit "Podman socket setup failed"
+    }
+    log_info "Podman socket enabled successfully"
 else
-    error_exit "Podman is not installed! It should have been installed from backports."
+    error_exit "Podman is not installed!"
 fi
 
 # Create directory for systemd service files (ensure it exists before any setup function that might use it)
