@@ -38,6 +38,35 @@ check_root() {
     fi
 }
 
+# Parse command line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --distro)
+                VM_DISTRO="$2"
+                if [[ "$VM_DISTRO" != "debian" && "$VM_DISTRO" != "ubuntu" ]]; then
+                    log_error "Invalid distro: $VM_DISTRO. Must be 'debian' or 'ubuntu'"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --help|-h)
+                echo "Usage: $0 [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  --distro <debian|ubuntu>  Choose VM distro (default: debian)"
+                echo "  --help, -h                Show this help message"
+                exit 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
+
 # Make all scripts executable
 make_scripts_executable() {
     log_info "Making scripts executable..."
@@ -53,6 +82,9 @@ make_scripts_executable() {
 
 # Main installation function
 main() {
+    # Parse command line arguments first
+    parse_args "$@"
+    
     print_banner
     
     # Basic checks
@@ -70,7 +102,7 @@ main() {
     log_info "Starting PrivateBox installation..."
     log_info "This process will:"
     log_info "  1. Detect network configuration"
-    log_info "  2. Create Ubuntu VM"
+    log_info "  2. Create VM (Debian by default)"
     log_info "  3. Install and configure services"
     log_info "  4. Wait for complete installation (5-10 minutes)"
     echo ""
@@ -78,11 +110,20 @@ main() {
     # Set environment variable to wait for cloud-init
     export WAIT_FOR_CLOUD_INIT=true
     
+    # Determine which distro to use (default to Debian)
+    local VM_DISTRO="${VM_DISTRO:-debian}"
+    
     # Run the main creation script with auto-discovery
     log_info "Starting VM creation with network auto-discovery..."
     
-    # Run create-ubuntu-vm.sh and capture the exit code
-    "${SCRIPT_DIR}/scripts/create-ubuntu-vm.sh" --auto-discover
+    # Run appropriate creation script based on distro
+    if [[ "$VM_DISTRO" == "ubuntu" ]]; then
+        log_info "Creating Ubuntu VM..."
+        "${SCRIPT_DIR}/scripts/create-ubuntu-vm.sh" --auto-discover
+    else
+        log_info "Creating Debian VM..."
+        "${SCRIPT_DIR}/scripts/create-debian-vm.sh" --auto-discover
+    fi
     local exit_code=$?
     
     echo ""
