@@ -139,6 +139,8 @@ PrivateBox is a privacy-focused router product built on Proxmox VE. The project 
 
 **Target Infrastructure**: Proxmox VE on Intel N100 mini PCs with 8-16GB RAM
 
+**Default OS**: Debian 12 (chosen for lower RAM usage - saves ~100-150MB per VM vs Ubuntu)
+
 ---
 
 ## Quick Start
@@ -170,7 +172,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 ### Key Architecture Decisions
 
 1. **Bootstrap Architecture**:
-   - Ubuntu 24.04 LTS VM as management host
+   - Debian 12 VM as management host (default, Ubuntu 24.04 optional)
    - Cloud-init for unattended installation
    - Automatic network configuration detection
    - Pre-installed Portainer and Semaphore

@@ -29,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 
 That's it! The installer will:
 - Detect your network configuration automatically
-- Create a management VM with all tools pre-installed
+- Create a management VM (Debian 12 by default) with all tools pre-installed
 - Set up web interfaces for easy management
 - Display connection information when complete
 
@@ -47,6 +47,9 @@ sudo bash quickstart.sh --no-auto --ip 192.168.1.50 --gateway 192.168.1.1
 
 # Unattended installation
 sudo bash quickstart.sh --yes
+
+# Use Ubuntu instead of Debian
+sudo bash quickstart.sh --distro ubuntu
 
 # Clean up installation files after completion
 sudo bash quickstart.sh --cleanup
