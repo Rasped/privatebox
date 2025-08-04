@@ -485,11 +485,11 @@ ssh_pwauth: true
 chpasswd:
   expire: false
 packages:
-  - podman
-  - buildah
-  - skopeo
   - openssh-server
   - ufw
+  - curl
+  - wget
+  - gnupg
 
 # Post-installation setup script
 write_files:
@@ -726,6 +726,10 @@ runcmd:
   - sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
   - sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
   - systemctl restart ssh
+  # Add Debian backports and install Podman 4.7+
+  - echo "deb http://deb.debian.org/debian bookworm-backports main" >> /etc/apt/sources.list
+  - apt-get update
+  - apt-get install -y -t bookworm-backports podman buildah skopeo
   # Execute the main cloud-init script with bash
   - ['/bin/bash', '/usr/local/bin/cloud-init-main.sh']
 EOF
