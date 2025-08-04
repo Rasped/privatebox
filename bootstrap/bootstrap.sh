@@ -58,18 +58,6 @@ parse_args() {
     done
 }
 
-# Make all scripts executable
-make_scripts_executable() {
-    log_info "Making scripts executable..."
-    
-    # Check if scripts directory exists
-    require_dir "${SCRIPT_DIR}/scripts" "Scripts directory not found"
-    
-    # Make scripts executable
-    chmod +x "${SCRIPT_DIR}/scripts"/*.sh || check_result $? "Failed to make scripts executable"
-    
-    log_info "Scripts are now executable"
-}
 
 # Main installation function
 main() {
@@ -81,9 +69,6 @@ main() {
     # Basic checks
     check_root
     
-    # Make scripts executable
-    make_scripts_executable
-    
     # Check if we're on Proxmox
     if [[ ! -f /etc/pve/pve-root-ca.pem ]] && [[ ! -d /etc/pve ]]; then
         log_error "This script must be run on a Proxmox VE host"
@@ -91,12 +76,6 @@ main() {
     fi
     
     log_info "Starting PrivateBox installation..."
-    log_info "This process will:"
-    log_info "  1. Detect network configuration"
-    log_info "  2. Create Debian VM"
-    log_info "  3. Install and configure services"
-    log_info "  4. Wait for complete installation (5-10 minutes)"
-    echo ""
     
     # Set environment variable to wait for cloud-init
     export WAIT_FOR_CLOUD_INIT=true
