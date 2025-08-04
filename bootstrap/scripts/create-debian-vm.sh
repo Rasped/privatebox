@@ -266,19 +266,20 @@ function download_image() {
     # Check if image already exists in cache
     if [ -f "${cached_image}" ]; then
         echo "Found existing image in cache, checking if it's complete..."
-        if wget --spider -q -show-progress "${CLOUD_IMG_URL}" 2>/dev/null; then
-            REMOTE_SIZE=$(wget --spider "${CLOUD_IMG_URL}" 2>&1 | grep Length | awk '{print $2}')
-            LOCAL_SIZE=$(stat -f%z "${cached_image}" 2>/dev/null || stat -c%s "${cached_image}")
-            
-            if [ "${REMOTE_SIZE}" = "${LOCAL_SIZE}" ]; then
-                echo "Cached image is complete, using cached version"
-                # Create a symlink or copy to current directory for VM creation
-                ln -sf "${cached_image}" "${IMAGE_NAME}" || cp "${cached_image}" "${IMAGE_NAME}"
-                return 0
-            fi
+        # Get remote file size (follow redirects, timeout after 10s)
+        REMOTE_SIZE=$(wget --spider --server-response --timeout=10 "${CLOUD_IMG_URL}" 2>&1 | grep -i "Content-Length" | tail -1 | awk '{print $2}' | tr -d '\r')
+        LOCAL_SIZE=$(stat -f%z "${cached_image}" 2>/dev/null || stat -c%s "${cached_image}" 2>/dev/null)
+        
+        if [ -n "${REMOTE_SIZE}" ] && [ -n "${LOCAL_SIZE}" ] && [ "${REMOTE_SIZE}" = "${LOCAL_SIZE}" ]; then
+            echo "Cached image is complete (${LOCAL_SIZE} bytes), using cached version"
+            # Create a symlink or copy to current directory for VM creation
+            ln -sf "${cached_image}" "${IMAGE_NAME}" || cp "${cached_image}" "${IMAGE_NAME}"
+            return 0
+        else
+            echo "Cached image size mismatch or unable to verify (local: ${LOCAL_SIZE}, remote: ${REMOTE_SIZE})"
+            echo "Re-downloading to ensure we have the latest version..."
+            rm -f "${cached_image}"
         fi
-        echo "Cached image is incomplete or corrupted, re-downloading..."
-        rm -f "${cached_image}"
     fi
     
     # Download with progress and retry support
