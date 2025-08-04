@@ -286,10 +286,14 @@ for i in {1..10}; do
     sleep 1
 done
 
-# Discover Proxmox host after network is configured
-discover_proxmox_host || {
-    log_info "Proxmox discovery failed, but continuing with setup"
-}
+# Proxmox host IP is now provided via cloud-init at /etc/privatebox-proxmox-host
+# No need to discover it anymore
+if [[ -f /etc/privatebox-proxmox-host ]]; then
+    PROXMOX_IP=$(cat /etc/privatebox-proxmox-host | tr -d '[:space:]')
+    log_info "Proxmox host IP from cloud-init: $PROXMOX_IP"
+else
+    log_info "No Proxmox host IP provided via cloud-init"
+fi
 
 # Check if Podman is installed and has Quadlet support
 if command -v podman &> /dev/null; then
