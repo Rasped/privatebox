@@ -38,11 +38,11 @@ readonly DEFAULT_VM_DISK_SIZE="10G"
 readonly DEFAULT_VM_BRIDGE="vmbr0"
 readonly DEFAULT_STORAGE="local-lvm"
 
-# Ubuntu Cloud Image
-UBUNTU_VERSION="${UBUNTU_VERSION:-24.04}"
-UBUNTU_CODENAME="${UBUNTU_CODENAME:-noble}"
-UBUNTU_IMAGE_URL="${UBUNTU_IMAGE_URL:-https://cloud-images.ubuntu.com/minimal/releases/${UBUNTU_CODENAME}/release/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img}"
-UBUNTU_IMAGE_NAME="${UBUNTU_IMAGE_NAME:-ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64.img}"
+# Debian Cloud Image
+DEBIAN_VERSION="${DEBIAN_VERSION:-12}"
+DEBIAN_CODENAME="${DEBIAN_CODENAME:-bookworm}"
+DEBIAN_IMAGE_URL="${DEBIAN_IMAGE_URL:-https://cloud.debian.org/images/cloud/${DEBIAN_CODENAME}/latest/debian-${DEBIAN_VERSION}-genericcloud-amd64.qcow2}"
+DEBIAN_IMAGE_NAME="${DEBIAN_IMAGE_NAME:-debian-${DEBIAN_VERSION}-genericcloud-amd64.qcow2}"
 
 # Network Defaults
 readonly DEFAULT_NETMASK="255.255.255.0"
@@ -51,7 +51,7 @@ readonly DEFAULT_DNS2="8.8.8.8"
 readonly DEFAULT_SSH_PORT=22
 
 # User Configuration
-readonly DEFAULT_USERNAME="privatebox"
+readonly DEFAULT_USERNAME="debian"
 readonly DEFAULT_USER_FULLNAME="PrivateBox Admin"
 
 # Paths
