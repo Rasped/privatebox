@@ -227,8 +227,8 @@ VM_NET_BRIDGE="${VM_NET_BRIDGE:-vmbr0}"
 
 # Legacy fields for compatibility
 STORAGE="${STORAGE:-local-lvm}"
-STATIC_IP="${CONTAINER_HOST_IP:-}"  # For create-ubuntu-vm.sh compatibility
-NET_BRIDGE="${VM_NET_BRIDGE:-}"     # For create-ubuntu-vm.sh compatibility
+STATIC_IP="${CONTAINER_HOST_IP:-}"  # For create-debian-vm.sh compatibility
+NET_BRIDGE="${VM_NET_BRIDGE:-}"     # For create-debian-vm.sh compatibility
 EOF
     
     # Set secure permissions

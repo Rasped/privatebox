@@ -66,7 +66,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --auto-discover  Automatically discover network configuration"
             echo "  --help, -h       Show this help message"
             echo ""
-            echo "The script creates an Ubuntu VM on Proxmox with PrivateBox services."
+            echo "The script creates a Debian VM on Proxmox with PrivateBox services."
             exit 0
             ;;
         *)
@@ -221,10 +221,10 @@ function check_and_remove_vm() {
 }
 
 # --- download_image ---
-# Description: Downloads the Ubuntu cloud image. It includes checks for an
+# Description: Downloads the Debian cloud image. It includes checks for an
 #              existing, complete image and retries on failure.
 # ---
-# Download Ubuntu cloud image
+# Download Debian cloud image
 function download_image() {
     echo "Downloading Debian ${DEBIAN_VERSION} cloud image..."
     echo "Initial URL: ${CLOUD_IMG_URL}"
