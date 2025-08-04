@@ -43,7 +43,6 @@ else
     NC=''
 fi
 
-# Functions
 print_banner() {
     echo "==========================================="
     echo "     PrivateBox Quick Start Installer"
@@ -104,25 +103,21 @@ EOF
 }
 
 check_prerequisites() {
-    # Check if running as root
     if [[ $EUID -ne 0 ]]; then
         print_error "This script must be run as root (use sudo)"
         exit 1
     fi
 
-    # Check if running on Proxmox VE
     if ! command -v qm &> /dev/null; then
         print_error "This script must be run on a Proxmox VE host"
         print_error "The 'qm' command was not found"
         exit 1
     fi
 
-    # Check for pveversion
     if command -v pveversion &> /dev/null; then
         print_info "Detected Proxmox VE: $(pveversion | cut -d'/' -f2)"
     fi
 
-    # Check for required tools
     local missing_tools=()
     
     for tool in curl tar jq; do
@@ -134,38 +129,38 @@ check_prerequisites() {
     if [ ${#missing_tools[@]} -gt 0 ]; then
         print_warn "Missing tools: ${missing_tools[*]}"
         print_info "Installing missing tools..."
-        apt-get update >/dev/null 2>&1
-        apt-get install -y "${missing_tools[@]}" >/dev/null 2>&1
+        if ! apt-get update >/dev/null 2>&1; then
+            print_error "Failed to update package lists"
+            exit 1
+        fi
+        if ! apt-get install -y "${missing_tools[@]}" >/dev/null 2>&1; then
+            print_error "Failed to install required tools: ${missing_tools[*]}"
+            exit 1
+        fi
     fi
 }
 
 download_repository() {
     print_info "Downloading PrivateBox bootstrap files..."
     
-    # Clean up any existing directory
     if [[ -d "$TEMP_DIR" ]]; then
         print_info "Removing existing installation directory..."
         rm -rf "$TEMP_DIR"
     fi
     
-    # Create temp directory
     mkdir -p "$TEMP_DIR"
     cd "$TEMP_DIR"
 
-    # Download tarball and extract only bootstrap folder
     print_info "Downloading from ${REPO_URL}/archive/${REPO_BRANCH}.tar.gz"
     
-    # Create a temporary file for better error handling
     local temp_tar="/tmp/privatebox-$$.tar.gz"
     
-    # Download the tarball
     if ! curl -fsSL "${REPO_URL}/archive/${REPO_BRANCH}.tar.gz" -o "$temp_tar"; then
         print_error "Failed to download from GitHub"
         print_error "Check your internet connection and try again"
         exit 1
     fi
     
-    # Extract just the bootstrap folder
     if ! tar -xzf "$temp_tar" --strip-components=1 "privatebox-${REPO_BRANCH}/bootstrap"; then
         print_error "Failed to extract bootstrap files"
         print_error "This might be a temporary issue. Please try again."
@@ -173,7 +168,6 @@ download_repository() {
         exit 1
     fi
     
-    # Clean up
     rm -f "$temp_tar"
 
     print_info "Bootstrap files downloaded to $TEMP_DIR"
@@ -182,10 +176,8 @@ download_repository() {
 prepare_bootstrap() {
     print_info "Preparing bootstrap environment..."
     
-    # Make scripts executable
     find "$TEMP_DIR/bootstrap" -name "*.sh" -type f -exec chmod +x {} \;
     
-    # Check if bootstrap.sh exists
     if [[ ! -f "$TEMP_DIR/bootstrap/bootstrap.sh" ]]; then
         print_error "bootstrap.sh not found in downloaded repository"
         exit 1
@@ -195,7 +187,6 @@ prepare_bootstrap() {
 run_bootstrap() {
     local bootstrap_args=()
     
-    # Build arguments for bootstrap.sh
     if [[ "${USE_AUTO_DISCOVERY:-true}" == "false" ]]; then
         bootstrap_args+=("--no-auto")
     fi
@@ -215,15 +206,13 @@ run_bootstrap() {
     print_info "Starting PrivateBox installation..."
     print_info "This process will:"
     print_info "  1. Detect network configuration"
-    print_info "  2. Create Ubuntu VM"
+    print_info "  2. Create ${VM_DISTRO:-Debian} VM"
     print_info "  3. Install and configure services"
     print_info "  4. Wait for complete installation (5-10 minutes)"
     echo ""
     
-    # Change to bootstrap directory and run
     cd "$TEMP_DIR/bootstrap"
     
-    # Run bootstrap with any passed arguments
     if [[ ${#bootstrap_args[@]} -gt 0 ]]; then
         print_info "Running: ./bootstrap.sh ${bootstrap_args[*]}"
         ./bootstrap.sh "${bootstrap_args[@]}"
@@ -244,14 +233,11 @@ cleanup() {
     fi
 }
 
-# Main execution
 main() {
-    # Clean up any existing installation directory first
     if [[ -d "$TEMP_DIR" ]]; then
         rm -rf "$TEMP_DIR"
     fi
     
-    # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --ip)
@@ -298,16 +284,14 @@ main() {
         esac
     done
 
-    # Run installation steps
     print_banner
     
-    # Show welcome message and what will happen
     echo "Welcome to PrivateBox!"
     echo ""
     echo "This installer will set up a privacy-focused router system on your Proxmox server."
     echo ""
     echo "What will happen:"
-    echo "  ✓ Create a ${VM_DISTRO:-Debian 12} virtual machine"
+    echo "  ✓ Create a ${VM_DISTRO:-Debian} virtual machine"
     echo "  ✓ Install Portainer for container management"  
     echo "  ✓ Install Semaphore for Ansible automation"
     echo "  ✓ Configure networking and security settings"
@@ -322,7 +306,6 @@ main() {
     echo "The installation will take approximately 5-10 minutes."
     echo ""
     
-    # Ask for confirmation unless --yes was provided
     if [[ "$SKIP_CONFIRMATION" != "true" ]]; then
         if [[ -t 0 ]]; then
             # Interactive mode - ask for confirmation
@@ -349,7 +332,6 @@ main() {
     prepare_bootstrap
     run_bootstrap
     
-    # Cleanup if requested
     cleanup
     
     print_info ""
@@ -357,7 +339,6 @@ main() {
     print_info "Check the output above for connection details."
 }
 
-# Cleanup function for traps
 cleanup_on_exit() {
     local exit_code=$?
     if [[ $exit_code -ne 0 ]]; then
@@ -369,8 +350,6 @@ cleanup_on_exit() {
     fi
 }
 
-# Trap to ensure cleanup on any exit
 trap cleanup_on_exit EXIT
 
-# Run main function
 main "$@"
