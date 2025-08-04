@@ -167,10 +167,14 @@ log_info "Starting VM post-installation setup..."
 log_info "Configuring system settings..."
 # Add your system configurations here
 
-# Install additional packages
-log_info "Installing additional packages..."
-apt-get update
-apt-get install -y curl jq
+# Install additional packages if needed
+if ! command -v curl &>/dev/null || ! command -v jq &>/dev/null; then
+    log_info "Installing required packages..."
+    apt-get update
+    apt-get install -y curl jq
+else
+    log_info "Required packages already installed"
+fi
 
 # Proxmox host IP is now provided via cloud-init at /etc/privatebox-proxmox-host
 # No need to discover it anymore
@@ -181,30 +185,14 @@ else
     log_info "No Proxmox host IP provided via cloud-init"
 fi
 
-# Check if Podman is installed and has Quadlet support
-if command -v podman &> /dev/null; then
-    log_info "Podman is already installed: $(podman --version)"
-    
-    # Check if we have Quadlet support (4.4+)
-    PODMAN_VERSION=$(podman --version | awk '{print $3}')
-    MAJOR_VERSION=$(echo $PODMAN_VERSION | cut -d. -f1)
-    MINOR_VERSION=$(echo $PODMAN_VERSION | cut -d. -f2)
-    
-    if [[ $MAJOR_VERSION -lt 4 ]] || [[ $MAJOR_VERSION -eq 4 && $MINOR_VERSION -lt 4 ]]; then
-        error_exit "Podman version $PODMAN_VERSION does not support Quadlet (requires 4.4+)"
-    fi
-    log_info "Podman version $PODMAN_VERSION supports Quadlet"
-    
-    # Enable Podman socket for Docker API compatibility
-    log_info "Enabling Podman socket..."
-    systemctl enable --now podman.socket || {
-        log_error "Failed to enable Podman socket"
-        error_exit "Podman socket setup failed"
-    }
-    log_info "Podman socket enabled successfully"
-else
-    error_exit "Podman is not installed!"
-fi
+# Enable Podman socket for Docker API compatibility
+# Podman is always installed by cloud-init, so we just need to enable the socket
+log_info "Enabling Podman socket..."
+systemctl enable --now podman.socket || {
+    log_error "Failed to enable Podman socket"
+    error_exit "Podman socket setup failed"
+}
+log_info "Podman socket enabled successfully"
 
 # Create directory for systemd service files (ensure it exists before any setup function that might use it)
 mkdir -p /etc/systemd/system
