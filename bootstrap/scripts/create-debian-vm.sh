@@ -103,7 +103,7 @@ else
     log_warn "Configuration file not found, using defaults: $CONFIG_FILE"
     # Default configuration values
     VMID=9000
-    DEBIAN_VERSION="12"
+    DEBIAN_VERSION="13"
     VM_USERNAME="debian"
     VM_PASSWORD=""  # Will be set from ADMIN_PASSWORD
     VM_MEMORY=2048
@@ -116,7 +116,7 @@ fi
 
 # Allow environment variables to override config file
 VMID="${VMID:-9000}"
-DEBIAN_VERSION="${DEBIAN_VERSION:-12}"
+DEBIAN_VERSION="${DEBIAN_VERSION:-13}"
 VM_USERNAME="${VM_USERNAME:-debian}"
 # Use ADMIN_PASSWORD from config-generator if available, otherwise fall back to VM_PASSWORD or default
 VM_PASSWORD="${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
@@ -136,8 +136,8 @@ if [[ ! $DEBIAN_VERSION =~ ^[0-9]+$ ]]; then
 fi
 
 # Construct URLs based on version
-CLOUD_IMG_URL="https://cloud.debian.org/images/cloud/bookworm/latest/debian-${DEBIAN_VERSION}-genericcloud-amd64.qcow2"
-IMAGE_NAME="debian-${DEBIAN_VERSION}-genericcloud-amd64.qcow2"
+CLOUD_IMG_URL="https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-genericcloud-amd64-daily.qcow2"
+IMAGE_NAME="debian-13-genericcloud-amd64.qcow2"
 
 # Validate configuration
 if ! validate_config; then
@@ -490,6 +490,9 @@ packages:
   - curl
   - wget
   - gnupg
+  - podman
+  - buildah
+  - skopeo
 
 # Post-installation setup script
 write_files:
@@ -726,10 +729,6 @@ runcmd:
   - sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
   - sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
   - systemctl restart ssh
-  # Add Debian backports and install Podman 4.7+
-  - echo "deb http://deb.debian.org/debian bookworm-backports main" >> /etc/apt/sources.list
-  - apt-get update
-  - apt-get install -y -t bookworm-backports podman buildah skopeo
   # Execute the main cloud-init script with bash
   - ['/bin/bash', '/usr/local/bin/cloud-init-main.sh']
 EOF
