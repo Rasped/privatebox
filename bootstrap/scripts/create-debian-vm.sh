@@ -116,7 +116,7 @@ fi
 
 # Allow environment variables to override config file
 VMID="${VMID:-9000}"
-DEBIAN_VERSION="${DEBIAN_VERSION:-13}"
+DEBIAN_VERSION="${DEBIAN_VERSION:-12}"
 VM_USERNAME="${VM_USERNAME:-debian}"
 # Use ADMIN_PASSWORD from config-generator if available, otherwise fall back to VM_PASSWORD or default
 VM_PASSWORD="${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
@@ -227,6 +227,22 @@ function check_and_remove_vm() {
 # Download Ubuntu cloud image
 function download_image() {
     echo "Downloading Debian ${DEBIAN_VERSION} cloud image..."
+    
+    # Check if the image URL exists, otherwise try daily build
+    if ! wget --spider "${CLOUD_IMG_URL}" 2>/dev/null; then
+        # Try daily build path
+        local daily_url="https://cloud.debian.org/images/cloud/${DEBIAN_CODENAME}/daily/latest/debian-${DEBIAN_VERSION}-genericcloud-amd64-daily.qcow2"
+        if wget --spider "${daily_url}" 2>/dev/null; then
+            log_info "Stable release not available, using daily build"
+            CLOUD_IMG_URL="${daily_url}"
+            IMAGE_NAME="debian-${DEBIAN_VERSION}-genericcloud-amd64-daily.qcow2"
+        else
+            log_error "Neither stable nor daily build found for Debian ${DEBIAN_VERSION} (${DEBIAN_CODENAME})"
+            exit ${EXIT_ERROR}
+        fi
+    else
+        log_info "Using stable release image"
+    fi
     
     # Create cache directory if it doesn't exist
     if [[ ! -d "${IMAGE_CACHE_DIR}" ]]; then

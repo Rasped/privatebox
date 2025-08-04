@@ -39,8 +39,8 @@ readonly DEFAULT_VM_BRIDGE="vmbr0"
 readonly DEFAULT_STORAGE="local-lvm"
 
 # Debian Cloud Image
-DEBIAN_VERSION="${DEBIAN_VERSION:-12}"
-DEBIAN_CODENAME="${DEBIAN_CODENAME:-bookworm}"
+DEBIAN_VERSION="${DEBIAN_VERSION:-13}"
+DEBIAN_CODENAME="${DEBIAN_CODENAME:-trixie}"
 DEBIAN_IMAGE_URL="${DEBIAN_IMAGE_URL:-https://cloud.debian.org/images/cloud/${DEBIAN_CODENAME}/latest/debian-${DEBIAN_VERSION}-genericcloud-amd64.qcow2}"
 DEBIAN_IMAGE_NAME="${DEBIAN_IMAGE_NAME:-debian-${DEBIAN_VERSION}-genericcloud-amd64.qcow2}"
 
