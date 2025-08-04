@@ -479,17 +479,11 @@ users:
       - ${SSH_PUBLIC_KEY}
 
 # Enable SSH and configure it
-ssh_pwauth: True
-ssh:
-  install-server: true
-  allow_pw_auth: true
-  ssh_quiet_keygen: true
-  allow_agent_forwarding: true
-  allow_tcp_forwarding: true
+ssh_pwauth: true
 
 # Ensure the password doesn't expire
 chpasswd:
-  expire: False
+  expire: false
 packages:
   - podman
   - buildah
@@ -728,6 +722,10 @@ ${semaphore_setup_content}
       fi
 
 runcmd:
+  # Ensure SSH password authentication is enabled
+  - sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+  - sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+  - systemctl restart ssh
   # Execute the main cloud-init script with bash
   - ['/bin/bash', '/usr/local/bin/cloud-init-main.sh']
 EOF
