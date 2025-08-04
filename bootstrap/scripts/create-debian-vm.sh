@@ -377,7 +377,6 @@ function generate_cloud_init() {
     local constants_content
     local validation_content
     local error_handler_content
-    local service_manager_content
     local ssh_manager_content
     local config_manager_content
     local password_generator_content
@@ -414,19 +413,15 @@ function generate_cloud_init() {
         return 1
     fi
     
-    if [[ -f "${SCRIPT_DIR}/../lib/error_handler.sh" ]]; then
-        error_handler_content=$(cat "${SCRIPT_DIR}/../lib/error_handler.sh" | sed 's/^/      /')
+    if [[ -f "${SCRIPT_DIR}/../lib/minimal-error.sh" ]]; then
+        error_handler_content=$(cat "${SCRIPT_DIR}/../lib/minimal-error.sh" | sed 's/^/      /')
     else
-        log_error "Cannot find error_handler.sh"
+        log_error "Cannot find minimal-error.sh"
         return 1
     fi
     
-    if [[ -f "${SCRIPT_DIR}/../lib/service_manager.sh" ]]; then
-        service_manager_content=$(cat "${SCRIPT_DIR}/../lib/service_manager.sh" | sed 's/^/      /')
-    else
-        log_error "Cannot find service_manager.sh"
-        return 1
-    fi
+    # Service manager removed - functions are defined inline
+    service_manager_content=""
     
     if [[ -f "${SCRIPT_DIR}/../lib/ssh_manager.sh" ]]; then
         ssh_manager_content=$(cat "${SCRIPT_DIR}/../lib/ssh_manager.sh" | sed 's/^/      /')
@@ -557,10 +552,6 @@ ${common_lib_content}
     permissions: '0644'
     content: |
 ${error_handler_content}
-  - path: /usr/local/lib/service_manager.sh
-    permissions: '0644'
-    content: |
-${service_manager_content}
   - path: /usr/local/lib/ssh_manager.sh
     permissions: '0644'
     content: |

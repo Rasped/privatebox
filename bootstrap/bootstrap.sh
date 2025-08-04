@@ -28,15 +28,7 @@ print_banner() {
     echo ""
 }
 
-# Check if running as root
-check_root() {
-    require_command "id" "id command is required"
-    
-    if [[ "${EUID}" -ne 0 ]]; then
-        log_error "This script must be run as root"
-        exit ${EXIT_NOT_ROOT}
-    fi
-}
+# Use check_root from common.sh
 
 # Parse command line arguments
 parse_args() {

@@ -17,19 +17,16 @@ source "${COMMON_LIB_DIR}/constants.sh" 2>/dev/null || true
 # 2. Bootstrap logger (provides logging functions)
 source "${COMMON_LIB_DIR}/bootstrap_logger.sh" 2>/dev/null || true
 
-# 3. Error handler (provides error handling and cleanup)
-source "${COMMON_LIB_DIR}/error_handler.sh" 2>/dev/null || true
+# 3. Minimal error handler (provides error handling and cleanup)
+source "${COMMON_LIB_DIR}/minimal-error.sh" 2>/dev/null || true
 
-# 4. Validation functions
-source "${COMMON_LIB_DIR}/validation.sh" 2>/dev/null || true
+# 4. Minimal validation functions
+source "${COMMON_LIB_DIR}/minimal-validation.sh" 2>/dev/null || true
 
-# 5. Service manager (provides service-related functions)
-source "${COMMON_LIB_DIR}/service_manager.sh" 2>/dev/null || true
-
-# 6. SSH manager (provides SSH-related functions)
+# 5. SSH manager (provides SSH-related functions)
 source "${COMMON_LIB_DIR}/ssh_manager.sh" 2>/dev/null || true
 
-# 7. Config manager (provides configuration functions)
+# 6. Config manager (provides configuration functions)
 source "${COMMON_LIB_DIR}/config_manager.sh" 2>/dev/null || true
 
 # Global variables (for backward compatibility)
@@ -202,8 +199,6 @@ validate_config() {
 
 # Export functions for use in other scripts
 # Note: Many of these are now provided by the specialized modules
-export -f log log_info log_warn log_error log_debug log_success
-export -f error_exit
 export -f check_command check_root backup_file
 export -f retry_with_backoff is_dry_run execute
 export -f get_distro_info get_distro_version is_proxmox

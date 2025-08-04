@@ -271,6 +271,30 @@ validate_vmid() {
     return 0
 }
 
+# Validate port number
+validate_port() {
+    local port="${1:-}"
+    
+    if [[ -z "$port" ]]; then
+        log_debug "Port validation failed: empty input"
+        return 1
+    fi
+    
+    # Check if numeric
+    if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+        log_debug "Port validation failed: not numeric - $port"
+        return 1
+    fi
+    
+    # Check range (valid ports are 1-65535)
+    if [[ $port -lt 1 ]] || [[ $port -gt 65535 ]]; then
+        log_debug "Port validation failed: out of range - $port"
+        return 1
+    fi
+    
+    return 0
+}
+
 # =============================================================================
 # FILE SYSTEM VALIDATION
 # =============================================================================
@@ -582,7 +606,7 @@ sanitize_filename() {
 
 export -f validate_input
 export -f validate_ip validate_cidr validate_mac_address validate_hostname
-export -f validate_vmid
+export -f validate_vmid validate_port
 export -f validate_path validate_file validate_directory
 export -f validate_alphanumeric validate_email validate_url
 export -f validate_integer validate_boolean
