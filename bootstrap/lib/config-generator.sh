@@ -43,7 +43,7 @@ declare -A OPTIONAL_FIELDS=(
     ["VM_MEMORY"]="4096"
     ["VM_CORES"]="2"
     ["VM_DISK_SIZE"]="40G"
-    ["VM_USERNAME"]="ubuntuadmin"
+    ["VM_USERNAME"]="debian"
     ["VM_STORAGE"]="local-lvm"
     ["VM_NET_BRIDGE"]="vmbr0"
     ["STORAGE"]="local-lvm"  # Legacy compatibility
@@ -218,7 +218,7 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 SERVICES_PASSWORD="${SERVICES_PASSWORD:-}"
 
 # VM Configuration
-VM_USERNAME="${VM_USERNAME:-ubuntuadmin}"
+VM_USERNAME="${VM_USERNAME:-debian}"
 VM_MEMORY="${VM_MEMORY:-4096}"
 VM_CORES="${VM_CORES:-2}"
 VM_DISK_SIZE="${VM_DISK_SIZE:-40G}"
