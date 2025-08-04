@@ -9,9 +9,8 @@ DRY_RUN="false"   # Set to true for testing
 # VM Creation Settings
 VM_VMID="9000"
 VM_OSTYPE="l26"
-VM_DISTRO="debian"  # Options: debian, ubuntu
-VM_DEBIAN_VERSION="13"  # For Debian (trixie)
-VM_UBUNTU_VERSION="24.04"  # For Ubuntu
+# VM uses Debian Linux
+VM_DEBIAN_VERSION="12"  # Debian version (bookworm)
 VM_STORAGE="local-lvm"
 VM_NET_BRIDGE="vmbr0"
 VM_STATIC_IP="192.168.1.22"
@@ -19,7 +18,7 @@ VM_GATEWAY="192.168.1.3"
 VM_MEMORY="4096"
 VM_CORES="2"
 VM_DISK_SIZE="5G"
-VM_USERNAME=""  # Leave empty for distro default (debian/ubuntuadmin)
+VM_USERNAME="debian"  # Default Debian cloud image user
 VM_SSH_KEY=""  # Add your SSH public key here
 
 # Portainer Settings

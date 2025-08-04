@@ -32,7 +32,7 @@ Deploy and test PrivateBox on a remote Proxmox server:
 
 ## Scripts
 
-- `create-ubuntu-vm.sh` - Creates Ubuntu 24.04 VM on Proxmox with cloud-init
+- `create-debian-vm.sh` - Creates Debian VM on Proxmox with cloud-init
 - `deploy-to-server.sh` - Deploy bootstrap to remote server and run tests
 - `initial-setup.sh` - Post-install setup (runs automatically via cloud-init)
 - `portainer-setup.sh` - Container management UI setup
