@@ -324,6 +324,11 @@ function ensure_ssh_key() {
         log_error "Private key not found at ${SSH_KEY_PATH}"
         exit 1
     fi
+    
+    # Get Proxmox host IP (the machine we're running on)
+    PROXMOX_HOST_IP=$(hostname -I | awk '{print $1}')
+    export PROXMOX_HOST_IP
+    log_info "Proxmox host IP: ${PROXMOX_HOST_IP}"
 }
 
 # --- generate_cloud_init ---
@@ -496,6 +501,11 @@ packages:
 
 # Post-installation setup script
 write_files:
+  - path: /etc/privatebox-proxmox-host
+    permissions: '0644'
+    owner: root:root
+    content: |
+      ${PROXMOX_HOST_IP}
   - path: /root/.credentials/proxmox_ssh_key
     permissions: '0600'
     owner: root:root
