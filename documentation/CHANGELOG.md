@@ -10,6 +10,10 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-04: [Task] Optimized bootstrap libraries - reduced 1,466 lines to 382 lines (74% reduction)
+- 2025-08-04: [Fix] Fixed Debian image cache validation - no more unnecessary re-downloads
+- 2025-08-04: [Task] Removed unused functions from semaphore-api.sh - reduced by 278 lines
+- 2025-08-04: [Fix] Added missing validate_port function to validation library
 - 2025-08-02: [Fix] Fixed metadata bug - templates now use ServicePasswords environment correctly
 - 2025-08-02: [Fix] Fixed password lookup - Semaphore passes environment secrets as Ansible extra vars not env vars
 - 2025-08-02: [Fix] Fixed AdGuard configuration port issues - containers are isolated, no conflict
