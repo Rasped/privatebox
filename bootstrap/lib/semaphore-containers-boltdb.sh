@@ -85,17 +85,11 @@ check_and_remove_manual_containers() {
         podman rm semaphore 2>/dev/null || true
     fi
     
-    # Remove old MySQL-based containers if they exist
-    if podman container exists semaphore-db; then
-        log_info "Stopping and removing old semaphore-db container..."
-        podman stop semaphore-db 2>/dev/null || true
-        podman rm semaphore-db 2>/dev/null || true
-    fi
-    
-    if podman container exists semaphore-ui; then
-        log_info "Stopping and removing old semaphore-ui container..."
-        podman stop semaphore-ui 2>/dev/null || true
-        podman rm semaphore-ui 2>/dev/null || true
+    # Remove any existing semaphore containers
+    if podman container exists semaphore; then
+        log_info "Stopping and removing existing semaphore container..."
+        podman stop semaphore 2>/dev/null || true
+        podman rm semaphore 2>/dev/null || true
     fi
     
     # Also check for networks that might interfere
@@ -210,29 +204,15 @@ display_setup_completion_message() {
 cleanup_systemd_units() {
     log_info "Cleaning up systemd units..."
     
-    # Stop and disable old services if they exist
-    for service in semaphore-network semaphore-db semaphore-ui; do
-        if systemctl is-enabled $service.service &>/dev/null; then
-            systemctl disable $service.service &>/dev/null || true
-            systemctl stop $service.service &>/dev/null || true
-        fi
-    done
+    # Stop and disable old service if it exists
+    if systemctl is-enabled semaphore.service &>/dev/null; then
+        systemctl disable semaphore.service &>/dev/null || true
+        systemctl stop semaphore.service &>/dev/null || true
+    fi
     
-    # Also check with container- prefix (systemd might generate these)
-    for service in container-semaphore-db container-semaphore-ui; do
-        if systemctl is-enabled $service.service &>/dev/null; then
-            systemctl disable $service.service &>/dev/null || true
-            systemctl stop $service.service &>/dev/null || true
-        fi
-    done
-    
-    # Remove old unit files
-    rm -f /etc/systemd/system/pod-semaphore-pod.service
-    rm -f /etc/systemd/system/container-semaphore-db.service
-    rm -f /etc/systemd/system/container-semaphore-ui.service
-    rm -f /etc/containers/systemd/semaphore-db.container
-    rm -f /etc/containers/systemd/semaphore-ui.container
-    rm -f /etc/containers/systemd/semaphore.network
+    # Remove old unit files if they exist
+    rm -f /etc/systemd/system/semaphore.service
+    rm -f /etc/containers/systemd/semaphore.container
 }
 
 # Create Quadlet configuration files
