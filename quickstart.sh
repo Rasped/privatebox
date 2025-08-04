@@ -16,7 +16,6 @@
 #   --no-auto          Skip network auto-discovery
 #   --cleanup          Remove downloaded files after installation
 #   --branch <branch>  Use specific git branch (default: main)
-#   --distro <distro>  Choose VM distro: debian or ubuntu (default: debian)
 #   --yes, -y          Skip confirmation prompt
 #   --help             Show this help message
 
@@ -75,7 +74,6 @@ Options:
     --no-auto          Skip network auto-discovery
     --no-cleanup       Keep downloaded files after installation
     --branch <branch>  Use specific git branch (default: main)
-    --distro <distro>  Choose VM distro: debian or ubuntu (default: debian)
     --yes, -y          Skip confirmation prompt
     --help             Show this help message
 
@@ -199,14 +197,11 @@ run_bootstrap() {
         bootstrap_args+=("--gateway" "$GATEWAY_IP")
     fi
     
-    if [[ -n "${VM_DISTRO:-}" ]]; then
-        bootstrap_args+=("--distro" "$VM_DISTRO")
-    fi
     
     print_info "Starting PrivateBox installation..."
     print_info "This process will:"
     print_info "  1. Detect network configuration"
-    print_info "  2. Create ${VM_DISTRO:-Debian} VM"
+    print_info "  2. Create Debian VM"
     print_info "  3. Install and configure services"
     print_info "  4. Wait for complete installation (5-10 minutes)"
     echo ""
@@ -260,14 +255,6 @@ main() {
                 REPO_BRANCH="$2"
                 shift 2
                 ;;
-            --distro)
-                VM_DISTRO="$2"
-                if [[ "$VM_DISTRO" != "debian" && "$VM_DISTRO" != "ubuntu" ]]; then
-                    print_error "Invalid distro: $VM_DISTRO. Must be 'debian' or 'ubuntu'"
-                    exit 1
-                fi
-                shift 2
-                ;;
             --yes|-y)
                 SKIP_CONFIRMATION=true
                 shift
@@ -291,7 +278,7 @@ main() {
     echo "This installer will set up a privacy-focused router system on your Proxmox server."
     echo ""
     echo "What will happen:"
-    echo "  ✓ Create a ${VM_DISTRO:-Debian} virtual machine"
+    echo "  ✓ Create a Debian virtual machine"
     echo "  ✓ Install Portainer for container management"  
     echo "  ✓ Install Semaphore for Ansible automation"
     echo "  ✓ Configure networking and security settings"
