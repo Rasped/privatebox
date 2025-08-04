@@ -215,26 +215,8 @@ setup_portainer
 # Set up Semaphore
 setup_semaphore
 
-# Reload systemd to pick up new Quadlet files and enable the services
-log_info "Reloading systemd and enabling Quadlet services..."
-if ! systemctl daemon-reload; then
-    log_error "Failed to reload systemd daemon"
-fi
-
-# Small delay to ensure systemd has processed the new Quadlet files
-sleep 2
-
-# Start Portainer (Quadlet services are auto-enabled via [Install] section)
-log_info "Starting Portainer service..."
-systemctl start portainer.service || log_error "Failed to start Portainer service"
-
-# Verify Semaphore service is running (it should be started by semaphore-setup-boltdb.sh)
-log_info "Verifying Semaphore service..."
-if ! systemctl is-active --quiet semaphore.service; then
-    log_warn "Semaphore service is not active - it should have been started by semaphore-setup-boltdb.sh"
-fi
-
-log_info "Systemd services created and enabled"
+# Services are started by their respective setup scripts
+# No need for additional systemd operations here
 
 log_info "VM setup completed successfully!"
 
