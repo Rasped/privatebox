@@ -2,6 +2,9 @@
 # Common utilities for PrivateBox bootstrap
 # Minimal set of actually used functions
 
+# Exit codes
+EXIT_MISSING_DEPS=2
+
 # Ensure we have logging functions available
 if ! declare -f log_info >/dev/null 2>&1; then
     # Basic fallback logging if not available
@@ -9,6 +12,17 @@ if ! declare -f log_info >/dev/null 2>&1; then
     log_error() { echo "[ERROR] $*" >&2; }
     log_debug() { [[ "${DEBUG:-false}" == "true" ]] && echo "[DEBUG] $*"; }
 fi
+
+# Check if required command exists
+require_command() {
+    local cmd="${1}"
+    local message="${2:-Command required}"
+    
+    if ! command -v "${cmd}" &> /dev/null; then
+        log_error "${message}: ${cmd}"
+        exit ${EXIT_MISSING_DEPS}
+    fi
+}
 
 # Validate IP address format
 validate_ip() {
@@ -70,6 +84,7 @@ setup_error_handling() {
 }
 
 # Export functions
+export -f require_command
 export -f validate_ip
 export -f register_cleanup
 export -f setup_error_handling
