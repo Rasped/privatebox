@@ -1,6 +1,21 @@
 #!/bin/bash
 # Semaphore API interaction library
 
+# Helper function to parse API response status code
+get_api_status() {
+    echo "$1" | cut -d'|' -f1
+}
+
+# Helper function to parse API response body
+get_api_body() {
+    echo "$1" | cut -d'|' -f2-
+}
+
+# Helper function to check if API call was successful
+is_api_success() {
+    local status="$1"
+    [[ "$status" == "200" || "$status" == "201" || "$status" == "204" ]]
+}
 
 # Get repository ID by name
 get_repository_id_by_name() {
@@ -15,10 +30,10 @@ get_repository_id_by_name() {
         "$base_url/api/project/$project_id/repositories" "" "$session" "Getting repositories")
     
     if [ $? -eq 0 ]; then
-        local status_code=$(echo "$api_result" | cut -d'|' -f1)
-        local repos=$(echo "$api_result" | cut -d'|' -f2-)
+        local status_code=$(get_api_status "$api_result")
+        local repos=$(get_api_body "$api_result")
         
-        if [ "$status_code" -eq 200 ]; then
+        if is_api_success "$status_code"; then
             local repo_id=$(echo "$repos" | jq -r ".[] | select(.name==\"$repo_name\") | .id" 2>/dev/null)
             if [ -n "$repo_id" ] && [ "$repo_id" != "null" ]; then
                 log_info "Found repository '$repo_name' with ID: $repo_id" >&2
@@ -69,12 +84,12 @@ create_repository() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
     log_info "Repository creation response - Status: $status_code"
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local repo_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$repo_id" ] && [ "$repo_id" != "null" ]; then
             log_info "✓ Repository '$repo_name' created successfully with ID: $repo_id" >&2
@@ -116,7 +131,7 @@ get_inventory_id_by_name() {
         "$base_url/api/project/$project_id/inventory" "" "$session" "Getting inventories")
     
     if [ $? -eq 0 ]; then
-        local invs=$(echo "$api_result" | cut -d'|' -f2-)
+        local invs=$(get_api_body "$api_result")
         echo "$invs" | jq -r ".[] | select(.name==\"$inv_name\") | .id" 2>/dev/null
     fi
 }
@@ -137,13 +152,13 @@ create_api_token() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
     log_info "API token creation response - Status: $status_code" >&2
     log_info "API token creation response body: $response_body" >&2
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local token=$(echo "$response_body" | jq -r '.id // .token' 2>/dev/null)
         if [ -n "$token" ] && [ "$token" != "null" ]; then
             log_info "Extracted API token: $token" >&2
@@ -203,12 +218,12 @@ create_semaphore_api_environment() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
     log_info "Environment creation response - Status: $status_code" >&2
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
             log_info "✓ SemaphoreAPI environment created successfully with ID: $env_id" >&2
@@ -296,12 +311,12 @@ create_template_generator_task() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
     log_info "Template creation response - Status: $status_code" >&2
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local template_id=$(echo "$response_body" | jq -r '.id')
         if [ -n "$template_id" ] && [ "$template_id" != "null" ]; then
             log_info "✓ Generate Templates task created successfully with ID: $template_id" >&2
@@ -336,10 +351,10 @@ run_semaphore_task() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local task_id=$(echo "$api_result" | cut -d'|' -f2- | jq -r '.id' 2>/dev/null)
+    local status_code=$(get_api_status "$api_result")
+    local task_id=$(get_api_body "$api_result" | jq -r '.id' 2>/dev/null)
     
-    if [ "$status_code" -ne 201 ] && [ "$status_code" -ne 200 ]; then
+    if ! is_api_success "$status_code"; then
         log_error "Failed to start task"
         return 1
     fi
@@ -433,12 +448,12 @@ create_password_environment() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
     log_info "Password environment creation response - Status: $status_code" >&2
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
             log_info "✓ ServicePasswords environment created successfully with ID: $env_id" >&2
@@ -623,11 +638,11 @@ try_admin_authentication() {
     local container_admin_password=$(podman exec semaphore-ui printenv SEMAPHORE_ADMIN_PASSWORD 2>/dev/null)
     
     # Log debugging info to stderr
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Using credential file password (first 2 chars): ${file_admin_password:0:2}****" >&2
+    echo "Using credential file password (first 2 chars): ${file_admin_password:0:2}****" >&2
     if [ -n "$container_admin_password" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Found container password (first 2 chars): ${container_admin_password:0:2}****" >&2
+        echo "Found container password (first 2 chars): ${container_admin_password:0:2}****" >&2
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] No container password found" >&2
+        echo "No container password found" >&2
     fi
     
     # Try container password if available
@@ -635,37 +650,37 @@ try_admin_authentication() {
     local http_code=401
     
     if [ -n "$container_admin_password" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Trying with container environment password..." >&2
+        echo "Trying with container environment password..." >&2
         http_code=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -X POST -H "Content-Type: application/json" \
             -d "{\"auth\": \"admin\", \"password\": \"$container_admin_password\"}" \
             http://localhost:3000/api/auth/login)
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Container password auth HTTP status code: $http_code" >&2
+        echo "Container password auth HTTP status code: $http_code" >&2
         
         if [ "$http_code" == "200" ] || [ "$http_code" == "204" ]; then
             admin_password="$container_admin_password"
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Container password authentication successful!" >&2
+            echo "Container password authentication successful!" >&2
         fi
     fi
     
     # If container password didn't work, try credential file password
     if [ "$http_code" != "200" ] && [ "$http_code" != "204" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Trying with credential file password..." >&2
+        echo "Trying with credential file password..." >&2
         http_code=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -X POST -H "Content-Type: application/json" \
             -d "{\"auth\": \"admin\", \"password\": \"$file_admin_password\"}" \
             http://localhost:3000/api/auth/login)
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Credential file password auth HTTP status code: $http_code" >&2
+        echo "Credential file password auth HTTP status code: $http_code" >&2
     fi
     
     # Try with default credentials as last resort
     if [ "$http_code" != "200" ] && [ "$http_code" != "204" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Trying with default credentials (admin/changeme) as fallback..." >&2
+        echo "Trying with default credentials (admin/changeme) as fallback..." >&2
         http_code=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -X POST -H "Content-Type: application/json" \
             -d '{"auth": "admin", "password": "changeme"}' \
             http://localhost:3000/api/auth/login)
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Default credentials HTTP status code: $http_code" >&2
+        echo "Default credentials HTTP status code: $http_code" >&2
         
         if [ "$http_code" == "200" ] || [ "$http_code" == "204" ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Default credentials worked! Using admin/changeme instead" >&2
+            echo "Default credentials worked! Using admin/changeme instead" >&2
             admin_password="changeme"
         fi
     fi
@@ -732,10 +747,10 @@ make_api_request() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $operation_name (attempt $attempt/$max_attempts)..." >&2
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Making $method request to $url" >&2
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Payload: $payload" >&2
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Cookie: ${session_cookie:0:30}..." >&2
+        echo "$operation_name (attempt $attempt/$max_attempts)..." >&2
+        echo "Making $method request to $url" >&2
+        echo "Payload: $payload" >&2
+        echo "Cookie: ${session_cookie:0:30}..." >&2
         
         local response=$(curl -s -m 45 -X "$method" -w "\n%{http_code}" \
             -H "Cookie: $session_cookie" \
@@ -743,17 +758,17 @@ make_api_request() {
             -d "$payload" \
             "$url")
             
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Raw response: $response" >&2
+        echo "Raw response: $response" >&2
         
         # Check if response is empty
         if [ -z "$response" ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Empty response from API for $operation_name." >&2
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] This could indicate a timeout or connection issue." >&2
+            echo "ERROR: Empty response from API for $operation_name." >&2
+            echo "This could indicate a timeout or connection issue." >&2
             if [ $attempt -eq $max_attempts ]; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Max attempts reached. Aborting." >&2
+                echo "Max attempts reached. Aborting." >&2
                 return 1
             fi
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Retrying in 15 seconds..." >&2
+            echo "Retrying in 15 seconds..." >&2
             sleep 15
             ((attempt++))
             continue
@@ -763,13 +778,13 @@ make_api_request() {
         local response_body=$(echo "$response" | head -n -1)
         
         if [ -z "$status_code" ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Invalid response format (no status code) for $operation_name." >&2
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Raw response: $response" >&2
+            echo "ERROR: Invalid response format (no status code) for $operation_name." >&2
+            echo "Raw response: $response" >&2
             if [ $attempt -eq $max_attempts ]; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Max attempts reached. Aborting." >&2
+                echo "Max attempts reached. Aborting." >&2
                 return 1
             fi
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Retrying in 10 seconds..." >&2
+            echo "Retrying in 10 seconds..." >&2
             sleep 10
             ((attempt++))
             continue
@@ -811,10 +826,10 @@ create_semaphore_user() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ] || [ "$status_code" -eq 204 ]; then
+    if is_api_success "$status_code" || [ "$status_code" -eq 204 ]; then
         log_info "User $username operation successful (HTTP $status_code)."
         if [ -n "$response_body" ]; then
             log_info "Response details: $response_body"
@@ -886,10 +901,10 @@ create_semaphore_project() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local project_id
         if [ -n "$response_body" ]; then
             project_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
@@ -965,10 +980,10 @@ get_ssh_key_id_by_name() {
         "http://localhost:3000/api/project/$project_id/keys" "" "$admin_session" "Getting SSH keys")
     
     if [ $? -eq 0 ]; then
-        local status_code=$(echo "$api_result" | cut -d'|' -f1)
-        local keys=$(echo "$api_result" | cut -d'|' -f2-)
+        local status_code=$(get_api_status "$api_result")
+        local keys=$(get_api_body "$api_result")
         
-        if [ "$status_code" -eq 200 ]; then
+        if is_api_success "$status_code"; then
             local key_id=$(echo "$keys" | jq -r ".[] | select(.name==\"$key_name\") | .id" 2>/dev/null)
             if [ -n "$key_id" ] && [ "$key_id" != "null" ]; then
                 log_info "Found SSH key '$key_name' with ID: $key_id" >&2
@@ -1009,10 +1024,10 @@ create_inventory() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local inv_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         log_info "$inventory_name created successfully (ID: $inv_id)"
         return 0
@@ -1138,10 +1153,10 @@ create_semaphore_ssh_key() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local key_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$key_id" ] && [ "$key_id" != "null" ]; then
             log_info "SSH key '$key_name' created successfully with ID: $key_id" >&2
@@ -1209,10 +1224,10 @@ create_infrastructure_project_with_ssh_key() {
         return 1
     fi
     
-    local status_code=$(echo "$api_result" | cut -d'|' -f1)
-    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
     
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+    if is_api_success "$status_code"; then
         local project_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$project_id" ] && [ "$project_id" != "null" ]; then
             log_info "PrivateBox project created with ID: $project_id"
