@@ -407,10 +407,10 @@ function generate_cloud_init() {
         return 1
     fi
     
-    if [[ -f "${SCRIPT_DIR}/../lib/validation.sh" ]]; then
-        validation_content=$(cat "${SCRIPT_DIR}/../lib/validation.sh" | sed 's/^/      /')
+    if [[ -f "${SCRIPT_DIR}/../lib/minimal-validation.sh" ]]; then
+        validation_content=$(cat "${SCRIPT_DIR}/../lib/minimal-validation.sh" | sed 's/^/      /')
     else
-        log_error "Cannot find validation.sh"
+        log_error "Cannot find minimal-validation.sh"
         return 1
     fi
     
@@ -541,7 +541,7 @@ ${constants_content}
     permissions: '0644'
     content: |
 ${bootstrap_logger_content}
-  - path: /usr/local/lib/validation.sh
+  - path: /usr/local/lib/minimal-validation.sh
     permissions: '0644'
     content: |
 ${validation_content}
