@@ -103,7 +103,7 @@ else
     log_warn "Configuration file not found, using defaults: $CONFIG_FILE"
     # Default configuration values
     VMID=9000
-    DEBIAN_VERSION="13"
+    DEBIAN_VERSION="12"
     VM_USERNAME="debian"
     VM_PASSWORD=""  # Will be set from ADMIN_PASSWORD
     VM_MEMORY=2048
@@ -135,9 +135,9 @@ if [[ ! $DEBIAN_VERSION =~ ^[0-9]+$ ]]; then
     exit ${EXIT_INVALID_CONFIG:-3}
 fi
 
-# Construct URLs based on version
-CLOUD_IMG_URL="https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-genericcloud-amd64-daily.qcow2"
-IMAGE_NAME="debian-13-genericcloud-amd64.qcow2"
+# Use image URL and name from constants.sh
+CLOUD_IMG_URL="${DEBIAN_IMAGE_URL}"
+IMAGE_NAME="${DEBIAN_IMAGE_NAME}"
 
 # Validate configuration
 if ! validate_config; then
