@@ -17,14 +17,8 @@ source "${COMMON_LIB_DIR}/constants.sh" 2>/dev/null || true
 # 2. Bootstrap logger (provides logging functions)
 source "${COMMON_LIB_DIR}/bootstrap_logger.sh" 2>/dev/null || true
 
-# 3. Error handler (provides error handling and cleanup)
-source "${COMMON_LIB_DIR}/error_handler.sh" 2>/dev/null || true
-
-# 4. Validation functions
-source "${COMMON_LIB_DIR}/validation.sh" 2>/dev/null || true
-
-# 5. Service manager (provides service-related functions)
-source "${COMMON_LIB_DIR}/service_manager.sh" 2>/dev/null || true
+# 3. Common utilities (minimal validation and error handling)
+source "${COMMON_LIB_DIR}/common-utils.sh" 2>/dev/null || true
 
 # 6. SSH manager (provides SSH-related functions)
 source "${COMMON_LIB_DIR}/ssh_manager.sh" 2>/dev/null || true
@@ -177,28 +171,7 @@ save_credentials() {
 # the real validation functions from validation.sh
 # Note: validation.sh must be sourced before these are used
 
-# Configuration validation (simplified wrapper)
-validate_config() {
-    local errors=0
-    
-    log_info "Validating configuration..."
-    
-    # This is a simplified version - the real validation should use
-    # the validate_config function from config_manager.sh
-    if declare -f config_manager_loaded >/dev/null 2>&1; then
-        # Use the new config manager validation
-        return 0
-    fi
-    
-    # Basic validation for backward compatibility
-    if [[ ${errors} -eq 0 ]]; then
-        log_info "Configuration validation passed"
-        return 0
-    else
-        log_error "Configuration validation failed with ${errors} error(s)"
-        return 1
-    fi
-}
+# Note: validate_config is now provided by common-utils.sh
 
 # Export functions for use in other scripts
 # Note: Many of these are now provided by the specialized modules
