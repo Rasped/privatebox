@@ -1044,7 +1044,7 @@ create_default_inventory() {
   hosts:
     container-host:
       ansible_host: ${vm_ip}
-      ansible_user: ubuntuadmin
+      ansible_user: debian
       ansible_become: true
       ansible_become_method: sudo"
         
@@ -1234,10 +1234,10 @@ create_infrastructure_project_with_ssh_key() {
                 log_info "WARNING: Proxmox SSH key not found at /root/.credentials/proxmox_ssh_key - skipping Proxmox SSH key creation"
             fi
             
-            # Create SSH key for VM self-management (with ubuntuadmin as the SSH user)
+            # Create SSH key for VM self-management (with debian as the SSH user)
             local vm_key_id=""
             if [ -f "/root/.credentials/semaphore_vm_key" ]; then
-                vm_key_id=$(create_semaphore_ssh_key "$project_id" "container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "ubuntuadmin")
+                vm_key_id=$(create_semaphore_ssh_key "$project_id" "container-host" "ssh" "$admin_session" "/root/.credentials/semaphore_vm_key" "debian")
             else
                 log_info "WARNING: VM SSH key not found at /root/.credentials/semaphore_vm_key - skipping VM SSH key creation"
             fi
