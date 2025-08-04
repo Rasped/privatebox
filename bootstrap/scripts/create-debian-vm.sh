@@ -467,8 +467,6 @@ function generate_cloud_init() {
 #cloud-config
 hostname: debian
 manage_etc_hosts: true
-locale: en_US.UTF-8
-locale_configfile: /etc/default/locale
 shell: ['/bin/bash', '-c']
 users:
   - name: ${VM_USERNAME}
@@ -665,10 +663,7 @@ ${semaphore_setup_content}
       echo "INSTALLATION_STATUS=running" > /etc/privatebox-cloud-init-complete
       echo "STARTED_AT=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /etc/privatebox-cloud-init-complete
       
-      # Locale configuration
-      echo "Configuring locale..."
-      locale-gen en_US.UTF-8 || write_error_status "locale-gen" "Failed to generate locale" \$?
-      update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8 || write_error_status "update-locale" "Failed to update locale" \$?
+      # Skip locale configuration - Debian cloud images have it pre-configured
       
       # Podman configuration
       echo "Configuring Podman for user ${VM_USERNAME}"
