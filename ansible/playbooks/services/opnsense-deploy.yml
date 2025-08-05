@@ -17,7 +17,7 @@
 
   vars:
     # Template download URL - CHANGE THIS to your file server
-    template_url: "http://192.168.1.17/templates/opnsense-template.qcow2"
+    template_url: "http://192.168.1.179/templates/opnsense-template.qcow2"
     
     # VM Configuration
     vm_id: 100
