@@ -120,7 +120,48 @@
           - "3. Enable SSH for remote management"
           - "=================================="
 
-    - name: Start VM (optional)
+    - name: Start VM
       command: qm start {{ vm_id }}
-      when: start_vm | default(false) | bool
-      tags: [start]
+      register: start_result
+
+    - name: Wait for VM to boot
+      pause:
+        seconds: 30
+        prompt: "Waiting for OPNsense to boot..."
+
+    - name: Try to get VM IP from DHCP
+      shell: |
+        # Get MAC address of WAN interface
+        MAC=$(qm config {{ vm_id }} | grep -E '^net0:' | grep -oP 'virtio=\K[^,]+')
+        echo "MAC: $MAC"
+        
+        # Check router DHCP leases (if accessible)
+        # This is a best-effort attempt
+        echo "Check your router DHCP leases for MAC: $MAC"
+      register: mac_info
+      ignore_errors: yes
+
+    - name: Display final deployment summary
+      debug:
+        msg:
+          - "=================================="
+          - "OPNsense VM Deployed and Started!"
+          - "=================================="
+          - ""
+          - "VM ID: {{ vm_id }}"
+          - "VM Name: {{ vm_name }}"
+          - "Status: Running"
+          - ""
+          - "Network Configuration:"
+          - "  WAN: {{ vm_net0_bridge }}"
+          - "  LAN: {{ vm_net1_bridge }}"
+          - ""
+          - "{{ mac_info.stdout | default('') }}"
+          - ""
+          - "Next Steps:"
+          - "1. Check router DHCP for VM IP"
+          - "2. Access console: qm terminal {{ vm_id }}"
+          - "3. Default login: root/opnsense"
+          - ""
+          - "Note: If VM fails to start, vmbr1 may be missing"
+          - "=================================="
