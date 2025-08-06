@@ -84,7 +84,10 @@
       "Bash(git revert:*)",
       "Bash(source:*)",
       "Bash(declare -f)",
-      "Bash(wget:*)"
+      "Bash(wget:*)",
+      "Bash(git pull:*)",
+      "Bash(git rm:*)",
+      "WebFetch(domain:forum.proxmox.com)"
     ],
     "deny": []
   }
