@@ -7,8 +7,8 @@ set -euo pipefail
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source common functions and config
-source "${SCRIPT_DIR}/../bootstrap/lib/common.sh"
+# Log file location
+LOG_FILE="${LOG_FILE:-/tmp/privatebox-bootstrap.log}"
 
 # Load configuration
 CONFIG_FILE="/tmp/privatebox-config.conf"
