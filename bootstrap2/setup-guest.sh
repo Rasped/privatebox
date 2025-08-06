@@ -140,9 +140,17 @@ EOF
 # Reload systemd and start services
 log "Starting services..."
 systemctl daemon-reload
+
+# Enable podman auto-update timer
 systemctl enable --now podman-auto-update.timer
-systemctl enable --now portainer.service || error_exit "Failed to start Portainer"
-systemctl enable --now semaphore.service || error_exit "Failed to start Semaphore"
+
+# Start services (triggers Quadlet generation)
+systemctl start portainer.service || error_exit "Failed to start Portainer"
+systemctl start semaphore.service || error_exit "Failed to start Semaphore"
+
+# Enable services for boot
+systemctl enable portainer.service || log "Warning: Failed to enable Portainer for boot"
+systemctl enable semaphore.service || log "Warning: Failed to enable Semaphore for boot"
 
 # Wait for services to be ready
 log "Waiting for services to be ready..."
