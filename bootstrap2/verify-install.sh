@@ -75,7 +75,7 @@ wait_for_cloud_init() {
     
     while [[ $elapsed -lt $max_wait ]]; do
         local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" \
-                      "${VM_USERNAME}@${vm_ip}" "sudo cloud-init status 2>/dev/null | grep -o 'status: [a-z]*' | cut -d' ' -f2" || echo "running")
+                      "${VM_USERNAME}@${vm_ip}" "cloud-init status 2>/dev/null | grep -o 'status: [a-z]*' | cut -d' ' -f2" || echo "running")
         
         if [[ "$status" == "done" ]]; then
             log "Cloud-init completed"
