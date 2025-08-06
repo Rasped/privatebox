@@ -165,16 +165,12 @@ systemctl daemon-reload
 # Enable podman auto-update timer
 systemctl enable --now podman-auto-update.timer
 
-# Start services (triggers Quadlet generation)
+# Start Portainer first
 systemctl start portainer.service || error_exit "Failed to start Portainer"
-systemctl start semaphore.service || error_exit "Failed to start Semaphore"
-
-# Enable services for boot
 systemctl enable portainer.service || log "Warning: Failed to enable Portainer for boot"
-systemctl enable semaphore.service || log "Warning: Failed to enable Semaphore for boot"
 
-# Wait for services to be ready
-log "Waiting for services to be ready..."
+# Wait for Portainer to be ready
+log "Waiting for Portainer to be ready..."
 for i in {1..30}; do
     if curl -sf http://localhost:9000 > /dev/null 2>&1; then
         log "Portainer is ready"
@@ -183,22 +179,8 @@ for i in {1..30}; do
     sleep 5
 done
 
-for i in {1..30}; do
-    if curl -sf http://localhost:3000/api/ping > /dev/null 2>&1; then
-        log "Semaphore is ready"
-        break
-    fi
-    sleep 5
-done
-
-# Create admin user for BoltDB (required for authentication)
-log "Creating Semaphore admin user..."
-
-# Debug: Check variables before use
-log "DEBUG: Checking environment variables..."
-log "DEBUG: SERVICES_PASSWORD=${SERVICES_PASSWORD:-NOT_SET}"
-log "DEBUG: ADMIN_PASSWORD=${ADMIN_PASSWORD:-NOT_SET}"
-log "DEBUG: VM_USERNAME=${VM_USERNAME:-NOT_SET}"
+# IMPORTANT: Create Semaphore admin user BEFORE starting service to avoid BoltDB corruption
+log "Creating Semaphore admin user before service start..."
 
 # Ensure SERVICES_PASSWORD is set
 if [[ -z "${SERVICES_PASSWORD}" ]]; then
@@ -206,42 +188,40 @@ if [[ -z "${SERVICES_PASSWORD}" ]]; then
     log "WARNING: Admin user creation will fail"
 else
     log "DEBUG: SERVICES_PASSWORD is set (length: ${#SERVICES_PASSWORD})"
+    
+    # Initialize BoltDB with admin user BEFORE starting service
+    log "Initializing Semaphore database with admin user..."
+    if podman run --rm \
+        -v /opt/semaphore/config:/etc/semaphore:Z \
+        -v /opt/semaphore/data:/var/lib/semaphore:Z \
+        docker.io/semaphoreui/semaphore:latest \
+        semaphore user add \
+        --admin \
+        --login admin \
+        --name Admin \
+        --email admin@localhost \
+        --password "${SERVICES_PASSWORD}" \
+        --config /etc/semaphore/config.json 2>&1 | tee /tmp/semaphore-user-add.log; then
+        log "✓ Admin user created successfully"
+    else
+        log "WARNING: Admin user creation failed (may already exist)"
+        log "DEBUG: Check /tmp/semaphore-user-add.log for details"
+    fi
 fi
 
-# Stop service to access database (following v1 pattern)
-systemctl stop semaphore.service
-sleep 2
+# NOW start Semaphore service with admin user already in database
+log "Starting Semaphore service..."
+systemctl start semaphore.service || error_exit "Failed to start Semaphore"
+systemctl enable semaphore.service || log "Warning: Failed to enable Semaphore for boot"
 
-# Create admin user using container (matching v1 exactly)
-log "DEBUG: Running semaphore user add command..."
-if podman run --rm \
-    -v /opt/semaphore/config:/etc/semaphore:Z \
-    -v /opt/semaphore/data:/var/lib/semaphore:Z \
-    docker.io/semaphoreui/semaphore:latest \
-    semaphore user add \
-    --admin \
-    --login admin \
-    --name Admin \
-    --email admin@localhost \
-    --password "${SERVICES_PASSWORD}" \
-    --config /etc/semaphore/config.json 2>&1 | tee /tmp/semaphore-user-add.log; then
-    log "✓ Admin user created successfully"
-else
-    log "WARNING: Admin user creation failed (may already exist)"
-    log "DEBUG: Check /tmp/semaphore-user-add.log for details"
-fi
-
-# Restart service (following v1 pattern)
-systemctl start semaphore.service
-sleep 3  # v1 uses sleep 3, not 2
-
-# Wait for API to be ready again
+# Wait for Semaphore API to be ready
+log "Waiting for Semaphore to be ready..."
 for i in {1..30}; do
     if curl -sf http://localhost:3000/api/ping > /dev/null 2>&1; then
-        log "Semaphore API ready after restart"
+        log "Semaphore is ready"
         break
     fi
-    sleep 2
+    sleep 5
 done
 
 # Configure Semaphore via API
