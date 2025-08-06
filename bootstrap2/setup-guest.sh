@@ -94,6 +94,12 @@ EOF
 
 # Create Semaphore config
 log "Creating Semaphore configuration..."
+
+# Generate secure keys for cookies and encryption
+COOKIE_HASH=$(head -c32 /dev/urandom | base64 | head -c44)
+COOKIE_ENCRYPTION=$(head -c32 /dev/urandom | base64 | head -c32)
+ACCESS_KEY_ENCRYPTION=$(head -c32 /dev/urandom | base64 | head -c32)
+
 SEMAPHORE_CONFIG="/opt/semaphore/config/config.json"
 cat > "$SEMAPHORE_CONFIG" <<EOF
 {
@@ -104,6 +110,9 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
   "port": "3000",
   "interface": "",
   "tmp_path": "/tmp/semaphore",
+  "cookie_hash": "${COOKIE_HASH}",
+  "cookie_encryption": "${COOKIE_ENCRYPTION}",
+  "access_key_encryption": "${ACCESS_KEY_ENCRYPTION}",
   "web": {
     "listen": "0.0.0.0:3000"
   },
@@ -144,7 +153,6 @@ Environment=SEMAPHORE_ADMIN=admin
 Environment=SEMAPHORE_ADMIN_PASSWORD=${SERVICES_PASSWORD}
 Environment=SEMAPHORE_ADMIN_NAME=Administrator
 Environment=SEMAPHORE_ADMIN_EMAIL=admin@privatebox.local
-Environment=SEMAPHORE_ACCESS_KEY_ENCRYPTION=$(head -c32 /dev/urandom | base64 | head -c32)
 Environment=SEMAPHORE_CONFIG_PATH=/etc/semaphore/config.json
 Environment=SEMAPHORE_PLAYBOOK_PATH=/tmp/semaphore/
 Environment=TZ=UTC
