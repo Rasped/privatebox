@@ -24,7 +24,7 @@ CHECK_INTERVAL=10
 SSH_KEY_PATH="${SSH_KEY_PATH:-/root/.ssh/id_rsa}"  # Default to root's key
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" >&2
 }
 
 display() {
@@ -48,7 +48,7 @@ wait_for_vm() {
         # Try SSH connection directly to known IP
         if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY_PATH" "${VM_USERNAME}@${vm_ip}" "echo 'SSH connection successful'" &>/dev/null; then
             log "SSH connection established to $vm_ip"
-            echo "$vm_ip"
+            echo "$vm_ip"  # Return only the IP, not log messages
             return 0
         fi
         
