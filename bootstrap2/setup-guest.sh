@@ -44,7 +44,8 @@ apt-get install -y \
     git \
     podman \
     buildah \
-    skopeo || error_exit "Failed to install required packages"
+    skopeo \
+    openssh-client || error_exit "Failed to install required packages"
 
 # Podman is installed from Debian repos above
 log "Podman installed from Debian repositories"
@@ -183,12 +184,49 @@ for i in {1..30}; do
 done
 
 for i in {1..30}; do
-    if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+    if curl -sf http://localhost:3000/api/ping > /dev/null 2>&1; then
         log "Semaphore is ready"
         break
     fi
     sleep 5
 done
+
+# Configure Semaphore via API
+log "Configuring Semaphore via API..."
+if [[ -f /usr/local/lib/semaphore-api.sh ]]; then
+    log "Loading Semaphore API library..."
+    source /usr/local/lib/semaphore-api.sh
+    
+    # Export required variables for API library
+    export PRIVATEBOX_GIT_URL="https://github.com/Rasped/privatebox.git"
+    export SERVICES_PASSWORD  # Already in environment from config.env
+    export ADMIN_PASSWORD     # Already in environment from config.env
+    
+    # Generate VM SSH key pair if not exists
+    if [[ ! -f /root/.credentials/semaphore_vm_key ]]; then
+        log "Generating VM SSH key pair..."
+        generate_vm_ssh_key_pair
+    fi
+    
+    # Run API configuration
+    log "Creating default Semaphore projects and configuration..."
+    if create_default_projects; then
+        log "✓ Semaphore API configuration completed successfully"
+        
+        # Clean up sensitive SSH keys after upload
+        if [[ -f /root/.credentials/proxmox_ssh_key ]]; then
+            rm -f /root/.credentials/proxmox_ssh_key
+            log "Removed Proxmox SSH key after upload to Semaphore"
+        fi
+        
+        # Keep VM key for potential future use
+        log "VM SSH key retained at /root/.credentials/semaphore_vm_key"
+    else
+        log "WARNING: Semaphore API configuration failed - manual setup may be required"
+    fi
+else
+    log "WARNING: Semaphore API library not found - skipping API configuration"
+fi
 
 # Create success marker
 log "Guest configuration complete!"

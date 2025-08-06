@@ -128,6 +128,24 @@ generate_cloud_init() {
         log "No SSH public key found, password auth only"
     fi
     
+    # Get Proxmox private SSH key for Semaphore
+    local proxmox_private_key=""
+    if [[ -f /root/.ssh/id_rsa ]]; then
+        proxmox_private_key=$(cat /root/.ssh/id_rsa | sed 's/^/      /')
+        log "Including Proxmox private SSH key for Semaphore"
+    else
+        log "No Proxmox private SSH key found"
+    fi
+    
+    # Load Semaphore API library for embedding
+    local semaphore_api_content=""
+    if [[ -f "${SCRIPT_DIR}/lib/semaphore-api.sh" ]]; then
+        semaphore_api_content=$(cat "${SCRIPT_DIR}/lib/semaphore-api.sh" | sed 's/^/      /')
+        log "Semaphore API library loaded for cloud-init embedding"
+    else
+        log "WARNING: Semaphore API library not found at ${SCRIPT_DIR}/lib/semaphore-api.sh"
+    fi
+    
     # Create custom user-data snippet
     cat > "/var/lib/vz/snippets/privatebox-${VMID}.yml" <<EOF
 #cloud-config
@@ -154,6 +172,28 @@ $(sed 's/^/      /' < "$WORK_DIR/privatebox-setup/config.env")
     permissions: '0755'
     content: |
 $SETUP_SCRIPT_CONTENT
+
+$(if [[ -n "$proxmox_private_key" ]]; then
+echo "  - path: /root/.credentials/proxmox_ssh_key"
+echo "    permissions: '0600'"
+echo "    owner: root:root"
+echo "    content: |"
+echo "$proxmox_private_key"
+fi)
+
+  - path: /etc/privatebox-proxmox-host
+    permissions: '0644'
+    owner: root:root
+    content: |
+      ${PROXMOX_HOST}
+
+$(if [[ -n "$semaphore_api_content" ]]; then
+echo "  - path: /usr/local/lib/semaphore-api.sh"
+echo "    permissions: '0755'"
+echo "    owner: root:root"
+echo "    content: |"
+echo "$semaphore_api_content"
+fi)
 
 runcmd:
   - [mkdir, -p, /etc/privatebox]
