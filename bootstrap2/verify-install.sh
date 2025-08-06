@@ -65,6 +65,38 @@ wait_for_vm() {
     return 1
 }
 
+# Wait for cloud-init to complete
+wait_for_cloud_init() {
+    local vm_ip="$1"
+    local elapsed=0
+    local max_wait=300  # 5 minutes max for cloud-init
+    
+    log "Waiting for cloud-init to complete..."
+    
+    while [[ $elapsed -lt $max_wait ]]; do
+        local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" \
+                      "${VM_USERNAME}@${vm_ip}" "sudo cloud-init status 2>/dev/null | grep -o 'status: [a-z]*' | cut -d' ' -f2" || echo "running")
+        
+        if [[ "$status" == "done" ]]; then
+            log "Cloud-init completed"
+            return 0
+        elif [[ "$status" == "error" ]]; then
+            log "Cloud-init failed with error"
+            return 1
+        fi
+        
+        sleep 10
+        elapsed=$((elapsed + 10))
+        
+        if [[ $((elapsed % 30)) -eq 0 ]]; then
+            display "   Cloud-init still running... (${elapsed}s elapsed)"
+        fi
+    done
+    
+    log "Timeout waiting for cloud-init"
+    return 1
+}
+
 # Check marker file
 check_marker_file() {
     local vm_ip="$1"
@@ -157,8 +189,16 @@ main() {
     
     display "✅ VM is accessible at $VM_IP"
     
+    # Wait for cloud-init to finish
+    display "⏳ Waiting for cloud-init to complete..."
+    if ! wait_for_cloud_init "$VM_IP"; then
+        error_exit "Cloud-init did not complete successfully"
+    fi
+    
+    display "✅ Cloud-init completed"
+    
     # Check installation marker
-    display "⏳ Waiting for guest configuration to complete..."
+    display "⏳ Verifying guest configuration..."
     if ! check_marker_file "$VM_IP"; then
         error_exit "Guest configuration did not complete successfully"
     fi
