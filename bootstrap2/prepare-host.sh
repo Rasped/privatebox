@@ -6,6 +6,9 @@
 
 set -euo pipefail
 
+# Get script directory for sourcing libraries
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Configuration
 LOG_FILE="/tmp/privatebox-bootstrap.log"
 CONFIG_FILE="/tmp/privatebox-config.conf"
@@ -145,29 +148,8 @@ detect_network() {
     PROXMOX_HOST="$host_ip"
 }
 
-# Password generation
-generate_password() {
-    local type="${1:-services}"  # "services" or "admin"
-    local length=32
-    
-    # Generate secure password with guaranteed character types
-    # Using the same secure method from v1
-    
-    # Ensure required character types
-    local upper=$(tr -dc 'A-Z' < /dev/urandom | head -c 1)
-    local lower=$(tr -dc 'a-z' < /dev/urandom | head -c 1)
-    local digit=$(tr -dc '0-9' < /dev/urandom | head -c 1)
-    
-    # Generate remaining characters (avoiding problematic chars for JSON/shell)
-    local remaining=$((length - 3))
-    local chars=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c $remaining)
-    
-    # Combine and shuffle
-    local all_chars="${upper}${lower}${digit}${chars}"
-    local password=$(echo "$all_chars" | fold -w1 | shuf | tr -d '\n')
-    
-    echo "$password"
-}
+# Source password generator library for phonetic passwords
+source "${SCRIPT_DIR}/lib/password-generator.sh"
 
 # Generate configuration
 generate_config() {
