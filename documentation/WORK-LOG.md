@@ -8,7 +8,8 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 
 ## Critical (P1) - v1 Blockers
 
-- [Investigation] Research OPNsense VM deployment methods (starting - need template approach)
+- [Discovery] Proxmox second NIC (enp1s0) requires manual activation - `ip link set enp1s0 up` (CRITICAL - affects network design)
+- [Investigation] Research OPNsense VM deployment methods (completed - see network-migration-plan.md)
 - [Task] Deploy OPNsense VM with VLAN configuration (pending - see documentation/network-architecture/vlan-design.md) 
 - [Task] Update service IPs to match VLAN design 10.10.20.x (pending - see documentation/network-architecture/vlan-design.md)
 
@@ -25,3 +26,6 @@ Move completed items to CHANGELOG.md. New items go to Uncategorized for triage.
 - [Task] Update playbooks to use ServicePasswords environment (pending - low priority)
 
 ## Uncategorized - Needs Triage
+
+- [Bug] enp1s0 not configured in /etc/network/interfaces - stays down after reboot (needs fix)
+- [Task] Create bootstrap script to ensure both NICs are active on Proxmox
