@@ -191,6 +191,40 @@ for i in {1..30}; do
     sleep 5
 done
 
+# Create admin user for BoltDB (required for authentication)
+log "Creating Semaphore admin user..."
+systemctl stop semaphore.service
+sleep 2
+
+# Create admin user using container
+if podman run --rm \
+    -v /opt/semaphore/config:/etc/semaphore:Z \
+    -v /opt/semaphore/data:/var/lib/semaphore:Z \
+    docker.io/semaphoreui/semaphore:latest \
+    semaphore user add \
+    --admin \
+    --login admin \
+    --name Administrator \
+    --email admin@privatebox.local \
+    --password "${SERVICES_PASSWORD}" \
+    --config /etc/semaphore/config.json >/dev/null 2>&1; then
+    log "✓ Admin user created successfully"
+else
+    log "WARNING: Admin user creation failed (may already exist)"
+fi
+
+# Restart service
+systemctl start semaphore.service
+
+# Wait for API to be ready again
+for i in {1..30}; do
+    if curl -sf http://localhost:3000/api/ping > /dev/null 2>&1; then
+        log "Semaphore API ready after restart"
+        break
+    fi
+    sleep 2
+done
+
 # Configure Semaphore via API
 log "Configuring Semaphore via API..."
 if [[ -f /usr/local/lib/semaphore-api.sh ]]; then
