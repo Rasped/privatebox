@@ -141,6 +141,36 @@ check_services() {
         all_healthy=false
     fi
     
+    # Check Semaphore API configuration
+    log "Checking Semaphore API configuration..."
+    
+    # Try to get Semaphore project via API
+    local api_check=$(curl -s -c - -X POST -H "Content-Type: application/json" \
+        -d "{\"auth\": \"admin\", \"password\": \"${SERVICES_PASSWORD}\"}" \
+        "http://${vm_ip}:3000/api/auth/login" 2>/dev/null | grep 'semaphore')
+    
+    if [[ -n "$api_check" ]]; then
+        display "  ✅ Semaphore API authentication working"
+        
+        # Check if PrivateBox project exists
+        local cookie=$(echo "$api_check" | tail -1 | awk -F'\t' '{print $7}')
+        local projects=$(curl -s -H "Cookie: semaphore=$cookie" \
+            "http://${vm_ip}:3000/api/projects" 2>/dev/null)
+        
+        if echo "$projects" | grep -q "PrivateBox"; then
+            display "  ✅ PrivateBox project configured"
+            log "Semaphore API configuration verified"
+        else
+            display "  ⚠️  PrivateBox project not found in Semaphore"
+            log "WARNING: Semaphore API configuration may be incomplete"
+            all_healthy=false
+        fi
+    else
+        display "  ⚠️  Semaphore API authentication failed"
+        log "WARNING: Could not verify Semaphore API configuration"
+        all_healthy=false
+    fi
+    
     $all_healthy
 }
 
