@@ -49,12 +49,21 @@ apt-get install -y \
 # Podman is installed from Debian repos above
 log "Podman installed from Debian repositories"
 
+# Enable Podman socket for Docker API compatibility
+log "Enabling Podman socket..."
+systemctl enable --now podman.socket || error_exit "Failed to enable Podman socket"
+log "Podman socket enabled successfully"
+
 # Create directories
 log "Creating service directories..."
 mkdir -p /opt/portainer/data
 mkdir -p /opt/semaphore/data
 mkdir -p /opt/semaphore/config
 mkdir -p /etc/containers/systemd
+
+# Create snippets volume for Semaphore integration
+log "Creating snippets volume..."
+podman volume create snippets || log "Snippets volume already exists"
 
 # Install Portainer
 log "Installing Portainer..."
@@ -67,8 +76,9 @@ Wants=network-online.target
 [Container]
 Image=docker.io/portainer/portainer-ce:latest
 ContainerName=portainer
-Volume=/var/run/docker.sock:/var/run/docker.sock:z
+Volume=/run/podman/podman.sock:/var/run/docker.sock:z
 Volume=/opt/portainer/data:/data:z
+Volume=snippets:/snippets:z
 PublishPort=9000:9000
 PublishPort=8000:8000
 Environment=TZ=UTC
