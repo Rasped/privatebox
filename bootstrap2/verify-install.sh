@@ -46,7 +46,7 @@ wait_for_vm() {
     
     while [[ $elapsed -lt $TIMEOUT ]]; do
         # Try SSH connection directly to known IP
-        if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "${VM_USERNAME}@${vm_ip}" "echo 'SSH connection successful'" &>/dev/null; then
+        if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" "${VM_USERNAME}@${vm_ip}" "echo 'SSH connection successful'" &>/dev/null; then
             log "SSH connection established to $vm_ip"
             echo "$vm_ip"
             return 0
@@ -73,7 +73,7 @@ check_marker_file() {
     log "Checking for installation marker file..."
     
     while [[ $elapsed -lt $TIMEOUT ]]; do
-        local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" \
+        local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" \
                       "${VM_USERNAME}@${vm_ip}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
         
         # Trim whitespace from status
@@ -131,7 +131,7 @@ check_services() {
     fi
     
     # Check SSH
-    if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" \
+    if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" \
            "${VM_USERNAME}@${vm_ip}" "systemctl is-active portainer semaphore" &>/dev/null; then
         display "  ✅ Services are running"
         log "Service status check passed"
