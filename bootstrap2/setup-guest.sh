@@ -209,7 +209,7 @@ else
     systemctl stop semaphore.service
     sleep 2
     
-    # Create admin user using container (matching v1 pattern)
+    # Create admin user using container (matching v1 pattern EXACTLY)
     log "Adding admin user to database..."
     if podman run --rm \
         -v /opt/semaphore/config:/etc/semaphore:Z \
@@ -221,11 +221,10 @@ else
         --name Admin \
         --email admin@localhost \
         --password "${SERVICES_PASSWORD}" \
-        --config /etc/semaphore/config.json 2>&1 | tee /tmp/semaphore-user-add.log; then
+        --config /etc/semaphore/config.json >/dev/null 2>&1; then
         log "✓ Admin user created successfully"
     else
         log "WARNING: Admin user creation failed (may already exist)"
-        log "DEBUG: Check /tmp/semaphore-user-add.log for details"
     fi
     
     # Restart service
