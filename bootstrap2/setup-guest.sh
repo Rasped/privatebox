@@ -41,15 +41,13 @@ apt-get install -y \
     gnupg \
     lsb-release \
     jq \
-    git || error_exit "Failed to install required packages"
+    git \
+    podman \
+    buildah \
+    skopeo || error_exit "Failed to install required packages"
 
-# Install Podman
-log "Installing Podman..."
-. /etc/os-release
-echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-curl -fsSL "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/Release.key" | gpg --dearmor | tee /etc/apt/trusted.gpg.d/devel_kubic_libcontainers_stable.gpg > /dev/null
-apt-get update
-apt-get install -y podman || error_exit "Failed to install Podman"
+# Podman is installed from Debian repos above
+log "Podman installed from Debian repositories"
 
 # Create directories
 log "Creating service directories..."
