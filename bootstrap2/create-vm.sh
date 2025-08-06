@@ -109,6 +109,16 @@ EOF
 generate_cloud_init() {
     display "Generating cloud-init configuration..."
     
+    # Enable snippets on local storage if not already enabled
+    local storage_config=$(pvesm status -content | grep "^local " || true)
+    if [[ -n "$storage_config" ]] && ! echo "$storage_config" | grep -q "snippets"; then
+        log "Enabling snippets on local storage"
+        pvesm set local --content vztmpl,iso,backup,snippets || true
+    fi
+    
+    # Create snippets directory if it doesn't exist
+    mkdir -p /var/lib/vz/snippets
+    
     # Get host SSH public key if available
     local ssh_key=""
     if [[ -f /root/.ssh/id_rsa.pub ]]; then
@@ -118,8 +128,8 @@ generate_cloud_init() {
         log "No SSH public key found, password auth only"
     fi
     
-    # Create minimal cloud-init user-data
-    cat > "$WORK_DIR/user-data" <<EOF
+    # Create custom user-data snippet
+    cat > "/var/lib/vz/snippets/privatebox-${VMID}.yml" <<EOF
 #cloud-config
 hostname: privatebox-management
 manage_etc_hosts: true
@@ -152,24 +162,8 @@ runcmd:
 
 final_message: "PrivateBox bootstrap phase 3 initiated"
 EOF
-
-    # Create meta-data
-    cat > "$WORK_DIR/meta-data" <<EOF
-instance-id: privatebox-${VMID}
-local-hostname: privatebox-management
-EOF
-
-    # Create ISO
-    cd "$WORK_DIR"
-    if command -v genisoimage &>/dev/null; then
-        genisoimage -output cloud-init.iso -volid cidata -joliet -rock user-data meta-data &>/dev/null
-    elif command -v mkisofs &>/dev/null; then
-        mkisofs -output cloud-init.iso -volid cidata -joliet -rock user-data meta-data &>/dev/null
-    else
-        error_exit "No ISO creation tool found (genisoimage or mkisofs)"
-    fi
     
-    log "Cloud-init ISO created"
+    log "Cloud-init snippet created at /var/lib/vz/snippets/privatebox-${VMID}.yml"
     display "  ✓ Cloud-init configuration ready"
 }
 
@@ -207,29 +201,12 @@ create_vm() {
     # Add cloud-init drive for network configuration
     qm set $VMID --ide2 ${VM_STORAGE}:cloudinit || error_exit "Failed to add cloud-init drive"
     
-    # Configure cloud-init network settings and SSH key
-    local ssh_pub_key=""
-    if [[ -f /root/.ssh/id_rsa.pub ]]; then
-        ssh_pub_key=$(cat /root/.ssh/id_rsa.pub)
-    fi
-    
+    # Configure cloud-init with custom user-data snippet
     qm set $VMID \
         --ipconfig0 ip=${STATIC_IP}/${NETMASK},gw=${GATEWAY} \
         --nameserver ${GATEWAY} \
-        ${ssh_pub_key:+--sshkey /root/.ssh/id_rsa.pub} \
+        --cicustom "user=local:snippets/privatebox-${VMID}.yml" \
         || error_exit "Failed to configure cloud-init"
-    
-    # Attach custom cloud-init ISO
-    cp "$WORK_DIR/cloud-init.iso" "/var/lib/vz/template/iso/cloud-init-${VMID}.iso" 2>/dev/null || \
-        cp "$WORK_DIR/cloud-init.iso" "/tmp/cloud-init-${VMID}.iso"
-    
-    if [[ -f "/var/lib/vz/template/iso/cloud-init-${VMID}.iso" ]]; then
-        qm set $VMID --ide1 local:iso/cloud-init-${VMID}.iso,media=cdrom || \
-            error_exit "Failed to attach cloud-init ISO"
-    else
-        qm set $VMID --ide1 /tmp/cloud-init-${VMID}.iso,media=cdrom || \
-            error_exit "Failed to attach cloud-init ISO"
-    fi
     
     log "VM $VMID created successfully"
     display "  ✓ VM configuration complete"
@@ -297,6 +274,19 @@ main() {
     
     log "Phase 2 completed successfully"
 }
+
+# Cleanup function
+cleanup() {
+    # Remove snippet file if it exists
+    [[ -f "/var/lib/vz/snippets/privatebox-${VMID}.yml" ]] && \
+        rm -f "/var/lib/vz/snippets/privatebox-${VMID}.yml"
+    
+    # Remove work directory
+    [[ -d "$WORK_DIR" ]] && rm -rf "$WORK_DIR"
+}
+
+# Set trap for cleanup on exit
+trap cleanup EXIT
 
 # Run main
 main "$@"
