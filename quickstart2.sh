@@ -221,9 +221,6 @@ run_bootstrap() {
         fi
     fi
     
-    # Make bootstrap executable
-    chmod +x "$bootstrap_script"
-    
     # Build bootstrap command with arguments
     local bootstrap_cmd="$bootstrap_script"
     
