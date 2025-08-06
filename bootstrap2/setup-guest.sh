@@ -135,8 +135,8 @@ Wants=network-online.target
 [Container]
 Image=docker.io/semaphoreui/semaphore:latest
 ContainerName=semaphore
-Volume=/opt/semaphore/data:/var/lib/semaphore:z
-Volume=/opt/semaphore/config:/etc/semaphore:z
+Volume=/opt/semaphore/data:/var/lib/semaphore:Z
+Volume=/opt/semaphore/config:/etc/semaphore:Z
 PublishPort=3000:3000
 Environment=SEMAPHORE_DB_DIALECT=bolt
 Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
@@ -193,10 +193,27 @@ done
 
 # Create admin user for BoltDB (required for authentication)
 log "Creating Semaphore admin user..."
+
+# Debug: Check variables before use
+log "DEBUG: Checking environment variables..."
+log "DEBUG: SERVICES_PASSWORD=${SERVICES_PASSWORD:-NOT_SET}"
+log "DEBUG: ADMIN_PASSWORD=${ADMIN_PASSWORD:-NOT_SET}"
+log "DEBUG: VM_USERNAME=${VM_USERNAME:-NOT_SET}"
+
+# Ensure SERVICES_PASSWORD is set
+if [[ -z "${SERVICES_PASSWORD}" ]]; then
+    log "ERROR: SERVICES_PASSWORD is not set!"
+    log "WARNING: Admin user creation will fail"
+else
+    log "DEBUG: SERVICES_PASSWORD is set (length: ${#SERVICES_PASSWORD})"
+fi
+
+# Stop service to access database (following v1 pattern)
 systemctl stop semaphore.service
 sleep 2
 
-# Create admin user using container
+# Create admin user using container (matching v1 exactly)
+log "DEBUG: Running semaphore user add command..."
 if podman run --rm \
     -v /opt/semaphore/config:/etc/semaphore:Z \
     -v /opt/semaphore/data:/var/lib/semaphore:Z \
@@ -204,17 +221,19 @@ if podman run --rm \
     semaphore user add \
     --admin \
     --login admin \
-    --name Administrator \
-    --email admin@privatebox.local \
+    --name Admin \
+    --email admin@localhost \
     --password "${SERVICES_PASSWORD}" \
-    --config /etc/semaphore/config.json >/dev/null 2>&1; then
+    --config /etc/semaphore/config.json 2>&1 | tee /tmp/semaphore-user-add.log; then
     log "✓ Admin user created successfully"
 else
     log "WARNING: Admin user creation failed (may already exist)"
+    log "DEBUG: Check /tmp/semaphore-user-add.log for details"
 fi
 
-# Restart service
+# Restart service (following v1 pattern)
 systemctl start semaphore.service
+sleep 3  # v1 uses sleep 3, not 2
 
 # Wait for API to be ready again
 for i in {1..30}; do
