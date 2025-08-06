@@ -147,16 +147,24 @@ detect_network() {
 
 # Password generation
 generate_password() {
-    local password_type="$1"
-    local length=16
+    local type="${1:-services}"  # "services" or "admin"
+    local length=32
     
-    # Generate alphanumeric password (safe for shell, JSON, YAML)
-    local password=$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-$length)
+    # Generate secure password with guaranteed character types
+    # Using the same secure method from v1
     
-    # Ensure it starts with a letter (avoid issues with some systems)
-    if [[ ! "$password" =~ ^[a-zA-Z] ]]; then
-        password="P${password:1}"
-    fi
+    # Ensure required character types
+    local upper=$(tr -dc 'A-Z' < /dev/urandom | head -c 1)
+    local lower=$(tr -dc 'a-z' < /dev/urandom | head -c 1)
+    local digit=$(tr -dc '0-9' < /dev/urandom | head -c 1)
+    
+    # Generate remaining characters (avoiding problematic chars for JSON/shell)
+    local remaining=$((length - 3))
+    local chars=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c $remaining)
+    
+    # Combine and shuffle
+    local all_chars="${upper}${lower}${digit}${chars}"
+    local password=$(echo "$all_chars" | fold -w1 | shuf | tr -d '\n')
     
     echo "$password"
 }
