@@ -94,44 +94,15 @@ GATEWAY="$GATEWAY"
 NETMASK="$NETMASK"
 EOF
     
-    # Copy setup script (Phase 3)
+    # Load setup script content for embedding
     if [[ -f "${SCRIPT_DIR}/setup-guest.sh" ]]; then
-        cp "${SCRIPT_DIR}/setup-guest.sh" "$WORK_DIR/privatebox-setup/"
-        chmod +x "$WORK_DIR/privatebox-setup/setup-guest.sh"
+        SETUP_SCRIPT_CONTENT=$(cat "${SCRIPT_DIR}/setup-guest.sh" | sed 's/^/      /')
+        log "Setup script loaded for cloud-init embedding"
     else
-        # Create minimal placeholder for now
-        cat > "$WORK_DIR/privatebox-setup/setup-guest.sh" <<'EOF'
-#!/bin/bash
-set -euo pipefail
-
-# Source configuration
-source /etc/privatebox/config.env
-
-# Log start
-echo "PrivateBox guest setup started at $(date)" > /var/log/privatebox-setup.log
-
-# TODO: Install Portainer
-echo "Installing Portainer..." >> /var/log/privatebox-setup.log
-
-# TODO: Install Semaphore
-echo "Installing Semaphore..." >> /var/log/privatebox-setup.log
-
-# Signal completion
-echo "SUCCESS" > /etc/privatebox-install-complete
-echo "Setup completed at $(date)" >> /var/log/privatebox-setup.log
-EOF
-        chmod +x "$WORK_DIR/privatebox-setup/setup-guest.sh"
+        error_exit "setup-guest.sh not found at ${SCRIPT_DIR}/setup-guest.sh"
     fi
     
-    # Create tarball
-    cd "$WORK_DIR"
-    tar -czf privatebox-setup.tar.gz privatebox-setup/
-    
-    # Encode for cloud-init
-    SETUP_TARBALL_B64=$(base64 -w0 < "$WORK_DIR/privatebox-setup.tar.gz")
-    
-    log "Setup package created: $(du -h $WORK_DIR/privatebox-setup.tar.gz | cut -f1)"
-    display "  ✓ Setup package created"
+    display "  ✓ Setup package prepared"
 }
 
 # Generate cloud-init configuration
@@ -169,34 +140,15 @@ write_files:
     content: |
 $(sed 's/^/      /' < "$WORK_DIR/privatebox-setup/config.env")
 
-  - path: /tmp/privatebox-setup.tar.gz
-    permissions: '0644'
-    encoding: b64
-    content: $SETUP_TARBALL_B64
-
-  - path: /usr/local/bin/bootstrap-phase3.sh
+  - path: /usr/local/bin/setup-guest.sh
     permissions: '0755'
     content: |
-      #!/bin/bash
-      set -euo pipefail
-      
-      # Create marker directory
-      mkdir -p /etc/privatebox
-      
-      # Extract setup package
-      cd /tmp
-      tar -xzf privatebox-setup.tar.gz
-      
-      # Run setup
-      /tmp/privatebox-setup/setup-guest.sh
-      
-      # Cleanup
-      rm -rf /tmp/privatebox-setup*
+$SETUP_SCRIPT_CONTENT
 
 runcmd:
   - [mkdir, -p, /etc/privatebox]
   - [mkdir, -p, /var/log]
-  - [/usr/local/bin/bootstrap-phase3.sh]
+  - ['/bin/bash', '/usr/local/bin/setup-guest.sh']
 
 final_message: "PrivateBox bootstrap phase 3 initiated"
 EOF
