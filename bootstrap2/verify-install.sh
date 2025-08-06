@@ -74,15 +74,11 @@ wait_for_cloud_init() {
     log "Waiting for cloud-init to complete..."
     
     while [[ $elapsed -lt $max_wait ]]; do
-        local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" \
-                      "${VM_USERNAME}@${vm_ip}" "cloud-init status 2>/dev/null | grep -o 'status: [a-z]*' | cut -d' ' -f2" || echo "running")
-        
-        if [[ "$status" == "done" ]]; then
+        # Check for cloud-init completion marker file
+        if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" \
+               "${VM_USERNAME}@${vm_ip}" "test -f /var/lib/cloud/instance/boot-finished" 2>/dev/null; then
             log "Cloud-init completed"
             return 0
-        elif [[ "$status" == "error" ]]; then
-            log "Cloud-init failed with error"
-            return 1
         fi
         
         sleep 10
