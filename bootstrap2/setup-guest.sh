@@ -115,7 +115,7 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
   "ldap": {
     "enable": false
   },
-  "oidc_providers": [],
+  "oidc_providers": {},
   "password_login_disable": false,
   "non_admin_can_create_project": false
 }
@@ -123,6 +123,8 @@ EOF
 
 # Install Semaphore
 log "Installing Semaphore..."
+# Fix ownership for Semaphore data directory (UID 1001)
+chown -R 1001:1001 /opt/semaphore/data
 cat > /etc/containers/systemd/semaphore.container <<EOF
 [Unit]
 Description=Semaphore Container

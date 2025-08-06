@@ -76,6 +76,9 @@ check_marker_file() {
         local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" \
                       "${VM_USERNAME}@${vm_ip}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
         
+        # Trim whitespace from status
+        status=$(echo "$status" | tr -d '[:space:]')
+        
         case "$status" in
             SUCCESS)
                 log "Installation completed successfully"
