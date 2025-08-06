@@ -1,22 +1,21 @@
 #!/bin/bash
 # PrivateBox Quick Start Script
 # 
-# This script provides a simple installation method for PrivateBox
+# Simple installation method for PrivateBox
 # 
 # Recommended usage (safer):
 #   curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
 #   sudo bash quickstart.sh [options]
 #
-# One-line usage (less secure):
+# One-line usage:
 #   curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
 #
 # Available options:
-#   --ip <IP>           Set static IP for the VM
-#   --gateway <IP>      Set gateway IP
-#   --no-auto          Skip network auto-discovery
+#   --dry-run          Run pre-flight checks and generate config only (no VM)
 #   --cleanup          Remove downloaded files after installation
 #   --branch <branch>  Use specific git branch (default: main)
 #   --yes, -y          Skip confirmation prompt
+#   --verbose, -v      Show detailed output
 #   --help             Show this help message
 
 set -euo pipefail
@@ -25,318 +24,268 @@ set -euo pipefail
 REPO_URL="https://github.com/Rasped/privatebox"
 REPO_BRANCH="main"
 TEMP_DIR="/tmp/privatebox-quickstart"
-CLEANUP_AFTER=true  # Default to cleaning up
+CLEANUP_AFTER=true
 SKIP_CONFIRMATION=false
+DRY_RUN=false
+VERBOSE=false
 
 # Color codes for output
 if [[ -t 1 ]]; then
     RED='\033[0;31m'
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
     NC='\033[0m' # No Color
 else
     # No colors for non-terminal output
     RED=''
     GREEN=''
     YELLOW=''
+    BLUE=''
     NC=''
 fi
 
 print_banner() {
+    echo -e "${BLUE}==========================================="
+    echo "     PrivateBox Quick Start"
     echo "==========================================="
-    echo "     PrivateBox Quick Start Installer"
-    echo "==========================================="
+    echo -e "${NC}"
+}
+
+print_usage() {
+    echo "Usage: $0 [OPTIONS]"
     echo ""
+    echo "Options:"
+    echo "  --dry-run          Run pre-flight checks and generate config only"
+    echo "  --cleanup          Remove downloaded files after installation"
+    echo "  --branch <branch>  Use specific git branch (default: main)"
+    echo "  --yes, -y          Skip confirmation prompt"
+    echo "  --verbose, -v      Show detailed output"
+    echo "  --help             Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                    # Interactive installation"
+    echo "  $0 --yes              # Skip confirmation"
+    echo "  $0 --dry-run          # Test without creating VM"
+    echo "  $0 --branch develop   # Use develop branch"
 }
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
+error_exit() {
+    echo -e "${RED}ERROR: $1${NC}" >&2
+    exit 1
 }
 
-print_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+success_msg() {
+    echo -e "${GREEN}✓ $1${NC}"
 }
 
-print_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+warning_msg() {
+    echo -e "${YELLOW}⚠ $1${NC}"
 }
 
-show_usage() {
-    cat << EOF
-PrivateBox Quick Start Script
-
-Usage: 
-    sudo bash quickstart.sh [options]
-
-Options:
-    --ip <IP>           Set static IP for the VM
-    --gateway <IP>      Set gateway IP  
-    --no-auto          Skip network auto-discovery
-    --no-cleanup       Keep downloaded files after installation
-    --branch <branch>  Use specific git branch (default: main)
-    --yes, -y          Skip confirmation prompt
-    --help             Show this help message
-
-Examples:
-    # Download and run (recommended)
-    curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
-    sudo bash quickstart.sh
-
-    # Basic installation with auto-discovery
-    sudo bash quickstart.sh
-
-    # Set custom IP address
-    sudo bash quickstart.sh --ip 192.168.1.50
-
-    # Use specific gateway
-    sudo bash quickstart.sh --ip 192.168.1.50 --gateway 192.168.1.1
-
-    # Use development branch
-    sudo bash quickstart.sh --branch develop
-
-    # Skip confirmation prompt
-    sudo bash quickstart.sh --yes
-
-EOF
+info_msg() {
+    echo -e "$1"
 }
 
-check_prerequisites() {
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --cleanup)
+            CLEANUP_AFTER=true
+            shift
+            ;;
+        --branch)
+            if [[ -z "${2:-}" ]]; then
+                error_exit "Branch name required for --branch option"
+            fi
+            REPO_BRANCH="$2"
+            shift 2
+            ;;
+        --yes|-y)
+            SKIP_CONFIRMATION=true
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
+        --help)
+            print_banner
+            print_usage
+            exit 0
+            ;;
+        *)
+            error_exit "Unknown option: $1\nUse --help for usage information"
+            ;;
+    esac
+done
+
+# Pre-flight checks
+run_preflight_checks() {
+    info_msg "Running pre-flight checks..."
+    
+    # Check if running as root
     if [[ $EUID -ne 0 ]]; then
-        print_error "This script must be run as root (use sudo)"
-        exit 1
+        error_exit "This script must be run as root (use sudo)"
     fi
-
-    if ! command -v qm &> /dev/null; then
-        print_error "This script must be run on a Proxmox VE host"
-        print_error "The 'qm' command was not found"
-        exit 1
-    fi
-
-    if command -v pveversion &> /dev/null; then
-        print_info "Detected Proxmox VE: $(pveversion | cut -d'/' -f2)"
-    fi
-
-    local missing_tools=()
     
-    for tool in curl tar jq; do
-        if ! command -v $tool &> /dev/null; then
-            missing_tools+=($tool)
+    # Check if running on Proxmox
+    if [[ ! -d /etc/pve ]]; then
+        error_exit "This script must be run on a Proxmox VE host"
+    fi
+    
+    # Check for required commands
+    for cmd in git curl wget qm; do
+        if ! command -v $cmd &> /dev/null; then
+            error_exit "Required command '$cmd' not found"
         fi
     done
-
-    if [ ${#missing_tools[@]} -gt 0 ]; then
-        print_warn "Missing tools: ${missing_tools[*]}"
-        print_info "Installing missing tools..."
-        if ! apt-get update >/dev/null 2>&1; then
-            print_error "Failed to update package lists"
-            exit 1
-        fi
-        if ! apt-get install -y "${missing_tools[@]}" >/dev/null 2>&1; then
-            print_error "Failed to install required tools: ${missing_tools[*]}"
-            exit 1
-        fi
+    
+    # Check internet connectivity
+    if ! curl -s --head --connect-timeout 5 https://github.com > /dev/null; then
+        error_exit "Cannot reach GitHub. Check internet connection"
     fi
+    
+    success_msg "Pre-flight checks passed"
 }
 
+# Download repository
 download_repository() {
-    print_info "Downloading PrivateBox bootstrap files..."
+    info_msg "Downloading PrivateBox repository..."
     
+    # Clean up any existing directory
     if [[ -d "$TEMP_DIR" ]]; then
-        print_info "Removing existing installation directory..."
         rm -rf "$TEMP_DIR"
     fi
     
-    mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR"
-
-    print_info "Downloading from ${REPO_URL}/archive/${REPO_BRANCH}.tar.gz"
-    
-    local temp_tar="/tmp/privatebox-$$.tar.gz"
-    
-    if ! curl -fsSL "${REPO_URL}/archive/${REPO_BRANCH}.tar.gz" -o "$temp_tar"; then
-        print_error "Failed to download from GitHub"
-        print_error "Check your internet connection and try again"
-        exit 1
+    # Clone repository
+    if ! git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$TEMP_DIR" &>/dev/null; then
+        error_exit "Failed to download repository from branch '$REPO_BRANCH'"
     fi
     
-    if ! tar -xzf "$temp_tar" --strip-components=1 "privatebox-${REPO_BRANCH}/bootstrap"; then
-        print_error "Failed to extract bootstrap files"
-        print_error "This might be a temporary issue. Please try again."
-        rm -f "$temp_tar"
-        exit 1
-    fi
-    
-    rm -f "$temp_tar"
-
-    print_info "Bootstrap files downloaded to $TEMP_DIR"
+    success_msg "Repository downloaded (branch: $REPO_BRANCH)"
 }
 
-prepare_bootstrap() {
-    print_info "Preparing bootstrap environment..."
-    
-    find "$TEMP_DIR/bootstrap" -name "*.sh" -type f -exec chmod +x {} \;
-    
-    if [[ ! -f "$TEMP_DIR/bootstrap/bootstrap.sh" ]]; then
-        print_error "bootstrap.sh not found in downloaded repository"
-        exit 1
-    fi
-}
-
-run_bootstrap() {
-    local bootstrap_args=()
-    
-    if [[ "${USE_AUTO_DISCOVERY:-true}" == "false" ]]; then
-        bootstrap_args+=("--no-auto")
+# Show confirmation prompt
+confirm_installation() {
+    if [[ "$SKIP_CONFIRMATION" == true ]]; then
+        return 0
     fi
     
-    if [[ -n "${STATIC_IP:-}" ]]; then
-        bootstrap_args+=("--ip" "$STATIC_IP")
-    fi
-    
-    if [[ -n "${GATEWAY_IP:-}" ]]; then
-        bootstrap_args+=("--gateway" "$GATEWAY_IP")
-    fi
-    
-    
-    print_info "Starting PrivateBox installation..."
-    print_info "This process will:"
-    print_info "  1. Detect network configuration"
-    print_info "  2. Create Debian VM"
-    print_info "  3. Install and configure services"
-    print_info "  4. Wait for complete installation (5-10 minutes)"
+    echo ""
+    info_msg "Installation Summary:"
+    info_msg "  • Repository branch: $REPO_BRANCH"
+    info_msg "  • Installation path: $TEMP_DIR"
+    info_msg "  • Dry-run mode: $DRY_RUN"
+    info_msg "  • Verbose output: $VERBOSE"
+    info_msg "  • Cleanup after: $CLEANUP_AFTER"
     echo ""
     
-    cd "$TEMP_DIR/bootstrap"
-    
-    if [[ ${#bootstrap_args[@]} -gt 0 ]]; then
-        print_info "Running: ./bootstrap.sh ${bootstrap_args[*]}"
-        ./bootstrap.sh "${bootstrap_args[@]}"
+    if [[ "$DRY_RUN" == true ]]; then
+        info_msg "This will run pre-flight checks and generate configuration only."
+        info_msg "No VM will be created."
     else
-        ./bootstrap.sh
+        warning_msg "This will create a new VM with ID 9000."
+        warning_msg "Any existing VM with ID 9000 will be destroyed!"
+    fi
+    
+    echo ""
+    read -p "Do you want to continue? (yes/no) " -n 1 -r
+    echo ""
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        info_msg "Installation cancelled"
+        exit 0
     fi
 }
 
-cleanup() {
-    if [[ "$CLEANUP_AFTER" == "true" ]]; then
-        if [[ -d "$TEMP_DIR" ]]; then
-            print_info "Cleaning up temporary files..."
-            rm -rf "$TEMP_DIR"
+# Run bootstrap
+run_bootstrap() {
+    info_msg "Starting PrivateBox bootstrap..."
+    
+    cd "$TEMP_DIR"
+    
+    # Use the bootstrap script
+    local bootstrap_script="./bootstrap/bootstrap.sh"
+    if [[ ! -f "$bootstrap_script" ]]; then
+        error_exit "Bootstrap script not found at $bootstrap_script"
+    fi
+    
+    # Build bootstrap command with arguments
+    local bootstrap_cmd="$bootstrap_script"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        bootstrap_cmd="$bootstrap_cmd --dry-run"
+    fi
+    
+    if [[ "$VERBOSE" == true ]]; then
+        bootstrap_cmd="$bootstrap_cmd --verbose"
+    fi
+    
+    # Run bootstrap
+    if [[ "$VERBOSE" == true ]]; then
+        if ! bash $bootstrap_cmd; then
+            error_exit "Bootstrap failed. Check /tmp/privatebox-bootstrap.log for details"
         fi
     else
-        print_info "Installation files retained at: $TEMP_DIR"
-        print_info "To remove manually: rm -rf $TEMP_DIR"
+        if ! bash $bootstrap_cmd 2>&1 | while IFS= read -r line; do
+            # Filter output for non-verbose mode
+            if [[ "$line" =~ ^Phase ]] || [[ "$line" =~ ^✓ ]] || [[ "$line" =~ ^✅ ]] || \
+               [[ "$line" =~ ERROR ]] || [[ "$line" =~ "Installation Complete" ]] || \
+               [[ "$line" =~ "VM Details:" ]] || [[ "$line" =~ "Access Credentials:" ]] || \
+               [[ "$line" =~ "Service Access:" ]] || [[ "$line" =~ "IP Address:" ]] || \
+               [[ "$line" =~ "Password:" ]] || [[ "$line" =~ "http://" ]]; then
+                echo "$line"
+            fi
+        done; then
+            error_exit "Bootstrap failed. Check /tmp/privatebox-bootstrap.log for details"
+        fi
     fi
 }
 
-main() {
-    if [[ -d "$TEMP_DIR" ]]; then
+# Cleanup function
+cleanup() {
+    if [[ "$CLEANUP_AFTER" == true ]] && [[ -d "$TEMP_DIR" ]]; then
+        info_msg "Cleaning up temporary files..."
         rm -rf "$TEMP_DIR"
+        success_msg "Cleanup complete"
     fi
-    
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --ip)
-                STATIC_IP="$2"
-                shift 2
-                ;;
-            --gateway)
-                GATEWAY_IP="$2"
-                shift 2
-                ;;
-            --no-auto)
-                USE_AUTO_DISCOVERY=false
-                shift
-                ;;
-            --no-cleanup)
-                CLEANUP_AFTER=false
-                shift
-                ;;
-            --branch)
-                REPO_BRANCH="$2"
-                shift 2
-                ;;
-            --yes|-y)
-                SKIP_CONFIRMATION=true
-                shift
-                ;;
-            --help|-h)
-                show_usage
-                exit 0
-                ;;
-            *)
-                print_error "Unknown option: $1"
-                show_usage
-                exit 1
-                ;;
-        esac
-    done
+}
 
+# Main execution
+main() {
+    # Set trap for cleanup
+    trap cleanup EXIT
+    
+    # Print banner
     print_banner
     
-    echo "Welcome to PrivateBox!"
-    echo ""
-    echo "This installer will set up a privacy-focused router system on your Proxmox server."
-    echo ""
-    echo "What will happen:"
-    echo "  ✓ Create a Debian virtual machine"
-    echo "  ✓ Install Portainer for container management"  
-    echo "  ✓ Install Semaphore for Ansible automation"
-    echo "  ✓ Configure networking and security settings"
-    echo "  ✓ Auto-detect network and assign IP address"
-    echo ""
-    echo "Requirements:"
-    echo "  • Proxmox VE 7.0 or higher"
-    echo "  • At least 4GB free RAM"
-    echo "  • At least 10GB free storage"
-    echo "  • Internet connection"
-    echo ""
-    echo "The installation will take approximately 5-10 minutes."
-    echo ""
+    # Run pre-flight checks
+    run_preflight_checks
     
-    if [[ "$SKIP_CONFIRMATION" != "true" ]]; then
-        if [[ -t 0 ]]; then
-            # Interactive mode - ask for confirmation
-            read -p "Do you want to continue? (yes/no) " -n 1 -r
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                print_info "Installation cancelled."
-                exit 0
-            fi
-        else
-            # Non-interactive mode - proceed with notice
-            print_info "Running in non-interactive mode. Proceeding with installation..."
-            print_info "To cancel, press Ctrl+C within the next 3 seconds..."
-            sleep 3
-        fi
-        echo ""
-    else
-        print_info "Skipping confirmation (--yes flag provided)"
-        echo ""
-    fi
+    # Show confirmation
+    confirm_installation
     
-    check_prerequisites
+    # Download repository
     download_repository
-    prepare_bootstrap
+    
+    # Run bootstrap
     run_bootstrap
     
-    cleanup
-    
-    print_info ""
-    print_info "PrivateBox installation completed!"
-    print_info "Check the output above for connection details."
-}
-
-cleanup_on_exit() {
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        print_error "Installation failed with exit code: $exit_code"
-    fi
-    # Always clean up unless --cleanup=false was explicitly set
-    if [[ "$CLEANUP_AFTER" != "false" ]] && [[ -d "$TEMP_DIR" ]]; then
-        rm -rf "$TEMP_DIR"
+    # Success message
+    echo ""
+    if [[ "$DRY_RUN" == true ]]; then
+        success_msg "Dry-run completed successfully!"
+        info_msg "Run without --dry-run to create the VM"
+    else
+        success_msg "PrivateBox installation completed successfully!"
+        info_msg "Check /tmp/privatebox-bootstrap.log for detailed logs"
     fi
 }
 
-trap cleanup_on_exit EXIT
-
+# Run main function
 main "$@"

@@ -1,188 +1,229 @@
 #!/bin/bash
-# PrivateBox Bootstrap Script
-# This is the single entry point for complete PrivateBox installation
-# It handles everything from network discovery to service verification
 #
-# Exit codes:
-#   0 - Success
-#   1 - General error
-#   2 - Missing dependencies
-#   4 - Not running as root
-#   5 - Not running on Proxmox
+# PrivateBox Bootstrap - Main Orchestrator
+# Simple, robust, phased installation process
+#
 
-# Get script directory
+set -euo pipefail
+
+# Script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/lib"
+LOG_FILE="/tmp/privatebox-bootstrap.log"
+CONFIG_FILE="/tmp/privatebox-config.conf"
 
-# Source common library which provides all functions and constants
-source "${SCRIPT_DIR}/lib/common.sh"
+# Default values
+DRY_RUN=false
+VERBOSE=false
+VMID=9000
 
-# Setup standardized error handling
-setup_error_handling
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
+        --help|-h)
+            cat <<EOF
+PrivateBox Bootstrap
 
-# Print banner
-print_banner() {
-    echo ""
-    echo "==========================================="
-    echo "     PrivateBox Bootstrap Installer"
-    echo "==========================================="
-    echo ""
+Usage: $0 [OPTIONS]
+
+Options:
+    --dry-run       Run pre-flight checks and generate config only (no VM creation)
+    --verbose, -v   Show detailed output
+    --help, -h      Show this help message
+
+The bootstrap process has 4 phases:
+1. Host preparation - Pre-flight checks and config generation
+2. VM provisioning - Create and configure VM with cloud-init
+3. Guest setup - Install services inside VM
+4. Verification - Confirm successful installation
+
+Logs are written to: $LOG_FILE
+Configuration saved to: $CONFIG_FILE
+EOF
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Initialize logging
+init_log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PrivateBox Bootstrap starting" > "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Arguments: dry-run=$DRY_RUN, verbose=$VERBOSE" >> "$LOG_FILE"
 }
 
-# Use check_root from common.sh
-
-# Parse command line arguments
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --help|-h)
-                echo "Usage: $0 [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  --help, -h  Show this help message"
-                exit 0
-                ;;
-            *)
-                log_error "Unknown option: $1"
-                echo "Use --help for usage information"
-                exit 1
-                ;;
-        esac
-    done
-}
-
-
-# Main installation function
-main() {
-    # Parse command line arguments first
-    parse_args "$@"
-    
-    print_banner
-    
-    # Basic checks
-    check_root
-    
-    # Check if we're on Proxmox
-    if [[ ! -f /etc/pve/pve-root-ca.pem ]] && [[ ! -d /etc/pve ]]; then
-        log_error "This script must be run on a Proxmox VE host"
-        exit ${EXIT_NOT_PROXMOX}
+# Log function
+log() {
+    local message="$1"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $message" >> "$LOG_FILE"
+    if [[ "$VERBOSE" == true ]]; then
+        echo "$message"
     fi
-    
-    log_info "Starting PrivateBox installation..."
-    
-    # Set environment variable to wait for cloud-init
-    export WAIT_FOR_CLOUD_INIT=true
-    
-    # Run the main creation script with auto-discovery
-    log_info "Starting Debian VM creation with network auto-discovery..."
-    
-    "${SCRIPT_DIR}/scripts/create-debian-vm.sh" --auto-discover
+}
+
+# Display important messages (always shown)
+display() {
+    local message="$1"
+    echo "$message"
+    log "$message"
+}
+
+# Error handler
+error_exit() {
+    local message="$1"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $message" >> "$LOG_FILE"
+    echo "ERROR: $message" >&2
+    echo "Check log file for details: $LOG_FILE"
+    exit 1
+}
+
+# Cleanup function
+cleanup() {
     local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        log "Bootstrap failed with exit code: $exit_code"
+        display "❌ Bootstrap failed. Check $LOG_FILE for details"
+    fi
+}
+
+trap cleanup EXIT
+
+# Main execution
+main() {
+    init_log
     
-    echo ""
-    echo "==========================================="
+    display "======================================"
+    display "   PrivateBox Bootstrap"
+    display "======================================"
+    display ""
     
-    # Load the generated config to show access info
-    if [[ -f "${SCRIPT_DIR}/config/privatebox.conf" ]]; then
-        source "${SCRIPT_DIR}/config/privatebox.conf" || check_result $? "Failed to load configuration file"
-        
-        # Check for installation errors first
-        if [[ -n "${INSTALLATION_ERROR_STAGE:-}" ]]; then
-            echo "     Installation Failed"
-            echo "==========================================="
-            echo ""
-            echo -e "${RED:-\033[0;31m}ERROR: Cloud-init installation failed!${NC:-\033[0m}"
-            echo ""
-            echo "Error Details:"
-            echo "  Stage: ${INSTALLATION_ERROR_STAGE}"
-            echo "  Message: ${INSTALLATION_ERROR_MESSAGE:-No error message}"
-            echo "  Exit Code: ${INSTALLATION_ERROR_CODE:-1}"
-            echo ""
-            echo "VM Information:"
-            echo "  VM IP Address: ${STATIC_IP}"
-            echo "  SSH: ssh ${VM_USERNAME}@${STATIC_IP}"
-            echo ""
-            echo "To investigate the error:"
-            echo "  1. SSH into the VM: ssh ${VM_USERNAME}@${STATIC_IP}"
-            echo "  2. Check cloud-init logs: sudo cat /var/log/cloud-init-output.log"
-            echo "  3. Check status file: cat /etc/privatebox-cloud-init-complete"
-            echo ""
-            log_error "Installation failed at stage: ${INSTALLATION_ERROR_STAGE}"
-            return ${EXIT_ERROR}
-        elif [[ $exit_code -eq 0 ]]; then
-            echo "     Installation Complete!"
-            echo "==========================================="
-            echo ""
-            echo "VM Access Information:"
-            echo "  VM IP Address: ${STATIC_IP}"
-            echo "  SSH Access: ssh ${VM_USERNAME}@${STATIC_IP}"
-            echo ""
-            echo "VM Login Credentials:"
-            echo "  Username: ${VM_USERNAME}"
-            echo "  Password: ${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
-            echo ""
-            echo "Web Services (accessible after VM login):"
-            echo "  Portainer: http://${STATIC_IP}:9000"
-            echo "  Semaphore: http://${STATIC_IP}:3000"
-            echo ""
-            echo "Semaphore Credentials:"
-            echo "  Semaphore Admin: admin"
-            
-            # Try to get Semaphore password from config
-            if [[ -n "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
-                echo "  Semaphore Password: ${SEMAPHORE_ADMIN_PASSWORD}"
-            else
-                echo "  Semaphore Password: (see /root/.credentials/semaphore_credentials.txt on VM)"
-            fi
-            echo ""
-            echo "IMPORTANT: Please change the VM password after first login!"
-            echo ""
-            log_info "PrivateBox is ready for use!"
-        else
-            echo "     VM Created - Waiting for Installation"
-            echo "==========================================="
-            echo ""
-            echo "The VM was created successfully!"
-            echo "Cloud-init is still running and will complete in 5-10 minutes."
-            echo ""
-            echo "VM Access Information:"
-            echo "  VM IP Address: ${STATIC_IP}"
-            echo "  SSH Access: ssh ${VM_USERNAME}@${STATIC_IP}"
-            echo ""
-            echo "VM Login Credentials:"
-            echo "  Username: ${VM_USERNAME}"
-            echo "  Password: ${ADMIN_PASSWORD:-${VM_PASSWORD:-Changeme123}}"
-            echo ""
-            echo "Web Services (will be available once installation completes):"
-            echo "  Portainer: http://${STATIC_IP}:9000"
-            echo "  Semaphore: http://${STATIC_IP}:3000"
-            echo ""
-            echo "Semaphore Credentials:"
-            echo "  Semaphore Admin: admin"
-            
-            # Try to get Semaphore password from config
-            if [[ -n "${SEMAPHORE_ADMIN_PASSWORD:-}" ]]; then
-                echo "  Semaphore Password: ${SEMAPHORE_ADMIN_PASSWORD}"
-            else
-                echo "  Semaphore Password: (will be available at /root/.credentials/semaphore_credentials.txt on VM)"
-            fi
-            echo ""
-            echo "To check if installation is complete:"
-            echo "  ssh ${VM_USERNAME}@${STATIC_IP} 'cat /etc/privatebox-cloud-init-complete'"
-            echo ""
-            echo "IMPORTANT: Please change the VM password after first login!"
-            echo ""
-            log_info "VM created successfully. Waiting for cloud-init to complete..."
-        fi
-    else
-        echo "     Installation Failed"
-        echo "==========================================="
-        log_error "Installation failed. Please check the logs."
-        return ${EXIT_ERROR}
+    # Phase 1: Host Preparation
+    display "Phase 1: Host Preparation"
+    display "-------------------------"
+    log "Starting Phase 1: Host preparation"
+    
+    if [[ ! -f "${SCRIPT_DIR}/prepare-host.sh" ]]; then
+        error_exit "prepare-host.sh not found"
     fi
     
-    return ${EXIT_SUCCESS}
+    if ! bash "${SCRIPT_DIR}/prepare-host.sh"; then
+        error_exit "Host preparation failed"
+    fi
+    
+    # Load generated config
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        error_exit "Configuration file not generated: $CONFIG_FILE"
+    fi
+    
+    source "$CONFIG_FILE"
+    log "Configuration loaded successfully"
+    
+    display "✅ Host preparation complete"
+    display ""
+    
+    # Check for dry-run mode
+    if [[ "$DRY_RUN" == true ]]; then
+        display "======================================"
+        display "   Dry-run Complete"
+        display "======================================"
+        display ""
+        display "Configuration generated at: $CONFIG_FILE"
+        display "Network settings:"
+        display "  Gateway: ${GATEWAY:-not set}"
+        display "  Bridge: ${VM_NET_BRIDGE:-not set}"
+        display "  VM IP: ${STATIC_IP:-not set}"
+        display ""
+        display "Credentials generated:"
+        display "  Admin password: ${ADMIN_PASSWORD:-not set}"
+        display "  Services password: ${SERVICES_PASSWORD:-not set}"
+        display ""
+        display "Run without --dry-run to create VM"
+        log "Dry-run completed successfully"
+        exit 0
+    fi
+    
+    # Phase 2: VM Provisioning
+    display "Phase 2: VM Provisioning"
+    display "------------------------"
+    log "Starting Phase 2: VM provisioning"
+    
+    if [[ ! -f "${SCRIPT_DIR}/create-vm.sh" ]]; then
+        error_exit "create-vm.sh not found"
+    fi
+    
+    if ! bash "${SCRIPT_DIR}/create-vm.sh"; then
+        error_exit "VM creation failed"
+    fi
+    
+    display "✅ VM provisioning complete"
+    display ""
+    
+    # Note: Phase 3 runs inside the VM via cloud-init
+    display "Phase 3: Guest Configuration"
+    display "----------------------------"
+    display "⏳ Waiting for guest setup to complete..."
+    display "   This may take 5-10 minutes"
+    log "Phase 3: Guest configuration started via cloud-init"
+    
+    # Phase 4: Host Verification
+    display ""
+    display "Phase 4: Installation Verification"
+    display "----------------------------------"
+    log "Starting Phase 4: Host verification"
+    
+    if [[ ! -f "${SCRIPT_DIR}/verify-install.sh" ]]; then
+        error_exit "verify-install.sh not found"
+    fi
+    
+    if ! bash "${SCRIPT_DIR}/verify-install.sh"; then
+        error_exit "Installation verification failed"
+    fi
+    
+    display "✅ Installation verified successfully"
+    display ""
+    
+    # Final summary
+    display "======================================"
+    display "   Installation Complete!"
+    display "======================================"
+    display ""
+    display "VM Details:"
+    display "  VM ID: $VMID"
+    display "  IP Address: $STATIC_IP"
+    display "  Username: ${VM_USERNAME:-debian}"
+    display ""
+    display "Access Credentials:"
+    display "  SSH: ssh ${VM_USERNAME:-debian}@$STATIC_IP"
+    display "  Password: $ADMIN_PASSWORD"
+    display ""
+    display "Service Access:"
+    display "  Portainer: http://$STATIC_IP:9000"
+    display "  Semaphore: http://$STATIC_IP:3000"
+    display "  Admin Password: $SERVICES_PASSWORD"
+    display ""
+    display "Logs saved to: $LOG_FILE"
+    display "Configuration saved to: $CONFIG_FILE"
+    
+    log "Bootstrap completed successfully"
+    
+    # Clean up config file (contains passwords)
+    if [[ -f "$CONFIG_FILE" ]]; then
+        log "Removing temporary config file"
+        rm -f "$CONFIG_FILE"
+    fi
 }
 
 # Run main function
 main "$@"
-exit $?
