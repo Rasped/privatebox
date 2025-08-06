@@ -97,8 +97,12 @@ SEMAPHORE_CONFIG="/opt/semaphore/config/config.json"
 cat > "$SEMAPHORE_CONFIG" <<EOF
 {
   "bolt": {
-    "host": "/opt/semaphore/data/database.boltdb"
+    "host": "/var/lib/semaphore/database.boltdb"
   },
+  "dialect": "bolt",
+  "port": "3000",
+  "interface": "",
+  "tmp_path": "/tmp/semaphore",
   "web": {
     "listen": "0.0.0.0:3000"
   },
@@ -132,12 +136,16 @@ Volume=/opt/semaphore/data:/var/lib/semaphore:z
 Volume=/opt/semaphore/config:/etc/semaphore:z
 PublishPort=3000:3000
 Environment=SEMAPHORE_DB_DIALECT=bolt
-Environment=SEMAPHORE_DB=bolt:///var/lib/semaphore/database.boltdb
+Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
 Environment=SEMAPHORE_ADMIN=admin
 Environment=SEMAPHORE_ADMIN_PASSWORD=${SERVICES_PASSWORD}
 Environment=SEMAPHORE_ADMIN_NAME=Administrator
 Environment=SEMAPHORE_ADMIN_EMAIL=admin@privatebox.local
 Environment=SEMAPHORE_ACCESS_KEY_ENCRYPTION=$(head -c32 /dev/urandom | base64 | head -c32)
+Environment=SEMAPHORE_CONFIG_PATH=/etc/semaphore/config.json
+Environment=SEMAPHORE_PLAYBOOK_PATH=/tmp/semaphore/
+Environment=TZ=UTC
+Exec=semaphore server --config=/etc/semaphore/config.json
 
 [Service]
 Restart=always
