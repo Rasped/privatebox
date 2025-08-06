@@ -40,24 +40,16 @@ error_exit() {
 # Wait for VM to be accessible
 wait_for_vm() {
     local elapsed=0
-    local vm_ip=""
+    local vm_ip="${STATIC_IP}"  # Use hardcoded IP from config
     
-    log "Waiting for VM to be accessible..."
+    log "Waiting for VM to be accessible at $vm_ip..."
     
     while [[ $elapsed -lt $TIMEOUT ]]; do
-        # Get VM IP
-        vm_ip=$(qm guest cmd $VMID network-get-interfaces 2>/dev/null | \
-                jq -r '.[] | select(.name=="enp0s18" or .name=="eth0") | .["ip-addresses"][] | select(.["ip-address-type"]=="ipv4") | .["ip-address"]' 2>/dev/null || true)
-        
-        if [[ -n "$vm_ip" ]]; then
-            log "VM IP detected: $vm_ip"
-            
-            # Try SSH connection
-            if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" "${VM_USERNAME}@${vm_ip}" "echo 'SSH connection successful'" &>/dev/null; then
-                log "SSH connection established"
-                echo "$vm_ip"
-                return 0
-            fi
+        # Try SSH connection directly to known IP
+        if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" "${VM_USERNAME}@${vm_ip}" "echo 'SSH connection successful'" &>/dev/null; then
+            log "SSH connection established to $vm_ip"
+            echo "$vm_ip"
+            return 0
         fi
         
         sleep $CHECK_INTERVAL
@@ -69,6 +61,7 @@ wait_for_vm() {
         fi
     done
     
+    log "Timeout waiting for VM at $vm_ip"
     return 1
 }
 
