@@ -179,8 +179,23 @@ for i in {1..30}; do
     sleep 5
 done
 
-# IMPORTANT: Create Semaphore admin user BEFORE starting service to avoid BoltDB corruption
-log "Creating Semaphore admin user before service start..."
+# Start Semaphore service first to let it initialize database
+log "Starting Semaphore service for initial database setup..."
+systemctl start semaphore.service || error_exit "Failed to start Semaphore"
+systemctl enable semaphore.service || log "Warning: Failed to enable Semaphore for boot"
+
+# Wait for Semaphore to initialize database
+log "Waiting for Semaphore to initialize..."
+for i in {1..30}; do
+    if curl -sf http://localhost:3000/api/ping > /dev/null 2>&1; then
+        log "Semaphore is ready"
+        break
+    fi
+    sleep 2
+done
+
+# Now create admin user using the stop/start pattern (matching v1 exactly)
+log "Creating Semaphore admin user..."
 
 # Ensure SERVICES_PASSWORD is set
 if [[ -z "${SERVICES_PASSWORD}" ]]; then
@@ -189,8 +204,13 @@ if [[ -z "${SERVICES_PASSWORD}" ]]; then
 else
     log "DEBUG: SERVICES_PASSWORD is set (length: ${#SERVICES_PASSWORD})"
     
-    # Initialize BoltDB with admin user BEFORE starting service
-    log "Initializing Semaphore database with admin user..."
+    # Stop service to modify database
+    log "Stopping Semaphore to create admin user..."
+    systemctl stop semaphore.service
+    sleep 2
+    
+    # Create admin user using container (matching v1 pattern)
+    log "Adding admin user to database..."
     if podman run --rm \
         -v /opt/semaphore/config:/etc/semaphore:Z \
         -v /opt/semaphore/data:/var/lib/semaphore:Z \
@@ -207,22 +227,21 @@ else
         log "WARNING: Admin user creation failed (may already exist)"
         log "DEBUG: Check /tmp/semaphore-user-add.log for details"
     fi
+    
+    # Restart service
+    log "Restarting Semaphore..."
+    systemctl start semaphore.service
+    sleep 3
+    
+    # Wait for API to be ready again
+    for i in {1..30}; do
+        if curl -sf http://localhost:3000/api/ping > /dev/null 2>&1; then
+            log "Semaphore API ready after restart"
+            break
+        fi
+        sleep 2
+    done
 fi
-
-# NOW start Semaphore service with admin user already in database
-log "Starting Semaphore service..."
-systemctl start semaphore.service || error_exit "Failed to start Semaphore"
-systemctl enable semaphore.service || log "Warning: Failed to enable Semaphore for boot"
-
-# Wait for Semaphore API to be ready
-log "Waiting for Semaphore to be ready..."
-for i in {1..30}; do
-    if curl -sf http://localhost:3000/api/ping > /dev/null 2>&1; then
-        log "Semaphore is ready"
-        break
-    fi
-    sleep 5
-done
 
 # Configure Semaphore via API
 log "Configuring Semaphore via API..."
