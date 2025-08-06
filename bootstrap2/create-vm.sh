@@ -277,11 +277,10 @@ main() {
 
 # Cleanup function
 cleanup() {
-    # Remove snippet file if it exists
-    [[ -f "/var/lib/vz/snippets/privatebox-${VMID}.yml" ]] && \
-        rm -f "/var/lib/vz/snippets/privatebox-${VMID}.yml"
+    # NOTE: Don't remove snippet file - it's needed by cloud-init when VM boots
+    # Snippet will be cleaned up when VM is destroyed
     
-    # Remove work directory
+    # Remove work directory only
     [[ -d "$WORK_DIR" ]] && rm -rf "$WORK_DIR"
 }
 
