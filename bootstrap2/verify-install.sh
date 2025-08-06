@@ -57,7 +57,7 @@ wait_for_vm() {
         
         # Show progress
         if [[ $((elapsed % 30)) -eq 0 ]]; then
-            display "   Still waiting... (${elapsed}s elapsed)"
+            echo "   Still waiting... (${elapsed}s elapsed)" >&2
         fi
     done
     
