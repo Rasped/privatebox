@@ -468,6 +468,49 @@ setup_template_synchronization() {
     return 0
 }
 
+# Generate VM SSH key pair (for use during setup)
+generate_vm_ssh_key_pair() {
+    log_info "Generating SSH key pair for VM self-management..."
+    
+    local vm_key_path="/root/.credentials/semaphore_vm_key"
+    local vm_key_comment="semaphore-vm-self-management@$(hostname)"
+    
+    # Ensure credentials directory exists
+    mkdir -p /root/.credentials
+    chmod 700 /root/.credentials
+    
+    # Remove existing keys if they exist
+    rm -f "${vm_key_path}" "${vm_key_path}.pub"
+    
+    # Generate new SSH key pair
+    ssh-keygen -t ed25519 -f "${vm_key_path}" -C "${vm_key_comment}" -N "" -q
+    
+    if [ $? -ne 0 ]; then
+        log_error "Failed to generate VM SSH key pair"
+        return 1
+    fi
+    
+    # Set secure permissions
+    chmod 600 "${vm_key_path}"
+    chmod 644 "${vm_key_path}.pub"
+    
+    # Add public key to debian's authorized_keys
+    local admin_home="/home/debian"
+    if [ -d "$admin_home" ]; then
+        mkdir -p "${admin_home}/.ssh"
+        chmod 700 "${admin_home}/.ssh"
+        cat "${vm_key_path}.pub" >> "${admin_home}/.ssh/authorized_keys"
+        chmod 600 "${admin_home}/.ssh/authorized_keys"
+        chown -R debian:debian "${admin_home}/.ssh"
+        log_info "Added VM SSH public key to debian's authorized_keys"
+    else
+        log_warn "debian home directory not found, skipping authorized_keys update"
+    fi
+    
+    log_info "VM SSH key pair generated and added to authorized_keys"
+    return 0
+}
+
 # Create default projects and add SSH key
 create_default_projects() {
     log_info "Setting up default projects..."
