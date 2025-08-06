@@ -209,21 +209,11 @@ run_bootstrap() {
     
     cd "$TEMP_DIR"
     
-    # Build bootstrap command
-    local bootstrap_cmd="./bootstrap2/bootstrap.sh"
-    
-    if [[ "$DRY_RUN" == true ]]; then
-        bootstrap_cmd="$bootstrap_cmd --dry-run"
-    fi
-    
-    if [[ "$VERBOSE" == true ]]; then
-        bootstrap_cmd="$bootstrap_cmd --verbose"
-    fi
-    
     # Check if bootstrap2 exists, fall back to original if not
-    if [[ ! -f "./bootstrap2/bootstrap.sh" ]]; then
+    local bootstrap_script="./bootstrap2/bootstrap.sh"
+    if [[ ! -f "$bootstrap_script" ]]; then
         warning_msg "Bootstrap v2 not found, using original bootstrap"
-        bootstrap_cmd="./bootstrap/bootstrap.sh"
+        bootstrap_script="./bootstrap/bootstrap.sh"
         
         # Original bootstrap doesn't support all flags
         if [[ "$DRY_RUN" == true ]]; then
@@ -232,7 +222,18 @@ run_bootstrap() {
     fi
     
     # Make bootstrap executable
-    chmod +x $bootstrap_cmd
+    chmod +x "$bootstrap_script"
+    
+    # Build bootstrap command with arguments
+    local bootstrap_cmd="$bootstrap_script"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        bootstrap_cmd="$bootstrap_cmd --dry-run"
+    fi
+    
+    if [[ "$VERBOSE" == true ]]; then
+        bootstrap_cmd="$bootstrap_cmd --verbose"
+    fi
     
     # Run bootstrap
     if [[ "$VERBOSE" == true ]]; then
