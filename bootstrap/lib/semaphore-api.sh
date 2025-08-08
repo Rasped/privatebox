@@ -245,6 +245,94 @@ create_template_generator_task() {
     return 1
 }
 
+# Create ProxmoxAPI environment
+create_proxmox_api_environment() {
+    local project_id="$1"
+    local admin_session="$2"
+    
+    local token_id="${PROXMOX_TOKEN_ID}"
+    local token_secret="${PROXMOX_TOKEN_SECRET}"
+    local api_host="${PROXMOX_API_HOST}"
+    
+    # Skip if no token configured
+    if [[ -z "$token_id" ]] || [[ -z "$token_secret" ]]; then
+        log_info "No Proxmox API token found, skipping ProxmoxAPI environment"
+        return 0
+    fi
+    
+    log_info "Creating ProxmoxAPI environment for project $project_id..."
+    
+    local env_payload=$(jq -n \
+        --arg name "ProxmoxAPI" \
+        --argjson pid "$project_id" \
+        --arg token_id "$token_id" \
+        --arg token_secret "$token_secret" \
+        --arg api_host "$api_host" \
+        '{
+            name: $name,
+            project_id: $pid,
+            json: "{}",
+            env: "{}",
+            secrets: [
+                {
+                    type: "var",
+                    name: "PROXMOX_TOKEN_ID",
+                    secret: $token_id,
+                    operation: "create"
+                },
+                {
+                    type: "var",
+                    name: "PROXMOX_TOKEN_SECRET",
+                    secret: $token_secret,
+                    operation: "create"
+                },
+                {
+                    type: "var",
+                    name: "PROXMOX_API_HOST",
+                    secret: $api_host,
+                    operation: "create"
+                },
+                {
+                    type: "var",
+                    name: "PROXMOX_NODE",
+                    secret: "pve",
+                    operation: "create"
+                }
+            ]
+        }')
+    
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/environment" \
+        "$env_payload" "$admin_session" "Creating ProxmoxAPI environment")
+    
+    if [ $? -ne 0 ]; then
+        log_error "API request failed for ProxmoxAPI environment creation"
+        return 1
+    fi
+    
+    # Parse response
+    local status_code=$(echo "$api_result" | cut -d'|' -f1)
+    local response_body=$(echo "$api_result" | cut -d'|' -f2-)
+    
+    if [[ "$status_code" == "201" ]] || [[ "$status_code" == "204" ]]; then
+        local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
+        if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
+            log_info "✓ ProxmoxAPI environment created successfully with ID: $env_id"
+            echo "$env_id"
+            return 0
+        fi
+    fi
+    
+    # Check if already exists
+    if echo "$response_body" | grep -q "already exists"; then
+        log_info "ProxmoxAPI environment already exists"
+        return 0
+    fi
+    
+    log_error "Failed to create ProxmoxAPI environment. Status: $status_code"
+    return 1
+}
+
 # Create password environment
 create_password_environment() {
     local project_id="$1"
@@ -691,6 +779,11 @@ create_infrastructure_project_with_ssh_key() {
             # Create password environment
             if ! create_password_environment "$project_id" "$admin_session"; then
                 log_error "Failed to create password environment"
+            fi
+            
+            # Create ProxmoxAPI environment
+            if ! create_proxmox_api_environment "$project_id" "$admin_session"; then
+                log_error "Failed to create ProxmoxAPI environment"
             fi
             
             # Setup template synchronization

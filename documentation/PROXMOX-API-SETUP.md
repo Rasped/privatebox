@@ -21,12 +21,14 @@ pveum user token add automation@pve ansible --privsep 1
 # SAVE THE TOKEN SECRET - shown only once!
 ```
 
-### 2. Register in Semaphore (on PrivateBox VM)
+### 2. Automatic Registration in Semaphore
 
-```bash
-ssh debian@192.168.1.20
-sudo /opt/privatebox/scripts/register-proxmox-api.sh
-```
+The Proxmox API token is now automatically registered during VM creation:
+- Token created during bootstrap Phase 1 (prepare-host.sh)
+- Passed to VM via cloud-init environment variables
+- Registered in Semaphore during initial setup (semaphore-api.sh)
+
+No manual registration needed!
 
 ## Detailed Instructions
 

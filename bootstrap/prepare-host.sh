@@ -165,6 +165,35 @@ generate_config() {
     local admin_password=$(generate_password admin)
     local services_password=$(generate_password services)
     
+    # Generate Proxmox API token
+    display "Creating Proxmox API token for automation..."
+    local proxmox_token_secret=""
+    local proxmox_token_id="automation@pve!ansible"
+    local proxmox_host_ip="$proxmox_host"
+    
+    # Check if user exists
+    if ! pveum user list | grep -q "^automation@pve"; then
+        pveum user add automation@pve --comment "Automation user for Ansible" >/dev/null 2>&1 || true
+    fi
+    
+    # Remove old token if exists
+    pveum user token remove "$proxmox_token_id" >/dev/null 2>&1 || true
+    
+    # Create new token with privilege separation
+    local token_output=$(pveum user token add automation@pve ansible --privsep 1 --output-format json 2>/dev/null)
+    if [[ -n "$token_output" ]]; then
+        proxmox_token_secret=$(echo "$token_output" | grep -oP '"value"\s*:\s*"\K[^"]+' || true)
+        
+        # Set permissions
+        pveum acl modify /vms -token "$proxmox_token_id" -role PVEVMAdmin >/dev/null 2>&1
+        pveum acl modify /storage -token "$proxmox_token_id" -role PVEDatastoreUser >/dev/null 2>&1
+        pveum acl modify /nodes -token "$proxmox_token_id" -role PVEAuditor >/dev/null 2>&1
+        
+        log "✓ API token created: $proxmox_token_id"
+    else
+        log "WARNING: Failed to create API token - automation features will be limited"
+    fi
+    
     # VM network settings (using hardcoded design)
     local container_host_ip="${base_network}.20"
     local caddy_host_ip="${base_network}.21"
@@ -199,6 +228,11 @@ VM_STORAGE="$STORAGE"
 # Credentials
 ADMIN_PASSWORD="$admin_password"
 SERVICES_PASSWORD="$services_password"
+
+# Proxmox API Token
+PROXMOX_TOKEN_ID="$proxmox_token_id"
+PROXMOX_TOKEN_SECRET="$proxmox_token_secret"
+PROXMOX_API_HOST="$proxmox_host_ip"
 
 # Legacy compatibility
 STORAGE="$STORAGE"
