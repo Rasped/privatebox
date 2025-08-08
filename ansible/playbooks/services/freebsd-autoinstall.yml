@@ -1,0 +1,424 @@
+---
+- name: "FreeBSD: Automated VM Install"
+  hosts: proxmox
+  gather_facts: true
+  
+  vars:
+    service_name: "FreeBSD 14.3 VM"
+    service_description: "Automated FreeBSD VM installation"
+    service_tag: "freebsd"
+    
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "ServicePasswords"
+    
+    # VM Configuration - can be overridden via extra vars
+    vmid: 9999
+    vm_name: "freebsd-vm"
+    vm_memory: 2048
+    vm_cores: 2
+    vm_disk_size: "20G"
+    vm_storage: "local-lvm"
+    network_bridge: "vmbr0"
+    
+    # FreeBSD Image Configuration
+    freebsd_version: "14.3"
+    freebsd_iso_url: "https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.3/FreeBSD-14.3-RELEASE-amd64-disc1.iso"
+    freebsd_iso_cache: "/var/lib/vz/template/iso"
+    freebsd_iso_name: "FreeBSD-14.3-RELEASE-amd64-disc1.iso"
+    
+    # Network Configuration - static IP setup
+    vm_static_ip: "192.168.1.100"
+    vm_netmask: "255.255.255.0"
+    vm_gateway: "192.168.1.1"
+    vm_dns1: "8.8.8.8"
+    vm_dns2: "8.8.4.4"
+    
+    # FreeBSD system configuration
+    freebsd_hostname: "freebsd-auto"
+    freebsd_interface: "vtnet0"
+    freebsd_timezone: "UTC"
+    freebsd_swap_size: "2G"  # Set to "0" to disable swap
+    
+    # FreeBSD user configuration
+    freebsd_username: "freebsd"
+    freebsd_password: "{{ SERVICES_PASSWORD | default('privatebox123') }}"
+    freebsd_fullname: "FreeBSD User"
+    freebsd_shell: "/bin/sh"
+    freebsd_sudo_access: true
+    
+    # FreeBSD package configuration
+    freebsd_packages:
+      - "bash"
+      - "nano"
+      - "curl"
+      - "wget"
+      - "git"
+    freebsd_additional_packages: []
+    
+    # FreeBSD services configuration
+    freebsd_services: []
+    freebsd_additional_services: {}
+    
+    # Security and hardening
+    freebsd_security_hardening: true
+    freebsd_ssh_security: true
+    freebsd_enable_firewall: false
+    freebsd_firewall_type: "simple"
+    freebsd_firewall_services: "ssh"
+    freebsd_firewall_allowed_ips: "any"
+    
+    # Performance and maintenance
+    freebsd_performance_tuning: false
+    freebsd_auto_updates: false
+    freebsd_reboot_after_postinstall: false
+    
+    # SSH key for passwordless access (optional)
+    # freebsd_ssh_key: "ssh-rsa AAAAB3N..."
+    
+    # Custom configurations and scripts
+    freebsd_custom_configs: []
+    freebsd_custom_scripts: []
+    freebsd_post_install_commands: []
+    
+    # Config drive paths
+    config_drive_dir: "/tmp/freebsd-config-{{ vmid }}"
+    config_drive_iso: "{{ config_drive_dir }}/config.iso"
+    
+    # Proxmox paths
+    proxmox_iso_dir: "/var/lib/vz/template/iso"
+    
+  tasks:
+    # Pre-flight checks
+    - name: "{{ service_name }} - Pre-flight validation"
+      tags: [freebsd, preflight]
+      block:
+        - name: Check if running on Proxmox host
+          command: which qm
+          register: qm_check
+          changed_when: false
+          failed_when: qm_check.rc != 0
+          
+        - name: Verify network bridge exists
+          command: ip link show {{ network_bridge }}
+          register: bridge_check
+          changed_when: false
+          failed_when: bridge_check.rc != 0
+            
+        - name: Check if VM ID {{ vmid }} already exists
+          command: qm status {{ vmid }}
+          register: vm_exists
+          changed_when: false
+          failed_when: false
+          
+        - name: Destroy existing VM if present
+          when: vm_exists.rc == 0
+          block:
+            - name: Stop VM {{ vmid }} if running
+              command: qm stop {{ vmid }}
+              register: vm_stop
+              failed_when: false
+              
+            - name: Wait for VM to stop
+              command: qm status {{ vmid }}
+              register: vm_status
+              until: "'stopped' in vm_status.stdout"
+              retries: 30
+              delay: 2
+              when: vm_stop.rc == 0
+              
+            - name: Destroy VM {{ vmid }}
+              command: qm destroy {{ vmid }} --purge
+              
+            - name: Confirm VM destroyed
+              command: qm status {{ vmid }}
+              register: destroy_check
+              failed_when: destroy_check.rc == 0
+
+    # FreeBSD ISO download and preparation
+    - name: "{{ service_name }} - ISO preparation"
+      tags: [freebsd, iso]
+      block:
+        - name: Create ISO cache directory
+          file:
+            path: "{{ freebsd_iso_cache }}"
+            state: directory
+            mode: '0755'
+            
+        - name: Check if FreeBSD ISO exists
+          stat:
+            path: "{{ freebsd_iso_cache }}/{{ freebsd_iso_name }}"
+          register: freebsd_iso_stat
+          
+        - name: Download FreeBSD ISO if not cached
+          get_url:
+            url: "{{ freebsd_iso_url }}"
+            dest: "{{ freebsd_iso_cache }}/{{ freebsd_iso_name }}"
+            mode: '0644'
+            timeout: 600
+          when: not freebsd_iso_stat.stat.exists
+          
+        - name: Verify FreeBSD ISO exists
+          stat:
+            path: "{{ freebsd_iso_cache }}/{{ freebsd_iso_name }}"
+          register: iso_verify
+          failed_when: not iso_verify.stat.exists
+
+    # Generate configuration files and build config drive
+    - name: "{{ service_name }} - Config drive preparation"
+      tags: [freebsd, config]
+      block:
+        - name: Clean up old config drive directory
+          file:
+            path: "{{ config_drive_dir }}"
+            state: absent
+            
+        - name: Create config drive directory
+          file:
+            path: "{{ config_drive_dir }}"
+            state: directory
+            mode: '0755'
+            
+        - name: Generate password hash
+          shell: openssl passwd -1 "{{ freebsd_password }}"
+          register: password_hash
+          changed_when: false
+          no_log: true
+          
+        - name: Create installerconfig from template
+          template:
+            src: freebsd/installerconfig.j2
+            dest: "{{ config_drive_dir }}/installerconfig"
+            mode: '0755'
+            
+        - name: Create postinstall script from template
+          template:
+            src: freebsd/postinstall.sh.j2
+            dest: "{{ config_drive_dir }}/postinstall"
+            mode: '0755'
+            
+        - name: Install genisoimage for creating ISO
+          apt:
+            name: genisoimage
+            state: present
+          when: ansible_facts['pkg_mgr'] == 'apt'
+            
+        - name: Build config drive ISO with volume label
+          command: >
+            genisoimage -r -J -o "{{ config_drive_iso }}" 
+            -V "FBSD_CONFIG" -volset "FreeBSD_AutoInstall"
+            "{{ config_drive_dir }}"
+          args:
+            creates: "{{ config_drive_iso }}"
+          register: iso_build
+          
+        - name: Upload config drive ISO to Proxmox
+          copy:
+            src: "{{ config_drive_iso }}"
+            dest: "{{ proxmox_iso_dir }}/freebsd-config-{{ vmid }}.iso"
+            mode: '0644'
+          register: config_upload
+
+    # VM creation and configuration
+    - name: "{{ service_name }} - VM creation"
+      tags: [freebsd, create]
+      block:
+        - name: Create VM {{ vmid }}
+          command: >
+            qm create {{ vmid }}
+            --name "{{ vm_name }}"
+            --memory {{ vm_memory }}
+            --cores {{ vm_cores }}
+            --net0 virtio,bridge={{ network_bridge }}
+            --serial0 socket
+            --vga serial0
+            --ostype other
+            --boot order=ide2
+          register: vm_create
+          
+        - name: Add main disk
+          command: >
+            qm set {{ vmid }}
+            --virtio0 {{ vm_storage }}:{{ vm_disk_size }}
+          register: disk_create
+          
+        - name: Attach FreeBSD installer ISO
+          command: >
+            qm set {{ vmid }}
+            --ide2 "local:iso/{{ freebsd_iso_name }},media=cdrom"
+          
+        - name: Attach config drive ISO
+          command: >
+            qm set {{ vmid }}
+            --ide1 "local:iso/freebsd-config-{{ vmid }}.iso,media=cdrom"
+
+    # VM startup and installation monitoring
+    - name: "{{ service_name }} - Automated installation"
+      tags: [freebsd, install]
+      block:
+        - name: Start VM {{ vmid }} for installation
+          command: qm start {{ vmid }}
+          
+        - name: Wait for VM to start
+          command: qm status {{ vmid }}
+          register: vm_status_check
+          until: "'running' in vm_status_check.stdout"
+          retries: 30
+          delay: 2
+          
+        - name: Monitor installation progress
+          shell: |
+            echo "Monitoring FreeBSD installation progress..."
+            for i in $(seq 1 60); do
+              if qm status {{ vmid }} | grep -q "stopped"; then
+                echo "VM stopped - installation may be complete"
+                break
+              fi
+              echo "Installation still running... ($i/60 minutes)"
+              sleep 60
+            done
+          register: install_monitor
+            
+        - name: Ensure VM is stopped for media changes
+          shell: |
+            if ! qm status {{ vmid }} | grep -q "stopped"; then
+              echo "Stopping VM for media changes..."
+              qm stop {{ vmid }}
+              # Wait for VM to stop
+              for i in $(seq 1 30); do
+                if qm status {{ vmid }} | grep -q "stopped"; then
+                  echo "VM stopped successfully"
+                  break
+                fi
+                echo "Waiting for VM to stop... ($i/30)"
+                sleep 2
+              done
+            else
+              echo "VM already stopped"
+            fi
+          register: vm_stop_result
+          
+        - name: Remove installer ISOs and set boot from disk
+          command: >
+            qm set {{ vmid }}
+            --delete ide2
+            --delete ide1
+            --boot order=virtio0
+            
+        - name: Start VM after installation
+          command: qm start {{ vmid }}
+          
+        - name: Wait for VM to start
+          command: qm status {{ vmid }}
+          register: vm_final_status
+          until: "'running' in vm_final_status.stdout"
+          retries: 30
+          delay: 2
+
+    # Post-installation validation
+    - name: "{{ service_name }} - Post-installation validation"
+      tags: [freebsd, validate]
+      block:
+        - name: Wait for SSH to be available
+          wait_for:
+            host: "{{ vm_static_ip }}"
+            port: 22
+            timeout: 300
+            
+        - name: Test SSH connection
+          shell: >
+            sshpass -p '{{ freebsd_password }}' ssh -o StrictHostKeyChecking=no 
+            -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 
+            {{ freebsd_username }}@{{ vm_static_ip }} 'uname -a'
+          register: ssh_test
+          changed_when: false
+          retries: 5
+          delay: 10
+          
+        - name: Verify SSH test succeeded
+          assert:
+            that:
+              - ssh_test.rc == 0
+              - "'FreeBSD' in ssh_test.stdout"
+            fail_msg: "SSH test failed or FreeBSD not detected"
+            success_msg: "FreeBSD VM successfully installed and accessible"
+
+    # Cleanup and final reporting
+    - name: "{{ service_name }} - Cleanup and reporting"
+      tags: [freebsd, cleanup]
+      block:
+        - name: Clean up temporary config drive directory
+          file:
+            path: "{{ config_drive_dir }}"
+            state: absent
+            
+        - name: Remove uploaded config drive ISO
+          file:
+            path: "{{ proxmox_iso_dir }}/freebsd-config-{{ vmid }}.iso"
+            state: absent
+            
+        - name: Display installation completion
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Installation COMPLETE"
+              - "=========================================="
+              - ""
+              - "VM Configuration:"
+              - "- VM ID: {{ vmid }}"
+              - "- VM Name: {{ vm_name }}"
+              - "- Memory: {{ vm_memory }} MB"
+              - "- Cores: {{ vm_cores }}"
+              - "- Disk: {{ vm_disk_size }}"
+              - ""
+              - "Network Configuration:"
+              - "- IP Address: {{ vm_static_ip }}"
+              - "- Netmask: {{ vm_netmask }}"
+              - "- Gateway: {{ vm_gateway }}"
+              - "- DNS: {{ vm_dns1 }}, {{ vm_dns2 }}"
+              - ""
+              - "System Access:"
+              - "- SSH: ssh {{ freebsd_username }}@{{ vm_static_ip }}"
+              - "- Username: {{ freebsd_username }}"
+              - "- Console: qm terminal {{ vmid }}"
+              - ""
+              - "VM Management:"
+              - "- Status: qm status {{ vmid }}"
+              - "- Stop: qm stop {{ vmid }}"
+              - "- Start: qm start {{ vmid }}"
+              - "- Destroy: qm destroy {{ vmid }} --purge"
+              - "=========================================="
+              
+        - name: Save deployment information
+          copy:
+            content: |
+              FreeBSD 14.3 VM Deployment Information
+              =====================================
+              Deployed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+              
+              VM Configuration:
+              - VM ID: {{ vmid }}
+              - VM Name: {{ vm_name }}
+              - Memory: {{ vm_memory }} MB
+              - Cores: {{ vm_cores }}
+              - Disk: {{ vm_disk_size }}
+              - Storage: {{ vm_storage }}
+              - Bridge: {{ network_bridge }}
+              
+              Network Configuration:
+              - IP Address: {{ vm_static_ip }}
+              - Netmask: {{ vm_netmask }}
+              - Gateway: {{ vm_gateway }}
+              - DNS Servers: {{ vm_dns1 }}, {{ vm_dns2 }}
+              
+              System Access:
+              - SSH User: {{ freebsd_username }}
+              - Hostname: {{ freebsd_hostname }}
+              - FreeBSD Version: {{ freebsd_version }}
+              
+              Status: Installation completed successfully
+              
+              SSH Test Result: {{ ssh_test.stdout | default('Not tested') }}
+            dest: "/tmp/freebsd-{{ vmid }}-deployment-info.txt"
+            mode: '0644'
