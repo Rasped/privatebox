@@ -325,6 +325,11 @@ create_proxmox_api_environment() {
             ]
         }')
     
+    # Debug: Write payload to file
+    echo "=== ProxmoxAPI Payload Debug ===" >> /tmp/proxmox-api-debug.log
+    echo "$env_payload" | jq '.' >> /tmp/proxmox-api-debug.log 2>&1
+    echo "=================================" >> /tmp/proxmox-api-debug.log
+    
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/environment" \
         "$env_payload" "$admin_session" "Creating ProxmoxAPI environment")
@@ -577,9 +582,9 @@ run_generate_templates_task() {
     fi
     
     log_info "Triggering Generate Templates (template_id=$template_id)"
-    local payload='{}'
+    local payload=$(jq -n --argjson tid "$template_id" '{template_id: $tid, debug: false, dry_run: false}')
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/template/$template_id/run" \
+        "http://localhost:3000/api/project/$project_id/tasks" \
         "$payload" "$admin_session" "Running Generate Templates")
     if [ $? -ne 0 ]; then
         return 1
