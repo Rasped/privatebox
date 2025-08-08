@@ -1,0 +1,435 @@
+---
+- name: "OPNsense: Stage 2 - FreeBSD to OPNsense Bootstrap"
+  hosts: proxmox
+  gather_facts: false
+  
+  vars:
+    service_name: "OPNsense Firewall"
+    service_description: "Convert FreeBSD 14.3 to OPNsense 25.7"
+    service_tag: "opnsense"
+    
+    # VM Configuration
+    vmid: 963
+    vm_name: "opnsense-firewall"
+    
+    # Input/Output files
+    vm_ip_file: "/tmp/opnsense-vm-ip"
+    api_creds_file: "/tmp/opnsense-api-creds"
+    stage_marker_file: "/tmp/opnsense-stage2-complete"
+    
+    # FreeBSD default credentials
+    freebsd_user: "freebsd"
+    freebsd_password: "freebsd"
+    
+    # OPNsense bootstrap configuration
+    opnsense_version: "25.7"
+    bootstrap_timeout: 1800  # 30 minutes
+    reboot_wait_timeout: 300  # 5 minutes
+    api_wait_timeout: 600     # 10 minutes
+
+  tasks:
+    # Pre-flight checks
+    - name: "{{ service_name }} - Stage 2 pre-flight validation"
+      tags: [opnsense, preflight]
+      block:
+        - name: Check if Stage 1 completed
+          stat:
+            path: "/tmp/opnsense-stage1-complete"
+          register: stage1_marker
+          failed_when: not stage1_marker.stat.exists
+          
+        - name: Load VM IP from Stage 1
+          slurp:
+            src: "{{ vm_ip_file }}"
+          register: vm_ip_content
+          failed_when: false
+          
+        - name: Set VM IP fact
+          set_fact:
+            vm_ip: "{{ vm_ip_content.content | b64decode | trim }}"
+          when: vm_ip_content.content is defined
+          
+        - name: Fail if VM IP not available
+          fail:
+            msg: "Could not load VM IP from {{ vm_ip_file }}. Run Stage 1 first."
+          when: vm_ip is not defined or vm_ip == ""
+          
+        - name: Verify VM is running
+          command: qm status {{ vmid }}
+          register: vm_status_check
+          failed_when: "'running' not in vm_status_check.stdout"
+          
+        - name: Test VM connectivity
+          command: ping -c 2 -W 2 {{ vm_ip }}
+          register: ping_test
+          failed_when: ping_test.rc != 0
+          
+        - name: Debug stage 2 start
+          debug:
+            msg:
+              - "Stage 2 Bootstrap Starting"
+              - "VM IP: {{ vm_ip }}"
+              - "VM Status: {{ vm_status_check.stdout }}"
+              - "Ping Test: Success"
+
+    # Test SSH connectivity to FreeBSD
+    - name: "{{ service_name }} - Test FreeBSD SSH access"
+      tags: [opnsense, ssh]
+      block:
+        - name: Test SSH connection to FreeBSD
+          delegate_to: "{{ vm_ip }}"
+          vars:
+            ansible_user: "{{ freebsd_user }}"
+            ansible_password: "{{ freebsd_password }}"
+            ansible_connection: ssh
+            ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            ansible_ssh_timeout: 10
+          command: uname -a
+          register: freebsd_test
+          
+        - name: Verify FreeBSD system
+          assert:
+            that:
+              - "'FreeBSD' in freebsd_test.stdout"
+            fail_msg: "VM is not responding as FreeBSD system"
+            success_msg: "FreeBSD SSH connection verified"
+            
+        - name: Debug FreeBSD info
+          debug:
+            msg: "FreeBSD System: {{ freebsd_test.stdout }}"
+
+    # Install required packages
+    - name: "{{ service_name }} - Install required packages"
+      tags: [opnsense, packages]
+      delegate_to: "{{ vm_ip }}"
+      vars:
+        ansible_user: "{{ freebsd_user }}"
+        ansible_password: "{{ freebsd_password }}"
+        ansible_connection: ssh
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        ansible_become: true
+        ansible_become_method: su
+        ansible_become_password: "{{ freebsd_password }}"
+      block:
+        - name: Update pkg repository
+          command: pkg update -f
+          
+        - name: Install required packages for OPNsense bootstrap
+          command: pkg install -y python39 sudo curl
+          
+        - name: Create python3 symlink
+          file:
+            src: /usr/local/bin/python3.9
+            dest: /usr/local/bin/python3
+            state: link
+            force: true
+
+    # Copy bootstrap script
+    - name: "{{ service_name }} - Prepare bootstrap script"
+      tags: [opnsense, script]
+      delegate_to: "{{ vm_ip }}"
+      vars:
+        ansible_user: "{{ freebsd_user }}"
+        ansible_password: "{{ freebsd_password }}"
+        ansible_connection: ssh
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        ansible_become: true
+        ansible_become_method: su
+        ansible_become_password: "{{ freebsd_password }}"
+      block:
+        - name: Copy OPNsense bootstrap script to VM
+          copy:
+            src: "../files/opnsense/bootstrap-opnsense.sh"
+            dest: "/root/bootstrap-opnsense.sh"
+            mode: '0755'
+            owner: root
+            group: wheel
+            
+        - name: Verify bootstrap script
+          stat:
+            path: "/root/bootstrap-opnsense.sh"
+          register: script_check
+          failed_when: not script_check.stat.exists or not script_check.stat.executable
+
+    # Execute OPNsense bootstrap
+    - name: "{{ service_name }} - Execute OPNsense bootstrap"
+      tags: [opnsense, bootstrap]
+      delegate_to: "{{ vm_ip }}"
+      vars:
+        ansible_user: "{{ freebsd_user }}"
+        ansible_password: "{{ freebsd_password }}"
+        ansible_connection: ssh
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        ansible_become: true
+        ansible_become_method: su
+        ansible_become_password: "{{ freebsd_password }}"
+      block:
+        - name: Execute OPNsense bootstrap (async - takes ~20 minutes)
+          shell: nohup /root/bootstrap-opnsense.sh > /var/log/bootstrap-output.log 2>&1 &
+          async: "{{ bootstrap_timeout }}"
+          poll: 0
+          register: bootstrap_job
+          
+        - name: Wait for bootstrap to complete and VM to reboot
+          async_status:
+            jid: "{{ bootstrap_job.ansible_job_id }}"
+          register: bootstrap_result
+          until: bootstrap_result.finished
+          retries: 60
+          delay: 30
+          failed_when: false  # Don't fail if connection lost due to reboot
+          
+        - name: Debug bootstrap execution
+          debug:
+            msg:
+              - "Bootstrap job started: {{ bootstrap_job.ansible_job_id }}"
+              - "Waiting for FreeBSD → OPNsense conversion (~20 minutes)"
+              - "System will reboot automatically after bootstrap"
+
+    # Wait for reboot and OPNsense to come online
+    - name: "{{ service_name }} - Wait for OPNsense reboot"
+      tags: [opnsense, reboot]
+      block:
+        - name: Wait for VM to stop responding (reboot started)
+          command: ping -c 1 -W 2 {{ vm_ip }}
+          register: ping_down
+          until: ping_down.rc != 0
+          retries: 60
+          delay: 10
+          failed_when: false
+          
+        - name: Wait for VM to come back online after reboot
+          command: ping -c 1 -W 2 {{ vm_ip }}
+          register: ping_up
+          until: ping_up.rc == 0
+          retries: 30
+          delay: 10
+          
+        - name: Debug reboot status
+          debug:
+            msg:
+              - "VM reboot detected and completed"
+              - "VM responding to ping: {{ vm_ip }}"
+              - "Waiting for OPNsense services to start..."
+
+    # Wait for OPNsense API to be available
+    - name: "{{ service_name }} - Wait for OPNsense API"
+      tags: [opnsense, api]
+      block:
+        - name: Wait for OPNsense HTTPS service to start
+          uri:
+            url: "https://{{ vm_ip }}"
+            method: GET
+            validate_certs: false
+            timeout: 10
+          register: https_test
+          until: https_test.status == 200
+          retries: 30
+          delay: 20
+          failed_when: false
+          
+        - name: Test OPNsense API endpoint
+          uri:
+            url: "https://{{ vm_ip }}/api/core/firmware/status"
+            method: GET
+            validate_certs: false
+            timeout: 10
+          register: api_test
+          until: api_test.status == 401  # 401 = API responding but needs auth
+          retries: 20
+          delay: 15
+          failed_when: api_test.status not in [200, 401]
+          
+        - name: Debug API availability
+          debug:
+            msg:
+              - "OPNsense HTTPS: {{ https_test.status | default('Not Ready') }}"
+              - "OPNsense API: {{ api_test.status | default('Not Ready') }}"
+              - "API endpoint: https://{{ vm_ip }}/api/"
+
+    # Retrieve API credentials
+    - name: "{{ service_name }} - Retrieve API credentials"
+      tags: [opnsense, credentials]
+      delegate_to: "{{ vm_ip }}"
+      vars:
+        ansible_user: "root"  # OPNsense default
+        ansible_password: "opnsense"  # OPNsense default
+        ansible_connection: ssh
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+      block:
+        - name: Check if API credentials were generated
+          stat:
+            path: "/root/api-credentials.json"
+          register: api_creds_check
+          
+        - name: Fetch API credentials from VM
+          slurp:
+            src: "/root/api-credentials.json"
+          register: api_creds_content
+          when: api_creds_check.stat.exists
+          
+        - name: Generate API credentials if missing
+          when: not api_creds_check.stat.exists
+          block:
+            - name: Generate API key
+              shell: openssl rand -hex 20
+              register: api_key_gen
+              
+            - name: Generate API secret  
+              shell: openssl rand -hex 40
+              register: api_secret_gen
+              
+            - name: Create API credentials JSON
+              copy:
+                content: |
+                  {
+                    "api_key": "{{ api_key_gen.stdout }}",
+                    "api_secret": "{{ api_secret_gen.stdout }}",
+                    "generated": "{{ ansible_date_time.iso8601 }}",
+                    "endpoint": "https://{{ vm_ip }}/api/"
+                  }
+                dest: "/root/api-credentials.json"
+                mode: '0600'
+                
+            - name: Fetch generated API credentials
+              slurp:
+                src: "/root/api-credentials.json"
+              register: api_creds_content
+
+    # Save credentials locally and test API
+    - name: "{{ service_name }} - Save and test API credentials"
+      tags: [opnsense, test]
+      block:
+        - name: Save API credentials to local file
+          copy:
+            content: "{{ api_creds_content.content | b64decode }}"
+            dest: "{{ api_creds_file }}"
+            mode: '0600'
+          
+        - name: Parse API credentials
+          set_fact:
+            api_credentials: "{{ api_creds_content.content | b64decode | from_json }}"
+            
+        - name: Test API with credentials
+          uri:
+            url: "https://{{ vm_ip }}/api/core/firmware/status"
+            method: GET
+            validate_certs: false
+            user: "{{ api_credentials.api_key }}"
+            password: "{{ api_credentials.api_secret }}"
+            force_basic_auth: true
+          register: api_auth_test
+          failed_when: api_auth_test.status not in [200, 201]
+          
+        - name: Create stage completion marker
+          copy:
+            content: |
+              Stage 2 Complete
+              VM ID: {{ vmid }}
+              VM Name: {{ vm_name }}
+              VM IP: {{ vm_ip }}
+              OPNsense Version: {{ opnsense_version }}
+              API Endpoint: https://{{ vm_ip }}/api/
+              API Credentials: {{ api_creds_file }}
+              Status: Ready for Stage 3 network configuration
+            dest: "{{ stage_marker_file }}"
+            mode: '0644'
+
+    # Final validation and reporting
+    - name: "{{ service_name }} - Stage 2 completion report"
+      tags: [opnsense, report]
+      block:
+        - name: Verify stage completion
+          assert:
+            that:
+              - vm_ip is defined
+              - api_credentials is defined
+              - api_auth_test.status == 200
+            fail_msg: "Stage 2 failed: API not responding with credentials"
+            success_msg: "Stage 2 SUCCESS: OPNsense API responding at {{ vm_ip }}"
+            
+        - name: Display stage 2 completion
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} - Stage 2 COMPLETE"  
+              - "=========================================="
+              - ""
+              - "Conversion Status: FreeBSD → OPNsense SUCCESS"
+              - "VM ID: {{ vmid }}"
+              - "VM Name: {{ vm_name }}"
+              - "VM IP: {{ vm_ip }}"
+              - "OPNsense Version: {{ opnsense_version }}"
+              - ""
+              - "API Configuration:"
+              - "- Endpoint: https://{{ vm_ip }}/api/"
+              - "- API Key: {{ api_credentials.api_key }}"
+              - "- Credentials File: {{ api_creds_file }}"
+              - "- Status: {{ api_auth_test.status }} ({{ api_auth_test.msg | default('OK') }})"
+              - ""
+              - "Access Information:"
+              - "- Web UI: https://{{ vm_ip }}/"
+              - "- Default Login: root/opnsense"
+              - "- SSH Access: root/opnsense"
+              - ""
+              - "Network Configuration:"
+              - "- WAN Interface: DHCP ({{ vm_ip }})"
+              - "- LAN Interface: Unconfigured"
+              - ""
+              - "Next Steps:"
+              - "- Run Stage 3: opnsense-stage3-configure.yml"
+              - "- This will configure basic LAN network"
+              - ""
+              - "VM Management:"
+              - "- Status: qm status {{ vmid }}"
+              - "- Console: qm terminal {{ vmid }}"
+              - "- Stop: qm stop {{ vmid }}"
+              - "- Start: qm start {{ vmid }}"
+              - ""
+              - "Files Created:"
+              - "- API Credentials: {{ api_creds_file }}"
+              - "- Stage marker: {{ stage_marker_file }}"
+              - "=========================================="
+              
+        - name: Save stage 2 deployment info
+          copy:
+            content: |
+              {{ service_name }} - Stage 2 Deployment Information
+              =================================================
+              Completed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+              
+              Conversion Details:
+              - Source: FreeBSD 14.3
+              - Target: OPNsense {{ opnsense_version }}
+              - Status: SUCCESS
+              - Bootstrap Duration: ~20 minutes
+              
+              VM Configuration:
+              - VM ID: {{ vmid }}
+              - VM Name: {{ vm_name }}
+              - VM IP: {{ vm_ip }}
+              
+              API Configuration:
+              - Endpoint: https://{{ vm_ip }}/api/
+              - API Key: {{ api_credentials.api_key }}
+              - API Secret: {{ api_credentials.api_secret }}
+              - Test Status: {{ api_auth_test.status }}
+              
+              Access Information:
+              - Web UI: https://{{ vm_ip }}/
+              - SSH: ssh root@{{ vm_ip }} (password: opnsense)
+              - Default credentials changed from freebsd/freebsd to root/opnsense
+              
+              Network Status:
+              - WAN: Configured via DHCP
+              - LAN: Ready for configuration in Stage 3
+              
+              Files Created:
+              - {{ api_creds_file }}
+              - {{ stage_marker_file }}
+              
+              Next Command:
+              ansible-playbook -i inventory opnsense-stage3-configure.yml
+            dest: "/tmp/opnsense-stage2-deployment-info.txt"
+            mode: '0644'
