@@ -24,20 +24,6 @@
       "mcp__context7__get-library-docs",
       "Bash(find:*)",
       "WebFetch(domain:192.168.1.21)",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.20 'sudo /opt/privatebox/scripts/health-check.sh')",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.20 'sudo systemctl status portainer semaphore')",
-      "Bash(rm:*)",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh -o StrictHostKeyChecking=no admin@192.168.1.20 'echo \"\"Login successful\"\" && sudo systemctl status cloud-final')",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh -o StrictHostKeyChecking=no operator@192.168.1.21 'echo \"\"SSH works\"\"')",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh -o StrictHostKeyChecking=accept-new ubuntuadmin@192.168.1.20 'sudo systemctl status portainer semaphore-ui | grep Active')",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh -o StrictHostKeyChecking=no ubuntuadmin@192.168.1.23 \"sudo systemctl status cloud-final\")",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo systemctl status portainer semaphore-ui | grep -E ''Active:|semaphore-ui.service|portainer.service''\")",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo grep -A5 -B5 ''vm-container-host'' /var/log/cloud-init-output.log | tail -30\")",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo grep -A10 ''Creating default inventory'' /var/log/cloud-init-output.log | tail -20\")",
-      "WebFetch(domain:192.168.1.23)",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo podman exec semaphore-ui ls -la /tmp/semaphore/\")",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo grep -B10 -A5 ''jq: invalid JSON'' /var/log/cloud-init-output.log\")",
-      "Bash(SSHPASS='Changeme123' sshpass -e ssh ubuntuadmin@192.168.1.23 \"sudo podman ps | grep adguard\")",
       "Bash(cat:*)",
       "WebFetch(domain:docs.opnsense.org)",
       "WebFetch(domain:forum.opnsense.org)",
@@ -89,7 +75,9 @@
       "Bash(git rm:*)",
       "WebFetch(domain:forum.proxmox.com)",
       "WebFetch(domain:download.freebsd.org)",
-      "WebFetch(domain:www.freshports.org)"
+      "WebFetch(domain:www.freshports.org)",
+      "WebFetch(domain:pve.proxmox.com)",
+      "Bash(SSHPASS='4gency-5ilica-dec3PtiOn-p0Ppy-cath0use' sshpass -e ssh debian@192.168.1.20 'cd /opt/privatebox && sudo git pull')"
     ],
     "deny": []
   }

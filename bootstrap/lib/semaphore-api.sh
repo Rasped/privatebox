@@ -241,6 +241,16 @@ create_template_generator_task() {
         fi
     fi
     
+    # If template already exists, return its ID
+    if echo "$response_body" | grep -qi "already exists"; then
+        local existing_id=$(get_template_id_by_name "$project_id" "Generate Templates" "$admin_session" 2>/dev/null)
+        if [ -n "$existing_id" ]; then
+            log_info "Using existing Generate Templates task with ID: $existing_id"
+            echo "$existing_id"
+            return 0
+        fi
+    fi
+    
     log_error "Failed to create template. Status: $status_code"
     return 1
 }
@@ -459,6 +469,13 @@ setup_template_synchronization() {
     fi
     log_info "✓ Task created with ID: $template_id"
     
+    # Auto-run the Generate Templates task once to sync templates
+    if run_generate_templates_task "$project_id" "$template_id" "$admin_session"; then
+        log_info "✓ Generate Templates task triggered successfully"
+    else
+        log_warn "Generate Templates task could not be triggered automatically"
+    fi
+    
     log_info "Template synchronization setup COMPLETED"
     return 0
 }
@@ -517,6 +534,61 @@ get_admin_session() {
         return 0
     done
     
+    return 1
+}
+
+# Find template by name and return ID
+get_template_id_by_name() {
+    local project_id="$1"
+    local template_name="$2"
+    local admin_session="$3"
+    
+    local api_result=$(make_api_request "GET" \
+        "http://localhost:3000/api/project/$project_id/templates" "" "$admin_session" "Listing templates")
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    local status_code=$(get_api_status "$api_result")
+    local body=$(get_api_body "$api_result")
+    if ! is_api_success "$status_code"; then
+        return 1
+    fi
+    local tid=$(echo "$body" | jq -r ".[] | select(.name==\"$template_name\") | .id" 2>/dev/null)
+    if [ -n "$tid" ] && [ "$tid" != "null" ]; then
+        echo "$tid"
+        return 0
+    fi
+    return 1
+}
+
+# Run the Generate Templates task
+run_generate_templates_task() {
+    local project_id="$1"
+    local template_id="${2:-}"
+    local admin_session="$3"
+    
+    # Resolve template id if not provided
+    if [ -z "$template_id" ]; then
+        template_id=$(get_template_id_by_name "$project_id" "Generate Templates" "$admin_session") || true
+        if [ -z "$template_id" ]; then
+            log_warn "Generate Templates task not found for project $project_id"
+            return 1
+        fi
+    fi
+    
+    log_info "Triggering Generate Templates (template_id=$template_id)"
+    local payload='{}'
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/template/$template_id/run" \
+        "$payload" "$admin_session" "Running Generate Templates")
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    local status_code=$(get_api_status "$api_result")
+    if is_api_success "$status_code"; then
+        return 0
+    fi
+    log_warn "Generate Templates run returned status $status_code"
     return 1
 }
 
