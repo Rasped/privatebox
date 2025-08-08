@@ -71,11 +71,11 @@
     
     # Proxmox API Configuration
     # These will be set as environment variables in Semaphore
-    proxmox_host: "{{ ansible_env.PROXMOX_HOST | default('localhost') }}"
-    proxmox_user: "{{ ansible_env.PROXMOX_USER | default('root@pam') }}"
-    proxmox_password: "{{ ansible_env.PROXMOX_PASSWORD | default('') }}"
-    proxmox_token_id: "{{ ansible_env.PROXMOX_TOKEN_ID | default('') }}"
-    proxmox_token_secret: "{{ ansible_env.PROXMOX_TOKEN_SECRET | default('') }}"
+    proxmox_host: "{{ lookup('env', 'PROXMOX_API_HOST') | default('192.168.1.10') }}"
+    proxmox_user: "{{ lookup('env', 'PROXMOX_USER') | default('root@pam') }}"
+    proxmox_password: "{{ lookup('env', 'PROXMOX_PASSWORD') | default('') }}"
+    proxmox_token_id: "{{ lookup('env', 'PROXMOX_TOKEN_ID') | default('') }}"
+    proxmox_token_secret: "{{ lookup('env', 'PROXMOX_TOKEN_SECRET') | default('') }}"
     proxmox_validate_certs: false
     
     # API timeout settings
