@@ -286,10 +286,13 @@ create_proxmox_api_environment() {
     log_info "Creating ProxmoxAPI environment for project $project_id..."
     echo "PROCEEDING: Creating environment" >> /tmp/proxmox-api-debug.log
     
+    # Escape the exclamation mark in token_id for Semaphore API
+    local escaped_token_id="${token_id//!/\\u0021}"
+    
     local env_payload=$(jq -n \
         --arg name "ProxmoxAPI" \
         --argjson pid "$project_id" \
-        --arg token_id "$token_id" \
+        --arg token_id "$escaped_token_id" \
         --arg token_secret "$token_secret" \
         --arg api_host "$api_host" \
         '{
@@ -327,6 +330,8 @@ create_proxmox_api_environment() {
     
     # Debug: Write payload to file
     echo "=== ProxmoxAPI Payload Debug ===" >> /tmp/proxmox-api-debug.log
+    echo "Original token_id: $token_id" >> /tmp/proxmox-api-debug.log
+    echo "Escaped token_id: $escaped_token_id" >> /tmp/proxmox-api-debug.log
     echo "$env_payload" | jq '.' >> /tmp/proxmox-api-debug.log 2>&1
     echo "=================================" >> /tmp/proxmox-api-debug.log
     
