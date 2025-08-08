@@ -17,6 +17,9 @@
     vm_storage: "local-lvm"
     wan_bridge: "vmbr0"
     lan_bridge: "vmbr1"
+    vm_static_ip: "192.168.1.11"
+    vm_gateway: "192.168.1.1"
+    vm_netmask: "24"
     
     # FreeBSD Image Configuration
     freebsd_version: "14.3"
@@ -216,7 +219,7 @@
         - name: Configure cloud-init settings
           command: >
             qm set {{ vmid }}
-            --ipconfig0 ip=dhcp
+            --ipconfig0 ip={{ vm_static_ip }}/{{ vm_netmask }},gw={{ vm_gateway }}
             --nameserver 8.8.8.8
             --cicustom "user=local:snippets/{{ cloud_init_snippet }}"
 
@@ -239,20 +242,9 @@
             seconds: 90
             prompt: "Waiting for cloud-init to complete FreeBSD setup"
             
-        - name: Get VM IP address
-          shell: >
-            qm guest cmd {{ vmid }} network-get-interfaces | 
-            jq -r '.[] | select(.name=="vtnet0") | .["ip-addresses"][]? | select(.["ip-address-type"]=="ipv4") | .["ip-address"]' |
-            head -n1
-          register: vm_ip_result
-          until: vm_ip_result.stdout and vm_ip_result.stdout != ""
-          retries: 15
-          delay: 10
-          
-        - name: Set VM IP fact
+        - name: Set VM IP fact (static)
           set_fact:
-            vm_ip: "{{ vm_ip_result.stdout | trim }}"
-          when: vm_ip_result.stdout
+            vm_ip: "{{ vm_static_ip }}"
           
         - name: Test VM connectivity
           command: ping -c 3 -W 2 {{ vm_ip }}
