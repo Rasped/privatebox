@@ -86,6 +86,15 @@
     - name: "{{ service_name }} - Pre-flight validation"
       tags: [freebsd, preflight, api]
       block:
+        - name: Debug environment variables
+          debug:
+            msg:
+              - "PROXMOX_API_HOST from env: {{ lookup('env', 'PROXMOX_API_HOST') }}"
+              - "PROXMOX_TOKEN_ID from env: {{ lookup('env', 'PROXMOX_TOKEN_ID') }}"
+              - "PROXMOX_TOKEN_SECRET exists: {{ lookup('env', 'PROXMOX_TOKEN_SECRET') != '' }}"
+              - "proxmox_host var: {{ proxmox_host }}"
+              - "proxmox_token_id var: {{ proxmox_token_id }}"
+              
         - name: Check Proxmox API authentication method
           set_fact:
             use_api_token: "{{ proxmox_token_id != '' and proxmox_token_secret != '' }}"
