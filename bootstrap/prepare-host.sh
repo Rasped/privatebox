@@ -186,15 +186,17 @@ generate_config() {
         sleep 1  # Brief pause to ensure removal completes
     fi
     
-    # Create new token with privilege separation
-    local token_output=$(pveum user token add automation@pve ansible --privsep 1 --output-format json 2>&1)
+    # Create new token without privilege separation (for Proxmox 8.4+ compatibility)
+    # Note: privsep=0 allows token to inherit user permissions
+    local token_output=$(pveum user token add automation@pve ansible --privsep 0 --output-format json 2>&1)
     if [[ "$token_output" == *"value"* ]]; then
         proxmox_token_secret=$(echo "$token_output" | grep -oP '"value"\s*:\s*"\K[^"]+' || true)
         
-        # Set permissions
-        pveum acl modify /vms -token "$proxmox_token_id" -role PVEVMAdmin >/dev/null 2>&1
-        pveum acl modify /storage -token "$proxmox_token_id" -role PVEDatastoreUser >/dev/null 2>&1
-        pveum acl modify /nodes -token "$proxmox_token_id" -role PVEAuditor >/dev/null 2>&1
+        # Set permissions on the user (Proxmox 8.4+ doesn't support -token parameter)
+        # Token with privsep=0 will inherit these permissions
+        pveum acl modify /vms --users "automation@pve" --roles PVEVMAdmin >/dev/null 2>&1
+        pveum acl modify /storage --users "automation@pve" --roles PVEDatastoreUser >/dev/null 2>&1
+        pveum acl modify /nodes --users "automation@pve" --roles PVEAuditor >/dev/null 2>&1
         
         log "✓ API token created: $proxmox_token_id"
     else
