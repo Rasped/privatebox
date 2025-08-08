@@ -87,7 +87,9 @@
       "Bash(wget:*)",
       "Bash(git pull:*)",
       "Bash(git rm:*)",
-      "WebFetch(domain:forum.proxmox.com)"
+      "WebFetch(domain:forum.proxmox.com)",
+      "WebFetch(domain:download.freebsd.org)",
+      "WebFetch(domain:www.freshports.org)"
     ],
     "deny": []
   }
