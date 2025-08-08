@@ -110,7 +110,7 @@
         - name: Test Proxmox API connection
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
-            api_user: "{{ proxmox_user }}"
+            api_user: "{{ proxmox_user if use_password else omit }}"
             api_password: "{{ proxmox_password if use_password else omit }}"
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
@@ -124,7 +124,7 @@
           when: vm_current_state.msg is not defined or "does not exist" not in vm_current_state.msg
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
-            api_user: "{{ proxmox_user }}"
+            api_user: "{{ proxmox_user if use_password else omit }}"
             api_password: "{{ proxmox_password if use_password else omit }}"
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
@@ -242,7 +242,7 @@
         - name: Create VM via Proxmox API
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
-            api_user: "{{ proxmox_user }}"
+            api_user: "{{ proxmox_user if use_password else omit }}"
             api_password: "{{ proxmox_password if use_password else omit }}"
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
@@ -274,7 +274,7 @@
         - name: Start VM for installation
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
-            api_user: "{{ proxmox_user }}"
+            api_user: "{{ proxmox_user if use_password else omit }}"
             api_password: "{{ proxmox_password if use_password else omit }}"
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
@@ -286,7 +286,7 @@
         - name: Wait for VM to start
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
-            api_user: "{{ proxmox_user }}"
+            api_user: "{{ proxmox_user if use_password else omit }}"
             api_password: "{{ proxmox_password if use_password else omit }}"
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
@@ -303,7 +303,7 @@
             - name: Wait for installation to complete
               community.general.proxmox_kvm:
                 api_host: "{{ proxmox_host }}"
-                api_user: "{{ proxmox_user }}"
+                api_user: "{{ proxmox_user if use_password else omit }}"
                 api_password: "{{ proxmox_password if use_password else omit }}"
                 api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
                 api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
@@ -319,7 +319,7 @@
         - name: Update VM configuration - remove ISOs and set boot from disk
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
-            api_user: "{{ proxmox_user }}"
+            api_user: "{{ proxmox_user if use_password else omit }}"
             api_password: "{{ proxmox_password if use_password else omit }}"
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
@@ -335,7 +335,7 @@
         - name: Start VM after installation
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
-            api_user: "{{ proxmox_user }}"
+            api_user: "{{ proxmox_user if use_password else omit }}"
             api_password: "{{ proxmox_password if use_password else omit }}"
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
