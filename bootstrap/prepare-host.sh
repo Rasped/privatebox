@@ -176,11 +176,15 @@ generate_config() {
         pveum user add automation@pve --comment "Automation user for Ansible" >/dev/null 2>&1 || true
     fi
     
-    # Remove old token if exists
-    pveum user token remove "$proxmox_token_id" >/dev/null 2>&1 || true
+    # Check if token already exists and remove it
+    if pveum user token list automation@pve 2>/dev/null | grep -q "│ ansible "; then
+        log "Removing existing token..."
+        pveum user token remove "$proxmox_token_id" >/dev/null 2>&1 || true
+        sleep 1  # Brief pause to ensure removal completes
+    fi
     
     # Create new token with privilege separation
-    local token_output=$(pveum user token add automation@pve ansible --privsep 1 --output-format json 2>/dev/null)
+    local token_output=$(pveum user token add automation@pve ansible --privsep 1 --output-format json)
     if [[ -n "$token_output" ]]; then
         proxmox_token_secret=$(echo "$token_output" | grep -oP '"value"\s*:\s*"\K[^"]+' || true)
         
