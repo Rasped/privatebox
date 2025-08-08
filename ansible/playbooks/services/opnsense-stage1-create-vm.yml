@@ -19,18 +19,19 @@
     lan_bridge: "vmbr1"
     # FreeBSD Image Configuration
     freebsd_version: "14.3"
-    freebsd_image_url: "https://download.freebsd.org/releases/VM-IMAGES/14.3-RELEASE/amd64/Latest/FreeBSD-14.3-RELEASE-amd64.qcow2.xz"
+    freebsd_image_url: "https://download.freebsd.org/releases/VM-IMAGES/14.3-RELEASE/amd64/Latest/FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
     freebsd_image_cache: "/var/lib/vz/template/cache"
-    freebsd_image_name: "FreeBSD-14.3-RELEASE-amd64.qcow2"
+    freebsd_image_name: "FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2"
     freebsd_image_xz: "{{ freebsd_image_name }}.xz"
     
     # Output files
     vm_ip_file: "/tmp/opnsense-vm-ip"
     stage_marker_file: "/tmp/opnsense-stage1-complete"
     
-    # Default FreeBSD credentials (standard image)
-    default_username: "root"
-    default_password: ""  # No password by default, need console access to set
+    # Cloud-init test configuration
+    cloud_init_snippet: "opnsense-{{ vmid }}.yml"
+    installer_username: "installer"
+    installer_password: "{{ admin_password | default('TestPass123') }}"
 
   tasks:
     # Pre-flight checks
@@ -122,8 +123,66 @@
           debug:
             msg: "FreeBSD image ready: {{ freebsd_image_cache }}/{{ freebsd_image_name }}"
 
+    # Cloud-init minimal test
+    - name: "{{ service_name }} - Cloud-init test configuration"
+      tags: [opnsense, cloudinit]
+      block:
+        - name: Create snippets directory
+          file:
+            path: /var/lib/vz/snippets
+            state: directory
+            mode: '0755'
+            
+        - name: Enable snippets on local storage
+          command: pvesm set local --content vztmpl,iso,backup,snippets
+          failed_when: false
+          
+        - name: Generate password hash for installer user
+          shell: openssl passwd -6 "{{ installer_password }}"
+          register: password_hash
+          changed_when: false
+          no_log: true
+          
+        - name: Create minimal cloud-init snippet for testing
+          copy:
+            content: |
+              #cloud-config
+              hostname: freebsd-opnsense
+              
+              # Test 1: User creation
+              users:
+                - name: {{ installer_username }}
+                  sudo: ALL=(ALL) NOPASSWD:ALL
+                  passwd: {{ password_hash.stdout }}
+                  shell: /bin/sh
+                  lock_passwd: false
+                
+                - name: root
+                  passwd: {{ password_hash.stdout }}
+                  lock_passwd: false
+              
+              # Test 2: Script execution
+              runcmd:
+                - echo "Cloud-init runcmd executed at $(date)" > /tmp/cloudinit-test.log
+                - echo "VM booted successfully" >> /tmp/cloudinit-test.log
+                - touch /tmp/cloudinit-marker
+                - pw usermod root -h 0 <<< "{{ installer_password }}" || true
+                - service sshd enable || true
+                - service sshd start || true
+              
+              # Test 3: File writing
+              write_files:
+                - path: /tmp/cloudinit-files-test
+                  content: "Cloud-init write_files worked"
+                  permissions: '0644'
+              
+              # Test bootcmd (runs earlier than runcmd)
+              bootcmd:
+                - echo "Cloud-init bootcmd executed" > /tmp/bootcmd-test.log
+            dest: "/var/lib/vz/snippets/{{ cloud_init_snippet }}"
+            mode: '0644'
 
-    # VM creation (no cloud-init - image doesn't support it)
+    # VM creation
     - name: "{{ service_name }} - VM creation"
       tags: [opnsense, create]
       block:
@@ -156,6 +215,14 @@
             
         - name: Resize disk to {{ vm_disk_size }}
           command: qm resize {{ vmid }} virtio0 {{ vm_disk_size }}
+          
+        - name: Add cloud-init drive
+          command: qm set {{ vmid }} --ide2 {{ vm_storage }}:cloudinit
+          
+        - name: Configure cloud-init with custom user data (no network config)
+          command: >
+            qm set {{ vmid }}
+            --cicustom "user=local:snippets/{{ cloud_init_snippet }}"
 
     # VM startup and IP discovery
     - name: "{{ service_name }} - VM startup and IP discovery"
@@ -237,6 +304,37 @@
           retries: 5
           delay: 3
           
+        - name: Test SSH access with installer user (cloud-init test)
+          shell: |
+            sshpass -p '{{ installer_password }}' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+              {{ installer_username }}@{{ vm_ip }} 'echo "SSH works"; uname -a'
+          register: ssh_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Check what cloud-init created (if SSH works)
+          when: ssh_test.rc == 0
+          shell: |
+            sshpass -p '{{ installer_password }}' ssh -o StrictHostKeyChecking=no \
+              {{ installer_username }}@{{ vm_ip }} '
+              echo "=== Cloud-init test results ==="
+              ls -la /tmp/cloudinit* /tmp/bootcmd* 2>/dev/null || echo "No cloud-init markers found"
+              echo "=== Users created ==="
+              grep -E "^(root|installer):" /etc/passwd
+              echo "=== SSH status ==="
+              service sshd status
+            '
+          register: cloudinit_check
+          failed_when: false
+          changed_when: false
+          
+        - name: Display cloud-init test results
+          debug:
+            msg: 
+              - "SSH Test Result: {{ 'SUCCESS' if ssh_test.rc == 0 else 'FAILED' }}"
+              - "SSH Output: {{ ssh_test.stdout | default('No output') }}"
+              - "Cloud-init Check: {{ cloudinit_check.stdout | default('Not run') if cloudinit_check is defined else 'Not run' }}"
+          
         - name: Save VM IP to file
           copy:
             content: "{{ vm_ip }}"
@@ -285,7 +383,11 @@
               - "Network Configuration:"
               - "- WAN Interface (vtnet0): {{ wan_bridge }} - DHCP ({{ vm_ip }})"
               - "- LAN Interface (vtnet1): {{ lan_bridge }} - Unconfigured"
-              - "- Default credentials: {{ default_username }}/{{ default_password }} (DHCP boot only)"
+              - ""
+              - "Cloud-init Test Results:"
+              - "- SSH with installer user: {{ 'WORKING' if ssh_test.rc == 0 else 'NOT WORKING' }}"
+              - "- Credentials tested: {{ installer_username }}/{{ installer_password }}"
+              - "- Cloud-init processed: {{ 'YES' if ssh_test.rc == 0 else 'UNKNOWN' }}"
               - ""
               - "Next Steps:"
               - "- Run Stage 2: opnsense-stage2-bootstrap.yml"
