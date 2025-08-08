@@ -295,7 +295,7 @@ create_proxmox_api_environment() {
         '{
             name: $name,
             project_id: $pid,
-            json: "{}",
+            json: ({} | tostring),
             env: "{}",
             secrets: [
                 {
@@ -380,7 +380,7 @@ create_password_environment() {
         '{
             name: $name,
             project_id: $pid,
-            json: "{}",
+            json: ({} | tostring),
             env: "{}",
             secrets: [
                 {
