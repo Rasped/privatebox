@@ -738,6 +738,14 @@ create_default_inventory() {
         log_warn "No valid VM SSH key ID provided, skipping VM inventory creation"
     fi
     
+    # Create localhost inventory for running tasks inside Semaphore container
+    local localhost_inventory="all:
+  hosts:
+    localhost:
+      ansible_connection: local"
+    
+    create_inventory "$project_id" "$admin_session" "localhost" "$localhost_inventory" ""
+    
     # Check if Proxmox host IP was discovered and create Proxmox inventory
     if [[ -f /etc/privatebox-proxmox-host ]]; then
         local proxmox_ip=$(cat /etc/privatebox-proxmox-host 2>/dev/null)
