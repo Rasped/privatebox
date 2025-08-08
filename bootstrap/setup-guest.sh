@@ -223,7 +223,8 @@ log "Enabling nightly image rebuild timer..."
 systemctl enable --now semaphore-image-update.timer
 
 log "Starting Portainer..."
-systemctl enable --now portainer.service || error_exit "Failed to start/enable Portainer"
+# Quadlet services are auto-generated, just start them
+systemctl start portainer.service || error_exit "Failed to start Portainer"
 
 log "Waiting for Portainer to be ready..."
 for i in {1..30}; do
@@ -235,7 +236,8 @@ for i in {1..30}; do
 done
 
 log "Starting Semaphore..."
-systemctl enable --now semaphore.service || error_exit "Failed to start/enable Semaphore"
+# Quadlet services are auto-generated, just start them
+systemctl start semaphore.service || error_exit "Failed to start Semaphore"
 
 log "Waiting for Semaphore API to be ready..."
 for i in {1..60}; do
