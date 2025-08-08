@@ -248,6 +248,36 @@ for i in {1..60}; do
   sleep 2
 done
 
+# Create admin user via stop/start dance (idempotent)
+log "Creating Semaphore admin user..."
+IMAGE="$(podman container inspect -f '{{.ImageName}}' semaphore 2>/dev/null || echo localhost/semaphore-proxmox:latest)"
+
+systemctl stop semaphore.service
+sleep 2  # Give it time to fully stop
+
+podman run --rm \
+  -v /opt/semaphore/config:/etc/semaphore:Z \
+  -v /opt/semaphore/data:/var/lib/semaphore:Z \
+  "$IMAGE" semaphore user add \
+  --admin \
+  --login admin \
+  --name "Administrator" \
+  --email admin@privatebox.local \
+  --password "${SERVICES_PASSWORD}" \
+  --config /etc/semaphore/config.json 2>&1 | grep -v "already exists" || true
+
+systemctl start semaphore.service
+
+# Wait for Semaphore to be ready again
+log "Waiting for Semaphore to restart..."
+for i in {1..30}; do
+  if curl -sf http://localhost:3000/api/ping >/dev/null 2>&1; then
+    log "Semaphore restarted successfully"
+    break
+  fi
+  sleep 2
+done
+
 #==============================#
 # Optional: API bootstrap (if library is present)
 #==============================#
