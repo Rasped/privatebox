@@ -1,0 +1,360 @@
+---
+- name: "OPNsense: Stage 1 - Create FreeBSD VM"
+  hosts: proxmox
+  gather_facts: false
+  
+  vars:
+    service_name: "OPNsense Firewall"
+    service_description: "FreeBSD VM for OPNsense conversion"
+    service_tag: "opnsense"
+    
+    # VM Configuration
+    vmid: 963
+    vm_name: "opnsense-firewall"
+    vm_memory: 4096
+    vm_cores: 2
+    vm_disk_size: "32G"
+    vm_storage: "local-lvm"
+    wan_bridge: "vmbr0"
+    lan_bridge: "vmbr1"
+    
+    # FreeBSD Image Configuration
+    freebsd_version: "14.3"
+    freebsd_image_url: "https://download.freebsd.org/releases/VM-IMAGES/14.3-RELEASE/amd64/Latest/FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
+    freebsd_image_cache: "/var/lib/vz/template/cache"
+    freebsd_image_name: "FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2"
+    freebsd_image_xz: "{{ freebsd_image_name }}.xz"
+    
+    # Output files
+    vm_ip_file: "/tmp/opnsense-vm-ip"
+    stage_marker_file: "/tmp/opnsense-stage1-complete"
+    
+    # Cloud-init configuration
+    cloud_init_snippet: "opnsense-{{ vmid }}.yml"
+    installer_username: "installer"
+    installer_password: "{{ admin_password | default('changeme') }}"
+
+  tasks:
+    # Pre-flight checks
+    - name: "{{ service_name }} - Pre-flight validation"
+      tags: [opnsense, preflight]
+      block:
+        - name: Check if we're running on Proxmox host
+          command: which qm
+          register: qm_check
+          changed_when: false
+          failed_when: qm_check.rc != 0
+          
+        - name: Verify network bridges exist
+          command: ip link show {{ item }}
+          register: bridge_check
+          changed_when: false
+          failed_when: bridge_check.rc != 0
+          loop:
+            - "{{ wan_bridge }}"
+            - "{{ lan_bridge }}"
+            
+        - name: Check if VM ID {{ vmid }} already exists
+          command: qm status {{ vmid }}
+          register: vm_exists
+          changed_when: false
+          failed_when: false
+          
+        - name: Destroy existing VM if present
+          when: vm_exists.rc == 0
+          block:
+            - name: Stop VM {{ vmid }} if running
+              command: qm stop {{ vmid }}
+              register: vm_stop
+              failed_when: false
+              
+            - name: Wait for VM to stop
+              command: qm status {{ vmid }}
+              register: vm_status
+              until: "'stopped' in vm_status.stdout"
+              retries: 30
+              delay: 2
+              when: vm_stop.rc == 0
+              
+            - name: Destroy VM {{ vmid }}
+              command: qm destroy {{ vmid }} --purge
+              
+            - name: Confirm VM destroyed
+              command: qm status {{ vmid }}
+              register: destroy_check
+              failed_when: destroy_check.rc == 0
+
+    # FreeBSD image download and preparation
+    - name: "{{ service_name }} - FreeBSD image preparation"
+      tags: [opnsense, image]
+      block:
+        - name: Create cache directory
+          file:
+            path: "{{ freebsd_image_cache }}"
+            state: directory
+            mode: '0755'
+            
+        - name: Check if FreeBSD image already exists
+          stat:
+            path: "{{ freebsd_image_cache }}/{{ freebsd_image_name }}"
+          register: freebsd_image_stat
+          
+        - name: Download FreeBSD image if not cached
+          when: not freebsd_image_stat.stat.exists
+          block:
+            - name: Download FreeBSD .xz image
+              get_url:
+                url: "{{ freebsd_image_url }}"
+                dest: "{{ freebsd_image_cache }}/{{ freebsd_image_xz }}"
+                mode: '0644'
+                timeout: 300
+              register: download_result
+              
+            - name: Extract FreeBSD image from .xz
+              command: xz -d "{{ freebsd_image_cache }}/{{ freebsd_image_xz }}"
+              when: download_result.changed
+              
+        - name: Verify FreeBSD image exists
+          stat:
+            path: "{{ freebsd_image_cache }}/{{ freebsd_image_name }}"
+          register: image_verify
+          failed_when: not image_verify.stat.exists
+          
+        - name: Display image info
+          debug:
+            msg: "FreeBSD image ready: {{ freebsd_image_cache }}/{{ freebsd_image_name }}"
+
+    # Cloud-init configuration
+    - name: "{{ service_name }} - Cloud-init preparation"
+      tags: [opnsense, cloudinit]
+      block:
+        - name: Create snippets directory
+          file:
+            path: /var/lib/vz/snippets
+            state: directory
+            mode: '0755'
+            
+        - name: Enable snippets on local storage
+          command: pvesm set local --content vztmpl,iso,backup,snippets
+          failed_when: false
+          
+        - name: Generate password hash
+          shell: openssl passwd -6 "{{ installer_password }}"
+          register: password_hash
+          changed_when: false
+          no_log: true
+          
+        - name: Create cloud-init snippet
+          copy:
+            content: |
+              #cloud-config
+              hostname: freebsd-temp
+              users:
+                - name: {{ installer_username }}
+                  sudo: ALL=(ALL) NOPASSWD:ALL
+                  passwd: {{ password_hash.stdout }}
+                  shell: /bin/sh
+                  
+              packages:
+                - python39
+                - py39-bcrypt
+                - py39-cloud-init
+                
+              write_files:
+                - path: /tmp/stage1-complete
+                  content: "Stage 1 ready for bootstrap"
+                  permissions: '0644'
+                  
+              runcmd:
+                - echo "Stage 1 initialized" > /var/log/stage1.log
+                - ifconfig vtnet0 | grep inet >> /var/log/stage1.log
+                - echo "FreeBSD $(uname -r) ready for OPNsense conversion" >> /var/log/stage1.log
+                
+              final_message: "FreeBSD VM ready for Stage 2 OPNsense bootstrap"
+            dest: "/var/lib/vz/snippets/{{ cloud_init_snippet }}"
+            mode: '0644'
+
+    # VM creation
+    - name: "{{ service_name }} - VM creation"
+      tags: [opnsense, create]
+      block:
+        - name: Create VM {{ vmid }}
+          command: >
+            qm create {{ vmid }}
+            --name "{{ vm_name }}"
+            --memory {{ vm_memory }}
+            --cores {{ vm_cores }}
+            --net0 virtio,bridge={{ wan_bridge }}
+            --net1 virtio,bridge={{ lan_bridge }}
+            --serial0 socket
+            --vga serial0
+            --agent enabled=1
+            --ostype l26
+          register: vm_create
+          
+        - name: Import FreeBSD disk image
+          command: >
+            qm importdisk {{ vmid }} 
+            "{{ freebsd_image_cache }}/{{ freebsd_image_name }}" 
+            {{ vm_storage }}
+          register: disk_import
+          
+        - name: Configure VM disk
+          command: >
+            qm set {{ vmid }}
+            --scsihw virtio-scsi-pci
+            --scsi0 {{ vm_storage }}:vm-{{ vmid }}-disk-0
+            --boot c
+            --bootdisk scsi0
+            
+        - name: Resize disk to {{ vm_disk_size }}
+          command: qm resize {{ vmid }} scsi0 {{ vm_disk_size }}
+          
+        - name: Add cloud-init drive
+          command: qm set {{ vmid }} --ide2 {{ vm_storage }}:cloudinit
+          
+        - name: Configure cloud-init settings
+          command: >
+            qm set {{ vmid }}
+            --ipconfig0 ip=dhcp
+            --nameserver 8.8.8.8
+            --cicustom "user=local:snippets/{{ cloud_init_snippet }}"
+
+    # VM startup and verification
+    - name: "{{ service_name }} - VM startup and verification"
+      tags: [opnsense, start]
+      block:
+        - name: Start VM {{ vmid }}
+          command: qm start {{ vmid }}
+          
+        - name: Wait for VM to start
+          command: qm status {{ vmid }}
+          register: vm_status_check
+          until: "'running' in vm_status_check.stdout"
+          retries: 30
+          delay: 2
+          
+        - name: Wait for cloud-init to complete
+          pause:
+            seconds: 90
+            prompt: "Waiting for cloud-init to complete FreeBSD setup"
+            
+        - name: Get VM IP address
+          shell: >
+            qm guest cmd {{ vmid }} network-get-interfaces | 
+            jq -r '.[] | select(.name=="vtnet0") | .["ip-addresses"][]? | select(.["ip-address-type"]=="ipv4") | .["ip-address"]' |
+            head -n1
+          register: vm_ip_result
+          until: vm_ip_result.stdout and vm_ip_result.stdout != ""
+          retries: 15
+          delay: 10
+          
+        - name: Set VM IP fact
+          set_fact:
+            vm_ip: "{{ vm_ip_result.stdout | trim }}"
+          when: vm_ip_result.stdout
+          
+        - name: Test VM connectivity
+          command: ping -c 3 -W 2 {{ vm_ip }}
+          register: ping_test
+          until: ping_test.rc == 0
+          retries: 10
+          delay: 5
+          when: vm_ip is defined
+          
+        - name: Save VM IP to file
+          copy:
+            content: "{{ vm_ip }}"
+            dest: "{{ vm_ip_file }}"
+            mode: '0644'
+          when: vm_ip is defined
+          
+        - name: Create stage completion marker
+          copy:
+            content: |
+              Stage 1 Complete: {{ ansible_date_time.iso8601 }}
+              VM ID: {{ vmid }}
+              VM Name: {{ vm_name }}
+              VM IP: {{ vm_ip | default('Not detected') }}
+              FreeBSD Version: {{ freebsd_version }}
+              Status: Ready for Stage 2 OPNsense bootstrap
+            dest: "{{ stage_marker_file }}"
+            mode: '0644'
+
+    # Final validation and reporting
+    - name: "{{ service_name }} - Stage 1 completion report"
+      tags: [opnsense, report]
+      block:
+        - name: Verify stage completion
+          assert:
+            that:
+              - vm_ip is defined
+              - vm_ip != ""
+              - ping_test.rc == 0
+            fail_msg: "Stage 1 failed: VM not responding to ping"
+            success_msg: "Stage 1 SUCCESS: FreeBSD VM responding at {{ vm_ip }}"
+            
+        - name: Display stage 1 completion
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} - Stage 1 COMPLETE"
+              - "=========================================="
+              - ""
+              - "VM Status: Running and accessible"
+              - "VM ID: {{ vmid }}"
+              - "VM Name: {{ vm_name }}"
+              - "VM IP: {{ vm_ip }}"
+              - "FreeBSD Version: {{ freebsd_version }}"
+              - ""
+              - "Network Configuration:"
+              - "- WAN Interface (vtnet0): {{ wan_bridge }} - DHCP"
+              - "- LAN Interface (vtnet1): {{ lan_bridge }} - Unconfigured"
+              - ""
+              - "Next Steps:"
+              - "- Run Stage 2: opnsense-stage2-bootstrap.yml"
+              - "- This will convert FreeBSD to OPNsense 25.7"
+              - ""
+              - "VM Management:"
+              - "- Status: qm status {{ vmid }}"
+              - "- Console: qm terminal {{ vmid }}"
+              - "- Stop: qm stop {{ vmid }}"
+              - "- Start: qm start {{ vmid }}"
+              - ""
+              - "Files Created:"
+              - "- VM IP: {{ vm_ip_file }}"
+              - "- Stage marker: {{ stage_marker_file }}"
+              - "=========================================="
+              
+        - name: Save stage 1 deployment info
+          copy:
+            content: |
+              {{ service_name }} - Stage 1 Deployment Information
+              =================================================
+              Deployed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+              
+              VM Configuration:
+              - VM ID: {{ vmid }}
+              - VM Name: {{ vm_name }}
+              - Memory: {{ vm_memory }} MB
+              - Cores: {{ vm_cores }}
+              - Disk: {{ vm_disk_size }}
+              - Storage: {{ vm_storage }}
+              
+              Network Configuration:
+              - WAN Bridge: {{ wan_bridge }} (vtnet0)
+              - LAN Bridge: {{ lan_bridge }} (vtnet1)
+              - VM IP: {{ vm_ip }}
+              
+              FreeBSD Configuration:
+              - Version: {{ freebsd_version }}
+              - Image: {{ freebsd_image_name }}
+              - User: {{ installer_username }}
+              
+              Status: Ready for Stage 2 OPNsense bootstrap
+              
+              Next Command:
+              ansible-playbook -i inventory opnsense-stage2-bootstrap.yml
+            dest: "/tmp/opnsense-stage1-deployment-info.txt"
+            mode: '0644'
