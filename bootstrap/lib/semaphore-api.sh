@@ -254,13 +254,27 @@ create_proxmox_api_environment() {
     local token_secret="${PROXMOX_TOKEN_SECRET}"
     local api_host="${PROXMOX_API_HOST}"
     
+    # Debug: Write values to file for verification
+    {
+        echo "=== ProxmoxAPI Environment Debug ==="
+        echo "Timestamp: $(date)"
+        echo "PROXMOX_TOKEN_ID: '${token_id}'"
+        echo "PROXMOX_TOKEN_SECRET: '${token_secret}'"
+        echo "PROXMOX_API_HOST: '${api_host}'"
+        echo "Token ID empty? $([[ -z "$token_id" ]] && echo "YES" || echo "NO")"
+        echo "Token Secret empty? $([[ -z "$token_secret" ]] && echo "YES" || echo "NO")"
+        echo "=================================="
+    } >> /tmp/proxmox-api-debug.log
+    
     # Skip if no token configured
     if [[ -z "$token_id" ]] || [[ -z "$token_secret" ]]; then
         log_info "No Proxmox API token found, skipping ProxmoxAPI environment"
+        echo "SKIPPED: Empty tokens" >> /tmp/proxmox-api-debug.log
         return 0
     fi
     
     log_info "Creating ProxmoxAPI environment for project $project_id..."
+    echo "PROCEEDING: Creating environment" >> /tmp/proxmox-api-debug.log
     
     local env_payload=$(jq -n \
         --arg name "ProxmoxAPI" \
