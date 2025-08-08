@@ -83,14 +83,17 @@
     
   tasks:
     # Install required Python modules
-    - name: Install proxmoxer Python module
-      pip:
-        name: 
-          - proxmoxer
-          - requests
-        state: present
-        executable: pip3
+    - name: Ensure pip is installed
+      shell: |
+        python3 -m ensurepip --default-pip 2>/dev/null || true
+        python3 -m pip install --upgrade pip setuptools wheel
       become: false
+      ignore_errors: true
+
+    - name: Install proxmoxer Python module
+      shell: python3 -m pip install proxmoxer requests
+      become: false
+      ignore_errors: true
 
     # Pre-flight checks and authentication
     - name: "{{ service_name }} - Pre-flight validation"
