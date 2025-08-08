@@ -248,7 +248,7 @@
         - name: Create stage completion marker
           copy:
             content: |
-              Stage 1 Complete: {{ ansible_date_time.iso8601 }}
+              Stage 1 Complete
               VM ID: {{ vmid }}
               VM Name: {{ vm_name }}
               VM IP: {{ vm_ip | default('Not detected') }}
