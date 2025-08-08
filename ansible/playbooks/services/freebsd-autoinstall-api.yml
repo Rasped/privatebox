@@ -10,7 +10,7 @@
     
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "ServicePasswords"
+      semaphore_environment: "ProxmoxAPI"
     
     # VM Configuration - can be overridden via extra vars
     vmid: 9998
