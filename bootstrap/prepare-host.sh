@@ -171,6 +171,9 @@ generate_config() {
     local proxmox_token_id="automation@pve!ansible"
     local proxmox_host_ip="$proxmox_host"
     
+    # Clean up any old token files
+    rm -f /root/.proxmox-api-token 2>/dev/null || true
+    
     # Check if user exists
     if ! pveum user list | grep -q "^automation@pve"; then
         pveum user add automation@pve --comment "Automation user for Ansible" >/dev/null 2>&1 || true
@@ -179,13 +182,13 @@ generate_config() {
     # Check if token already exists and remove it
     if pveum user token list automation@pve 2>/dev/null | grep -q "│ ansible "; then
         log "Removing existing token..."
-        pveum user token remove "$proxmox_token_id" >/dev/null 2>&1 || true
+        pveum user token remove automation@pve ansible >/dev/null 2>&1 || true
         sleep 1  # Brief pause to ensure removal completes
     fi
     
     # Create new token with privilege separation
-    local token_output=$(pveum user token add automation@pve ansible --privsep 1 --output-format json)
-    if [[ -n "$token_output" ]]; then
+    local token_output=$(pveum user token add automation@pve ansible --privsep 1 --output-format json 2>&1)
+    if [[ "$token_output" == *"value"* ]]; then
         proxmox_token_secret=$(echo "$token_output" | grep -oP '"value"\s*:\s*"\K[^"]+' || true)
         
         # Set permissions
@@ -196,6 +199,8 @@ generate_config() {
         log "✓ API token created: $proxmox_token_id"
     else
         log "WARNING: Failed to create API token - automation features will be limited"
+        log "Token creation output: $token_output"
+        proxmox_token_secret=""  # Ensure it's empty on failure
     fi
     
     # VM network settings (using hardcoded design)
