@@ -89,10 +89,6 @@ documentation/   # Technical documentation and guides
 
 After installation completes (5-10 minutes), you can access your PrivateBox VM:
 
-**VM Login Credentials:**
-- SSH: `ssh ubuntuadmin@<VM-IP>`
-- Username: `ubuntuadmin`
-- Password: `Changeme123` (⚠️ change immediately after first login!)
 
 **Web Services** (available after VM login):
 - **Portainer**: `http://<VM-IP>:9000` - Container management UI
