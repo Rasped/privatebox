@@ -85,9 +85,11 @@
     # Install required Python modules
     - name: Install proxmoxer Python module
       pip:
-        name: proxmoxer
+        name: 
+          - proxmoxer
+          - requests
         state: present
-      delegate_to: localhost
+        executable: pip3
       become: false
 
     # Pre-flight checks and authentication
