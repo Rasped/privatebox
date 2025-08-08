@@ -1,7 +1,7 @@
 ---
 - name: "OPNsense: Stage 1 - Create FreeBSD VM"
   hosts: proxmox
-  gather_facts: false
+  gather_facts: true
   
   vars:
     service_name: "OPNsense Firewall"
@@ -19,18 +19,18 @@
     lan_bridge: "vmbr1"
     # FreeBSD Image Configuration
     freebsd_version: "14.3"
-    freebsd_image_url: "https://download.freebsd.org/releases/VM-IMAGES/14.3-RELEASE/amd64/Latest/FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
+    freebsd_image_url: "https://download.freebsd.org/releases/VM-IMAGES/14.3-RELEASE/amd64/Latest/FreeBSD-14.3-RELEASE-amd64.qcow2.xz"
     freebsd_image_cache: "/var/lib/vz/template/cache"
-    freebsd_image_name: "FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2"
+    freebsd_image_name: "FreeBSD-14.3-RELEASE-amd64.qcow2"
     freebsd_image_xz: "{{ freebsd_image_name }}.xz"
     
     # Output files
     vm_ip_file: "/tmp/opnsense-vm-ip"
     stage_marker_file: "/tmp/opnsense-stage1-complete"
     
-    # Default FreeBSD credentials (no cloud-init)
-    default_username: "freebsd"
-    default_password: "freebsd"
+    # Default FreeBSD credentials (standard image)
+    default_username: "root"
+    default_password: ""  # No password by default, need console access to set
 
   tasks:
     # Pre-flight checks
@@ -137,7 +137,6 @@
             --net1 virtio,bridge={{ lan_bridge }}
             --serial0 socket
             --vga serial0
-            --agent enabled=1
             --ostype other
           register: vm_create
           
@@ -151,13 +150,12 @@
         - name: Configure VM disk (no ipconfig0 - DHCP default)
           command: >
             qm set {{ vmid }}
-            --scsihw virtio-scsi-pci
-            --scsi0 {{ vm_storage }}:vm-{{ vmid }}-disk-0
+            --virtio0 {{ vm_storage }}:vm-{{ vmid }}-disk-0
             --boot c
-            --bootdisk scsi0
+            --bootdisk virtio0
             
         - name: Resize disk to {{ vm_disk_size }}
-          command: qm resize {{ vmid }} scsi0 {{ vm_disk_size }}
+          command: qm resize {{ vmid }} virtio0 {{ vm_disk_size }}
 
     # VM startup and IP discovery
     - name: "{{ service_name }} - VM startup and IP discovery"
