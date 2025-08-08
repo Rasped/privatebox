@@ -71,11 +71,11 @@
     
     # Proxmox API Configuration
     # These will be set as environment variables in Semaphore
-    proxmox_host: "{{ lookup('env', 'PROXMOX_API_HOST') | default('192.168.1.10') }}"
-    proxmox_user: "{{ lookup('env', 'PROXMOX_USER') | default('root@pam') }}"
-    proxmox_password: "{{ lookup('env', 'PROXMOX_PASSWORD') | default('') }}"
-    proxmox_token_id: "{{ lookup('env', 'PROXMOX_TOKEN_ID') | default('') }}"
-    proxmox_token_secret: "{{ lookup('env', 'PROXMOX_TOKEN_SECRET') | default('') }}"
+    proxmox_host: "{{ PROXMOX_API_HOST | default('192.168.1.10') }}"
+    proxmox_user: "{{ PROXMOX_USER | default('root@pam') }}"
+    proxmox_password: "{{ PROXMOX_PASSWORD | default('') }}"
+    proxmox_token_id: "{{ PROXMOX_TOKEN_ID | default('') }}"
+    proxmox_token_secret: "{{ PROXMOX_TOKEN_SECRET | default('') }}"
     proxmox_validate_certs: false
     
     # API timeout settings
@@ -89,9 +89,9 @@
         - name: Debug environment variables
           debug:
             msg:
-              - "PROXMOX_API_HOST from env: {{ lookup('env', 'PROXMOX_API_HOST') }}"
-              - "PROXMOX_TOKEN_ID from env: {{ lookup('env', 'PROXMOX_TOKEN_ID') }}"
-              - "PROXMOX_TOKEN_SECRET exists: {{ lookup('env', 'PROXMOX_TOKEN_SECRET') != '' }}"
+              - "PROXMOX_API_HOST from var: {{ PROXMOX_API_HOST | default('') }}"
+              - "PROXMOX_TOKEN_ID from var: {{ PROXMOX_TOKEN_ID | default('') }}"
+              - "PROXMOX_TOKEN_SECRET exists: {{ PROXMOX_TOKEN_SECRET | default('') != '' }}"
               - "proxmox_host var: {{ proxmox_host }}"
               - "proxmox_token_id var: {{ proxmox_token_id }}"
               
