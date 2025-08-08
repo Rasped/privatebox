@@ -25,13 +25,13 @@
     freebsd_image_xz: "{{ freebsd_image_name }}.xz"
     
     # Output files
-    vm_ip_file: "/tmp/opnsense-vm-ip"
-    stage_marker_file: "/tmp/opnsense-stage1-complete"
+    stage1_artifact_dir: "/var/lib/vz/privatebox"
+    stage1_artifact_file: "{{ stage1_artifact_dir }}/opnsense-stage1.json"
     
-    # Cloud-init test configuration
+    # Cloud-init configuration (use FreeBSD defaults for both stages)
     cloud_init_snippet: "opnsense-{{ vmid }}.yml"
-    installer_username: "installer"
-    installer_password: "{{ admin_password | default('TestPass123') }}"
+    freebsd_username: "freebsd"
+    freebsd_password: "freebsd"
 
   tasks:
     # Pre-flight checks
@@ -123,6 +123,23 @@
           debug:
             msg: "FreeBSD image ready: {{ freebsd_image_cache }}/{{ freebsd_image_name }}"
 
+    # Ensure dependencies on Proxmox host
+    - name: "{{ service_name }} - Install dependencies on Proxmox"
+      tags: [opnsense, deps]
+      block:
+        - name: Update apt cache
+          apt:
+            update_cache: true
+          when: ansible_facts['pkg_mgr'] == 'apt'
+
+        - name: Install required tools (arp-scan, sshpass)
+          apt:
+            name:
+              - arp-scan
+              - sshpass
+            state: present
+          when: ansible_facts['pkg_mgr'] == 'apt'
+
     # Cloud-init minimal test
     - name: "{{ service_name }} - Cloud-init test configuration"
       tags: [opnsense, cloudinit]
@@ -137,48 +154,22 @@
           command: pvesm set local --content vztmpl,iso,backup,snippets
           failed_when: false
           
-        - name: Generate password hash for installer user
-          shell: openssl passwd -6 "{{ installer_password }}"
+        - name: Generate password hash for FreeBSD user
+          shell: openssl passwd -6 "{{ freebsd_password }}"
           register: password_hash
           changed_when: false
           no_log: true
           
-        - name: Create minimal cloud-init snippet for testing
+        - name: Create cloud-init snippet for user creation
           copy:
             content: |
               #cloud-config
-              hostname: freebsd-opnsense
-              
-              # Test 1: User creation
+              hostname: freebsd-temp
               users:
-                - name: {{ installer_username }}
+                - name: {{ freebsd_username }}
                   sudo: ALL=(ALL) NOPASSWD:ALL
                   passwd: {{ password_hash.stdout }}
                   shell: /bin/sh
-                  lock_passwd: false
-                
-                - name: root
-                  passwd: {{ password_hash.stdout }}
-                  lock_passwd: false
-              
-              # Test 2: Script execution
-              runcmd:
-                - echo "Cloud-init runcmd executed at $(date)" > /tmp/cloudinit-test.log
-                - echo "VM booted successfully" >> /tmp/cloudinit-test.log
-                - touch /tmp/cloudinit-marker
-                - pw usermod root -h 0 <<< "{{ installer_password }}" || true
-                - service sshd enable || true
-                - service sshd start || true
-              
-              # Test 3: File writing
-              write_files:
-                - path: /tmp/cloudinit-files-test
-                  content: "Cloud-init write_files worked"
-                  permissions: '0644'
-              
-              # Test bootcmd (runs earlier than runcmd)
-              bootcmd:
-                - echo "Cloud-init bootcmd executed" > /tmp/bootcmd-test.log
             dest: "/var/lib/vz/snippets/{{ cloud_init_snippet }}"
             mode: '0644'
 
@@ -238,11 +229,6 @@
           retries: 30
           delay: 2
           
-        - name: Wait for FreeBSD VM to boot with DHCP
-          pause:
-            seconds: 60
-            prompt: "Waiting for FreeBSD VM to boot and get DHCP IP"
-          
         - name: Extract MAC address from VM config
           shell: qm config {{ vmid }} | grep net0 | sed -E 's/.*virtio=([^,]+).*/\1/'
           register: vm_mac_result
@@ -255,102 +241,81 @@
         - name: Debug MAC address
           debug:
             msg: "VM MAC address: {{ vm_mac }}"
-            
-        - name: Populate ARP table by pinging subnet range
+
+        - name: Determine WAN bridge IPv4 CIDR (if any)
           shell: |
-            # Get current subnet from default gateway
-            GATEWAY=$(ip route | grep default | awk '{print $3}')
-            SUBNET=$(echo $GATEWAY | cut -d. -f1-3)
-            echo "Scanning subnet: ${SUBNET}.1-254 (gateway: $GATEWAY)"
-            
-            # Ping range in parallel (background jobs)
-            for ip in {1..254}; do 
-              ping -c 1 -W 1 "${SUBNET}.${ip}" >/dev/null 2>&1 & 
-            done
-            wait
-            
-            echo "ARP population complete"
+            ip -4 addr show dev {{ wan_bridge }} | awk '/inet / {print $2; exit}'
+          register: wan_cidr
           changed_when: false
-          
-        - name: Discover VM IP from ARP table
+
+        - name: Discover VM IP via arp-scan on {{ wan_bridge }} (max 4 minutes)
           shell: |
-            # Try modern 'ip neighbor' first, fallback to 'arp'
-            VM_IP=$(ip neighbor show | grep -i "{{ vm_mac }}" | awk '{print $1}' | head -1)
-            if [ -z "$VM_IP" ]; then
-              VM_IP=$(arp -a | grep -i "{{ vm_mac }}" | sed -E 's/.*\(([0-9.]+)\).*/\1/' | head -1)
+            MAC="{{ vm_mac | lower }}"
+            IFACE="{{ wan_bridge }}"
+            CIDR="{{ wan_cidr.stdout | trim }}"
+            if [ -n "$CIDR" ]; then
+              OUT=$(arp-scan --interface="$IFACE" "$CIDR" 2>/dev/null | awk -v mac="$MAC" 'tolower($2)==mac {print $1; exit}')
+            else
+              OUT=$(arp-scan --interface="$IFACE" --localnet 2>/dev/null | awk -v mac="$MAC" 'tolower($2)==mac {print $1; exit}')
             fi
-            echo "$VM_IP"
+            if [ -z "$OUT" ]; then
+              # Fallback to neighbor/arp cache
+              OUT=$(ip neighbor show dev "$IFACE" | awk -v mac="$MAC" 'tolower($5)==mac {print $1; exit}')
+            fi
+            echo -n "$OUT"
           register: vm_ip_result
           changed_when: false
-          
+          retries: 48
+          delay: 5
+          until: vm_ip_result.stdout != ""
+
         - name: Set VM IP fact
           set_fact:
             vm_ip: "{{ vm_ip_result.stdout }}"
-          when: vm_ip_result.stdout != ""
-          
-        - name: Fail if VM IP not discovered
-          fail:
-            msg: "Could not discover VM IP via MAC address {{ vm_mac }}"
-          when: vm_ip_result.stdout == ""
-          
+
         - name: Debug discovered IP
           debug:
             msg: "Discovered VM IP: {{ vm_ip }}"
-          
-        - name: Test VM connectivity
-          command: ping -c 3 -W 2 {{ vm_ip }}
-          register: ping_test
-          until: ping_test.rc == 0
-          retries: 5
-          delay: 3
-          
-        - name: Test SSH access with installer user (cloud-init test)
+
+        - name: Wait for SSH port 22 to be open (max 4 minutes)
+          wait_for:
+            host: "{{ vm_ip }}"
+            port: 22
+            timeout: 240
+
+        - name: Test SSH access with FreeBSD user
           shell: |
-            sshpass -p '{{ installer_password }}' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
-              {{ installer_username }}@{{ vm_ip }} 'echo "SSH works"; uname -a'
+            sshpass -p '{{ freebsd_password }}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
+              {{ freebsd_username }}@{{ vm_ip }} 'echo "SSH SUCCESS"; uname -a'
           register: ssh_test
-          failed_when: false
           changed_when: false
-          
-        - name: Check what cloud-init created (if SSH works)
-          when: ssh_test.rc == 0
-          shell: |
-            sshpass -p '{{ installer_password }}' ssh -o StrictHostKeyChecking=no \
-              {{ installer_username }}@{{ vm_ip }} '
-              echo "=== Cloud-init test results ==="
-              ls -la /tmp/cloudinit* /tmp/bootcmd* 2>/dev/null || echo "No cloud-init markers found"
-              echo "=== Users created ==="
-              grep -E "^(root|installer):" /etc/passwd
-              echo "=== SSH status ==="
-              service sshd status
-            '
-          register: cloudinit_check
-          failed_when: false
-          changed_when: false
-          
-        - name: Display cloud-init test results
-          debug:
-            msg: 
-              - "SSH Test Result: {{ 'SUCCESS' if ssh_test.rc == 0 else 'FAILED' }}"
-              - "SSH Output: {{ ssh_test.stdout | default('No output') }}"
-              - "Cloud-init Check: {{ cloudinit_check.stdout | default('Not run') if cloudinit_check is defined else 'Not run' }}"
-          
-        - name: Save VM IP to file
-          copy:
-            content: "{{ vm_ip }}"
-            dest: "{{ vm_ip_file }}"
-            mode: '0644'
-          
-        - name: Create stage completion marker
+
+        - name: Fail if SSH test failed
+          fail:
+            msg: "Stage 1 failed: SSH to {{ vm_ip }} with {{ freebsd_username }}/{{ freebsd_password }} did not succeed"
+          when: ssh_test.rc != 0
+
+        - name: Ensure artifact directory exists
+          file:
+            path: "{{ stage1_artifact_dir }}"
+            state: directory
+            mode: '0755'
+
+        - name: Write Stage 1 JSON artifact
           copy:
             content: |
-              Stage 1 Complete
-              VM ID: {{ vmid }}
-              VM Name: {{ vm_name }}
-              VM IP: {{ vm_ip | default('Not detected') }}
-              FreeBSD Version: {{ freebsd_version }}
-              Status: Ready for Stage 2 OPNsense bootstrap
-            dest: "{{ stage_marker_file }}"
+              {
+                "status": "complete",
+                "vmid": {{ vmid }},
+                "name": "{{ vm_name }}",
+                "wan_bridge": "{{ wan_bridge }}",
+                "lan_bridge": "{{ lan_bridge }}",
+                "mac": "{{ vm_mac }}",
+                "ip": "{{ vm_ip }}",
+                "ssh_user": "{{ freebsd_username }}",
+                "timestamp": "{{ ansible_date_time.iso8601 }}"
+              }
+            dest: "{{ stage1_artifact_file }}"
             mode: '0644'
 
     # Final validation and reporting
@@ -362,9 +327,9 @@
             that:
               - vm_ip is defined
               - vm_ip != ""
-              - ping_test.rc == 0
-            fail_msg: "Stage 1 failed: VM not responding to ping"
-            success_msg: "Stage 1 SUCCESS: FreeBSD VM responding at {{ vm_ip }}"
+              - ssh_test.rc == 0
+            fail_msg: "Stage 1 failed: SSH not successful"
+            success_msg: "Stage 1 SUCCESS: FreeBSD VM accessible via SSH at {{ vm_ip }}"
             
         - name: Display stage 1 completion
           debug:
@@ -384,10 +349,9 @@
               - "- WAN Interface (vtnet0): {{ wan_bridge }} - DHCP ({{ vm_ip }})"
               - "- LAN Interface (vtnet1): {{ lan_bridge }} - Unconfigured"
               - ""
-              - "Cloud-init Test Results:"
-              - "- SSH with installer user: {{ 'WORKING' if ssh_test.rc == 0 else 'NOT WORKING' }}"
-              - "- Credentials tested: {{ installer_username }}/{{ installer_password }}"
-              - "- Cloud-init processed: {{ 'YES' if ssh_test.rc == 0 else 'UNKNOWN' }}"
+              - "Access:"
+              - "- SSH Status: WORKING"
+              - "- User: {{ freebsd_username }}"
               - ""
               - "Next Steps:"
               - "- Run Stage 2: opnsense-stage2-bootstrap.yml"
@@ -400,8 +364,7 @@
               - "- Start: qm start {{ vmid }}"
               - ""
               - "Files Created:"
-              - "- VM IP: {{ vm_ip_file }}"
-              - "- Stage marker: {{ stage_marker_file }}"
+              - "- Stage 1 JSON: {{ stage1_artifact_file }}"
               - "=========================================="
               
         - name: Save stage 1 deployment info
@@ -429,7 +392,7 @@
               FreeBSD Configuration:
               - Version: {{ freebsd_version }}
               - Image: {{ freebsd_image_name }}
-              - Default User: {{ default_username }}/{{ default_password }}
+              - User: {{ freebsd_username }}
               
               Status: Ready for Stage 2 OPNsense bootstrap
               
