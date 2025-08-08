@@ -1,6 +1,6 @@
 ---
 - name: "FreeBSD: Automated VM Install via Proxmox API"
-  hosts: localhost
+  hosts: container-host
   gather_facts: true
   
   vars:
