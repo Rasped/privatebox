@@ -72,10 +72,12 @@
     # Proxmox API Configuration
     # These will be set as environment variables in Semaphore
     proxmox_host: "{{ PROXMOX_API_HOST | default('192.168.1.10') }}"
-    # When using token auth, api_user is still required but ignored - use token user part
-    proxmox_user: "{{ PROXMOX_USER | default(PROXMOX_TOKEN_ID.split('!')[0] if PROXMOX_TOKEN_ID else 'root@pam') }}"
+    # Split the token to get user and token name parts
+    # PROXMOX_TOKEN_ID comes as "automation@pve!ansible" from bootstrap
+    proxmox_user: "{{ PROXMOX_USER | default(PROXMOX_TOKEN_ID.split('!')[0] if PROXMOX_TOKEN_ID and '!' in PROXMOX_TOKEN_ID else 'root@pam') }}"
     proxmox_password: "{{ PROXMOX_PASSWORD | default('') }}"
-    proxmox_token_id: "{{ PROXMOX_TOKEN_ID | default('') }}"
+    # api_token_id needs just the token name part (after the !)
+    proxmox_token_id: "{{ PROXMOX_TOKEN_ID.split('!')[1] if PROXMOX_TOKEN_ID and '!' in PROXMOX_TOKEN_ID else '' }}"
     proxmox_token_secret: "{{ PROXMOX_TOKEN_SECRET | default('') }}"
     proxmox_validate_certs: false
     
@@ -163,7 +165,7 @@
             url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ inventory_hostname | default('localhost') }}/storage/local/upload"
             method: POST
             headers:
-              Authorization: "{{ 'PVEAPIToken=' + proxmox_token_id + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
+              Authorization: "{{ 'PVEAPIToken=' + PROXMOX_TOKEN_ID + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
             body_format: form-multipart
             body:
               content: "iso"
@@ -227,7 +229,7 @@
             url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ inventory_hostname | default('localhost') }}/storage/local/upload"
             method: POST
             headers:
-              Authorization: "{{ 'PVEAPIToken=' + proxmox_token_id + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
+              Authorization: "{{ 'PVEAPIToken=' + PROXMOX_TOKEN_ID + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
             body_format: form-multipart
             body:
               content: "iso"
@@ -400,7 +402,7 @@
             url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ inventory_hostname | default('localhost') }}/storage/local/content/local:iso%2Ffreebsd-config-{{ vmid }}.iso"
             method: DELETE
             headers:
-              Authorization: "{{ 'PVEAPIToken=' + proxmox_token_id + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
+              Authorization: "{{ 'PVEAPIToken=' + PROXMOX_TOKEN_ID + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
             validate_certs: "{{ proxmox_validate_certs }}"
             status_code: [200, 404]
           register: config_iso_cleanup
