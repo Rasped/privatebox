@@ -1,0 +1,7 @@
+---
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Show TEST_TOKEN variable
+      debug:
+        msg: "TEST_TOKEN value is: {{ TEST_TOKEN | default('NOT SET') }}"
