@@ -678,13 +678,24 @@ create_inventory() {
     
     log_info "Creating inventory: $inventory_name"
     
-    local inventory_payload=$(jq -n \
-        --arg name "$inventory_name" \
-        --arg type "static" \
-        --argjson pid "$project_id" \
-        --arg inv "$inventory_content" \
-        --argjson ssh_key_id "$ssh_key_id" \
-        '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $ssh_key_id}')
+    # Build payload conditionally based on whether ssh_key_id is provided
+    local inventory_payload
+    if [ -n "$ssh_key_id" ] && [ "$ssh_key_id" != "null" ]; then
+        inventory_payload=$(jq -n \
+            --arg name "$inventory_name" \
+            --arg type "static" \
+            --argjson pid "$project_id" \
+            --arg inv "$inventory_content" \
+            --argjson ssh_key_id "$ssh_key_id" \
+            '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $ssh_key_id}')
+    else
+        inventory_payload=$(jq -n \
+            --arg name "$inventory_name" \
+            --arg type "static" \
+            --argjson pid "$project_id" \
+            --arg inv "$inventory_content" \
+            '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: null}')
+    fi
     
     local api_result=$(make_api_request "POST" "http://localhost:3000/api/project/$project_id/inventory" \
         "$inventory_payload" "$admin_session" "Creating $inventory_name")
