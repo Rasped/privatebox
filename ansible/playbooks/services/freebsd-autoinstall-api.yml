@@ -199,13 +199,13 @@
           
         - name: Create installerconfig from template
           template:
-            src: freebsd/installerconfig.j2
+            src: ../../templates/freebsd/installerconfig.j2
             dest: "{{ config_drive_dir }}/installerconfig"
             mode: '0755'
             
         - name: Create postinstall script from template
           template:
-            src: freebsd/postinstall.sh.j2
+            src: ../../templates/freebsd/postinstall.sh.j2
             dest: "{{ config_drive_dir }}/postinstall"
             mode: '0755'
             
