@@ -7,6 +7,7 @@ Your privacy-focused network appliance - automated deployment of privacy-enhanci
 PrivateBox transforms a mini PC running Proxmox into a comprehensive privacy protection system for your network. It automatically deploys and manages services like ad-blocking and secure DNS with just one command.
 
 **Key Features:**
+
 - 🛡️ **Privacy Protection**: Ad-blocking, DNS privacy, and firewall in one solution
 - 🚀 **One-Command Setup**: Fully automated deployment in ~5 minutes
 - 🎯 **Service-Oriented**: Clean, modular architecture for each service
@@ -28,6 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 ```
 
 That's it! The installer will:
+
 - Detect your network configuration automatically
 - Create a management VM (Debian 12 by default) with all tools pre-installed
 - Set up web interfaces for easy management
@@ -36,20 +38,9 @@ That's it! The installer will:
 ### Custom Installation
 
 ```bash
-# Specify IP address
-sudo bash quickstart.sh --ip 192.168.1.50
-
-# Specify gateway
-sudo bash quickstart.sh --ip 192.168.1.50 --gateway 192.168.1.1
-
-# Skip network auto-discovery
-sudo bash quickstart.sh --no-auto --ip 192.168.1.50 --gateway 192.168.1.1
 
 # Unattended installation
 sudo bash quickstart.sh --yes
-
-# Use Ubuntu instead of Debian
-sudo bash quickstart.sh --distro ubuntu
 
 # Clean up installation files after completion
 sudo bash quickstart.sh --cleanup
@@ -61,11 +52,13 @@ sudo bash quickstart.sh --help
 ## What's Included
 
 ### Privacy Services
+
 - **AdGuard Home**: Network-wide ad and tracker blocking (Available)
 - **OPNsense**: Enterprise-grade firewall and router (Planned - In Development)
 - **Unbound DNS**: Privacy-focused recursive DNS resolver (Planned)
 
 ### Management Tools
+
 - **Portainer**: Simple container management with web UI
 - **Semaphore**: Ansible automation with point-and-click deployment
 
@@ -80,7 +73,7 @@ sudo bash quickstart.sh --help
 
 ```
 bootstrap/       # Installation scripts and infrastructure
-ansible/         # Service deployment playbooks  
+ansible/         # Service deployment playbooks
 documentation/   # Technical documentation and guides
 ```
 
@@ -90,33 +83,7 @@ documentation/   # Technical documentation and guides
 
 ## Getting Started
 
-### Manual Installation
-
-If you prefer to run the bootstrap scripts manually:
-
-```bash
-# Clone the repository
-git clone https://github.com/Rasped/privatebox.git
-cd privatebox/bootstrap
-
-# Run with auto-discovery (recommended)
-sudo ./bootstrap.sh
-
-# Or run with specific network settings
-sudo ./scripts/create-ubuntu-vm.sh --ip 192.168.1.50 --gateway 192.168.1.1
-```
-
-### Remote Deployment
-
-Deploy to a remote Proxmox server:
-
-```bash
-# Deploy and run bootstrap
-./bootstrap/deploy-to-server.sh 192.168.1.10
-
-# Deploy with testing
-./bootstrap/deploy-to-server.sh 192.168.1.10 root --test
-```
+````
 
 ### Access Information
 
@@ -138,7 +105,7 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 
 **Semaphore Template Synchronization:**
 - Bootstrap automatically creates a "Generate Templates" task in Semaphore
-- Ansible playbooks with `semaphore_*` metadata in `vars_prompt` are automatically synced to Semaphore job templates  
+- Ansible playbooks with `semaphore_*` metadata in `vars_prompt` are automatically synced to Semaphore job templates
 - Run "Generate Templates" from Semaphore UI to sync new or updated playbooks
 - Initial sync runs automatically during bootstrap setup
 
@@ -174,14 +141,14 @@ vars_prompt:
     # Semaphore template metadata
     semaphore_type: boolean
     semaphore_description: "Enable or disable the service"
-    
+
   - name: port_number
     prompt: "Service port"
     default: "8080"
     semaphore_type: integer
     semaphore_min: 1024
     semaphore_max: 65535
-```
+````
 
 ### Running Template Sync
 
@@ -200,6 +167,7 @@ vars_prompt:
 ## Current Status
 
 ### ✅ Working Features
+
 - **Bootstrap System**: One-command VM creation with all management tools
 - **Container Management**: Portainer for easy container administration
 - **Automation Platform**: Semaphore with automatic template synchronization
@@ -207,17 +175,16 @@ vars_prompt:
 - **SSH Key Management**: Automatic configuration for both Proxmox and container hosts
 
 ### 🚧 In Development
+
 - **OPNsense Integration**: Firewall and router functionality
 - **Network Segmentation**: VLAN-based network isolation (design phase)
 - **Additional Privacy Services**: Unbound DNS, WireGuard VPN
 
-
-
 ### 📋 Future Features
+
 - **Consumer Dashboard**: User-friendly web interface for non-technical users
 - **Backup/Restore**: Automated configuration backup and recovery
 - **Additional Services**: Pi-hole, WireGuard VPN, Nginx Proxy Manager
-
 
 ## Documentation
 

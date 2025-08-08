@@ -17,10 +17,6 @@
     vm_storage: "local-lvm"
     wan_bridge: "vmbr0"
     lan_bridge: "vmbr1"
-    vm_static_ip: "192.168.1.11"
-    vm_gateway: "192.168.1.1"
-    vm_netmask: "24"
-    
     # FreeBSD Image Configuration
     freebsd_version: "14.3"
     freebsd_image_url: "https://download.freebsd.org/releases/VM-IMAGES/14.3-RELEASE/amd64/Latest/FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
@@ -32,10 +28,9 @@
     vm_ip_file: "/tmp/opnsense-vm-ip"
     stage_marker_file: "/tmp/opnsense-stage1-complete"
     
-    # Cloud-init configuration
-    cloud_init_snippet: "opnsense-{{ vmid }}.yml"
-    installer_username: "installer"
-    installer_password: "{{ admin_password | default('changeme') }}"
+    # Default FreeBSD credentials (no cloud-init)
+    default_username: "freebsd"
+    default_password: "freebsd"
 
   tasks:
     # Pre-flight checks
@@ -127,57 +122,8 @@
           debug:
             msg: "FreeBSD image ready: {{ freebsd_image_cache }}/{{ freebsd_image_name }}"
 
-    # Cloud-init configuration
-    - name: "{{ service_name }} - Cloud-init preparation"
-      tags: [opnsense, cloudinit]
-      block:
-        - name: Create snippets directory
-          file:
-            path: /var/lib/vz/snippets
-            state: directory
-            mode: '0755'
-            
-        - name: Enable snippets on local storage
-          command: pvesm set local --content vztmpl,iso,backup,snippets
-          failed_when: false
-          
-        - name: Generate password hash
-          shell: openssl passwd -6 "{{ installer_password }}"
-          register: password_hash
-          changed_when: false
-          no_log: true
-          
-        - name: Create cloud-init snippet
-          copy:
-            content: |
-              #cloud-config
-              hostname: freebsd-temp
-              users:
-                - name: {{ installer_username }}
-                  sudo: ALL=(ALL) NOPASSWD:ALL
-                  passwd: {{ password_hash.stdout }}
-                  shell: /bin/sh
-                  
-              packages:
-                - python39
-                - py39-bcrypt
-                - py39-cloud-init
-                
-              write_files:
-                - path: /tmp/stage1-complete
-                  content: "Stage 1 ready for bootstrap"
-                  permissions: '0644'
-                  
-              runcmd:
-                - echo "Stage 1 initialized" > /var/log/stage1.log
-                - ifconfig vtnet0 | grep inet >> /var/log/stage1.log
-                - echo "FreeBSD $(uname -r) ready for OPNsense conversion" >> /var/log/stage1.log
-                
-              final_message: "FreeBSD VM ready for Stage 2 OPNsense bootstrap"
-            dest: "/var/lib/vz/snippets/{{ cloud_init_snippet }}"
-            mode: '0644'
 
-    # VM creation
+    # VM creation (no cloud-init - image doesn't support it)
     - name: "{{ service_name }} - VM creation"
       tags: [opnsense, create]
       block:
@@ -192,7 +138,7 @@
             --serial0 socket
             --vga serial0
             --agent enabled=1
-            --ostype l26
+            --ostype other
           register: vm_create
           
         - name: Import FreeBSD disk image
@@ -202,7 +148,7 @@
             {{ vm_storage }}
           register: disk_import
           
-        - name: Configure VM disk
+        - name: Configure VM disk (no ipconfig0 - DHCP default)
           command: >
             qm set {{ vmid }}
             --scsihw virtio-scsi-pci
@@ -212,19 +158,9 @@
             
         - name: Resize disk to {{ vm_disk_size }}
           command: qm resize {{ vmid }} scsi0 {{ vm_disk_size }}
-          
-        - name: Add cloud-init drive
-          command: qm set {{ vmid }} --ide2 {{ vm_storage }}:cloudinit
-          
-        - name: Configure cloud-init settings
-          command: >
-            qm set {{ vmid }}
-            --ipconfig0 ip={{ vm_static_ip }}/{{ vm_netmask }},gw={{ vm_gateway }}
-            --nameserver 8.8.8.8
-            --cicustom "user=local:snippets/{{ cloud_init_snippet }}"
 
-    # VM startup and verification
-    - name: "{{ service_name }} - VM startup and verification"
+    # VM startup and IP discovery
+    - name: "{{ service_name }} - VM startup and IP discovery"
       tags: [opnsense, start]
       block:
         - name: Start VM {{ vmid }}
@@ -237,29 +173,77 @@
           retries: 30
           delay: 2
           
-        - name: Wait for cloud-init to complete
+        - name: Wait for FreeBSD VM to boot with DHCP
           pause:
-            seconds: 90
-            prompt: "Waiting for cloud-init to complete FreeBSD setup"
-            
-        - name: Set VM IP fact (static)
+            seconds: 60
+            prompt: "Waiting for FreeBSD VM to boot and get DHCP IP"
+          
+        - name: Extract MAC address from VM config
+          shell: qm config {{ vmid }} | grep net0 | sed -E 's/.*virtio=([^,]+).*/\1/'
+          register: vm_mac_result
+          changed_when: false
+          
+        - name: Set MAC address fact
           set_fact:
-            vm_ip: "{{ vm_static_ip }}"
+            vm_mac: "{{ vm_mac_result.stdout }}"
+            
+        - name: Debug MAC address
+          debug:
+            msg: "VM MAC address: {{ vm_mac }}"
+            
+        - name: Populate ARP table by pinging subnet range
+          shell: |
+            # Get current subnet from default gateway
+            GATEWAY=$(ip route | grep default | awk '{print $3}')
+            SUBNET=$(echo $GATEWAY | cut -d. -f1-3)
+            echo "Scanning subnet: ${SUBNET}.1-254 (gateway: $GATEWAY)"
+            
+            # Ping range in parallel (background jobs)
+            for ip in {1..254}; do 
+              ping -c 1 -W 1 "${SUBNET}.${ip}" >/dev/null 2>&1 & 
+            done
+            wait
+            
+            echo "ARP population complete"
+          changed_when: false
+          
+        - name: Discover VM IP from ARP table
+          shell: |
+            # Try modern 'ip neighbor' first, fallback to 'arp'
+            VM_IP=$(ip neighbor show | grep -i "{{ vm_mac }}" | awk '{print $1}' | head -1)
+            if [ -z "$VM_IP" ]; then
+              VM_IP=$(arp -a | grep -i "{{ vm_mac }}" | sed -E 's/.*\(([0-9.]+)\).*/\1/' | head -1)
+            fi
+            echo "$VM_IP"
+          register: vm_ip_result
+          changed_when: false
+          
+        - name: Set VM IP fact
+          set_fact:
+            vm_ip: "{{ vm_ip_result.stdout }}"
+          when: vm_ip_result.stdout != ""
+          
+        - name: Fail if VM IP not discovered
+          fail:
+            msg: "Could not discover VM IP via MAC address {{ vm_mac }}"
+          when: vm_ip_result.stdout == ""
+          
+        - name: Debug discovered IP
+          debug:
+            msg: "Discovered VM IP: {{ vm_ip }}"
           
         - name: Test VM connectivity
           command: ping -c 3 -W 2 {{ vm_ip }}
           register: ping_test
           until: ping_test.rc == 0
-          retries: 10
-          delay: 5
-          when: vm_ip is defined
+          retries: 5
+          delay: 3
           
         - name: Save VM IP to file
           copy:
             content: "{{ vm_ip }}"
             dest: "{{ vm_ip_file }}"
             mode: '0644'
-          when: vm_ip is defined
           
         - name: Create stage completion marker
           copy:
@@ -298,10 +282,12 @@
               - "VM Name: {{ vm_name }}"
               - "VM IP: {{ vm_ip }}"
               - "FreeBSD Version: {{ freebsd_version }}"
+              - "VM MAC: {{ vm_mac }}"
               - ""
               - "Network Configuration:"
-              - "- WAN Interface (vtnet0): {{ wan_bridge }} - DHCP"
+              - "- WAN Interface (vtnet0): {{ wan_bridge }} - DHCP ({{ vm_ip }})"
               - "- LAN Interface (vtnet1): {{ lan_bridge }} - Unconfigured"
+              - "- Default credentials: {{ default_username }}/{{ default_password }} (DHCP boot only)"
               - ""
               - "Next Steps:"
               - "- Run Stage 2: opnsense-stage2-bootstrap.yml"
@@ -338,11 +324,12 @@
               - WAN Bridge: {{ wan_bridge }} (vtnet0)
               - LAN Bridge: {{ lan_bridge }} (vtnet1)
               - VM IP: {{ vm_ip }}
+              - VM MAC: {{ vm_mac }}
               
               FreeBSD Configuration:
               - Version: {{ freebsd_version }}
               - Image: {{ freebsd_image_name }}
-              - User: {{ installer_username }}
+              - Default User: {{ default_username }}/{{ default_password }}
               
               Status: Ready for Stage 2 OPNsense bootstrap
               
