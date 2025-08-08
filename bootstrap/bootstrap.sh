@@ -28,6 +28,14 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        --setup-proxmox-api)
+            # Run Proxmox API setup
+            if [[ ! -f "${SCRIPT_DIR}/scripts/setup-proxmox-api-token.sh" ]]; then
+                echo "ERROR: Proxmox API setup script not found"
+                exit 1
+            fi
+            exec "${SCRIPT_DIR}/scripts/setup-proxmox-api-token.sh"
+            ;;
         --help|-h)
             cat <<EOF
 PrivateBox Bootstrap
@@ -38,12 +46,15 @@ Options:
     --dry-run       Run pre-flight checks and generate config only (no VM creation)
     --verbose, -v   Show detailed output
     --help, -h      Show this help message
+    --setup-proxmox-api  Setup Proxmox API token (run on Proxmox host)
 
 The bootstrap process has 4 phases:
 1. Host preparation - Pre-flight checks and config generation
 2. VM provisioning - Create and configure VM with cloud-init
 3. Guest setup - Install services inside VM
 4. Verification - Confirm successful installation
+
+Optional: Setup Proxmox API token for automation (use --setup-proxmox-api)
 
 Logs are written to: $LOG_FILE
 Configuration saved to: $CONFIG_FILE

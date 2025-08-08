@@ -281,6 +281,22 @@ if [[ -f /usr/local/lib/semaphore-api.sh ]]; then
         
         # Keep VM key for potential future use
         log "VM SSH key retained at /root/.credentials/semaphore_vm_key"
+        
+        # Register Proxmox API token
+        log "Checking for Proxmox API token..."
+        
+        # Check if token file was transferred
+        if [[ -f /root/.proxmox-api-token ]]; then
+            log "Found Proxmox API token file"
+            if /opt/privatebox/scripts/register-proxmox-api.sh; then
+                log "✓ Proxmox API environment registered"
+            else
+                log "WARNING: Failed to register Proxmox API environment"
+            fi
+        else
+            log "No Proxmox API token file found - skipping registration"
+            log "Run 'bootstrap.sh --setup-proxmox-api' on Proxmox host first"
+        fi
     else
         log "WARNING: Semaphore API configuration failed - manual setup may be required"
     fi
