@@ -82,6 +82,14 @@
     proxmox_timeout: 300
     
   tasks:
+    # Install required Python modules
+    - name: Install proxmoxer Python module
+      pip:
+        name: proxmoxer
+        state: present
+      delegate_to: localhost
+      become: false
+
     # Pre-flight checks and authentication
     - name: "{{ service_name }} - Pre-flight validation"
       tags: [freebsd, preflight, api]
