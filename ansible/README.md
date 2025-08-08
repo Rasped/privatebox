@@ -132,8 +132,7 @@ For playbooks without metadata or custom configurations:
 
 ### In Development
 
-- **OPNsense Deployment** (`playbooks/services/deploy-opnsense-from-template.yml`) - Deploy OPNsense VM from template
-- **OPNsense Configuration** (`playbooks/services/opnsense-configure-*.yml`) - Various OPNsense configuration playbooks
+- **OPNsense FreeBSD Bootstrap** - New approach using FreeBSD cloud-init (see `documentation/features/opnsense-freebsd-bootstrap/`)
 
 ### Planned
 
