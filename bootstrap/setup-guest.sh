@@ -72,10 +72,14 @@ podman volume create snippets >/dev/null 2>&1 || true
 log "Writing Semaphore Containerfile..."
 cat > /opt/semaphore/Containerfile <<'EOF'
 FROM docker.io/semaphoreui/semaphore:latest
+# Switch to root to install packages and create directories
+USER root
 # Add proxmoxer + requests for PVE modules, and community.general collection system-wide
 RUN pip3 install --no-cache-dir proxmoxer requests \
  && mkdir -p /usr/share/ansible/collections \
  && ansible-galaxy collection install -p /usr/share/ansible/collections community.general
+# Switch back to semaphore user
+USER semaphore
 EOF
 
 log "Building Semaphore image (localhost/semaphore-proxmox:latest)..."
