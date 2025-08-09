@@ -1,31 +1,11 @@
-# --- PREAMBLE (read by bsdinstall) ---
 DISTRIBUTIONS="kernel.txz base.txz"
-PARTITIONS=DEFAULT
-BSDINSTALL_DISTSITE="https://download.freebsd.org/ftp/releases/amd64/14.3-RELEASE/"
+PARTITIONS="vtbd0"
 
 #!/bin/sh
-# --- SETUP SCRIPT (runs inside chroot /mnt after extract) ---
 set -eu
-
-# Hostname & basic services
 sysrc hostname="freebsd-privatebox"
 sysrc sshd_enable=YES
 sysrc ifconfig_DEFAULT=DHCP
-# For static instead of DHCP, use:
-# sysrc ifconfig_vtnet0="inet 192.168.1.55 netmask 255.255.255.0"
-# sysrc defaultrouter="192.168.1.1"
-# printf "nameserver 8.8.8.8\nnameserver 8.8.4.4\n" > /etc/resolv.conf
-
-# Root password (plaintext echoed to pw via stdin)
 echo "privatebox123" | pw usermod root -h 0
-
-# Create an admin user with wheel
 pw useradd freebsd -m -G wheel -s /bin/sh
 echo "privatebox123" | pw usermod freebsd -h 0
-
-# Optional: timezone
-ln -fs /usr/share/zoneinfo/UTC /etc/localtime
-
-# Optional: packages (requires network)
-# env ASSUME_ALWAYS_YES=yes pkg bootstrap -f
-# pkg install -y bash nano curl wget git rsync htop
