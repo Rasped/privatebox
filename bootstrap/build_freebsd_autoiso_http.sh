@@ -142,8 +142,9 @@ done
 
 log "Mounting mfsroot UFS…"
 fsck_ufs -y /dev/vtbd0 || true
-mkdir -p /mnt/mfs/etc
+mkdir -p /mnt/mfs
 mount -t ufs -o rw /dev/vtbd0 /mnt/mfs
+mkdir -p /mnt/mfs/etc
 
 # 4) Install shim + markers
 log "Installing rc.local shim…"
@@ -165,7 +166,7 @@ log "Powering off…"
 shutdown -p now
 '
 
-KEEP_BUILDER="${KEEP_BUILDER:-0}"
+KEEP_BUILDER="${KEEP_BUILDER:-1}"
 cleanup() {
   set +e
   [ "$KEEP_BUILDER" = "1" ] && { echo "Keeping builder VM $BID for debugging"; return; }
@@ -280,13 +281,13 @@ qm set "$BID" --virtio0 "${STORAGE}:vm-${BID}-disk-0" >/dev/null
 qm config "$BID" | grep -E 'boot|sata|virtio0' || true
 
 qm start "$BID" >/dev/null
-sleep 6
+sleep 15
 
 # --- Drive build via serial console (mfsBSD root pw: mfsroot) ---
 cat > "$WORK/drive.expect" <<'EOT'
 #!/usr/bin/expect -f
 set vmid [lindex $argv 0]
-set timeout 90
+set timeout 240
 spawn socat -,raw,echo=0 UNIX-CONNECT:/var/run/qemu-server/$vmid.serial0
 
 expect -re "(login:|#)"
