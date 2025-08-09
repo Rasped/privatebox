@@ -2,17 +2,18 @@
 - name: "FreeBSD: Automated VM Install via Proxmox API"
   hosts: localhost
   gather_facts: true
-  
+
   vars:
+    proxmox_node: "{{ PROXMOX_NODE | default('proxmox') }}"
+    iso_storage: "{{ ISO_STORAGE | default('local') }}"
     service_name: "FreeBSD 14.3 VM (API)"
     service_description: "Automated FreeBSD VM installation using Proxmox API"
     service_tag: "freebsd-api"
-    
-    # Template configuration for Semaphore
+
     template_config:
       semaphore_environment: "ProxmoxAPI"
-    
-    # VM Configuration - can be overridden via extra vars
+
+    # VM Configuration
     vmid: 9998
     vm_name: "freebsd-api-vm"
     vm_memory: 2048
@@ -20,93 +21,61 @@
     vm_disk_size: 20
     vm_storage: "local-lvm"
     network_bridge: "vmbr0"
-    
+
     # FreeBSD Image Configuration
     freebsd_version: "14.3"
-    # Custom auto-installer ISO created by freebsd-create-iso.yml
-    freebsd_iso_name: "FreeBSD-{{ freebsd_version }}-auto.iso"
-    
-    # Network Configuration - static IP setup for PrivateBox
+    # new default matches your builder output (uses build-id 9970 unless overridden)
+    freebsd_iso_name: "mfsbsd-{{ freebsd_version }}-auto-{{ auto_iso_build_id | default(9970) }}.iso"
+
+    # Network Configuration (guest)
     vm_static_ip: "192.168.1.55"
     vm_netmask: "255.255.255.0"
     vm_gateway: "192.168.1.1"
     vm_dns1: "8.8.8.8"
     vm_dns2: "8.8.4.4"
-    
-    # FreeBSD system configuration
+
+    # FreeBSD system/user config (for post checks / your installerconfig)
     freebsd_hostname: "freebsd-privatebox"
     freebsd_interface: "vtnet0"
     freebsd_timezone: "UTC"
     freebsd_swap_size: "2G"
-    
-    # FreeBSD user configuration
     freebsd_username: "freebsd"
     freebsd_password: "{{ SERVICES_PASSWORD | default('privatebox123') }}"
     freebsd_fullname: "FreeBSD PrivateBox User"
     freebsd_shell: "/bin/sh"
     freebsd_sudo_access: true
-    
-    # FreeBSD packages for PrivateBox environment
-    freebsd_packages:
-      - "bash"
-      - "nano"
-      - "curl"
-      - "wget"
-      - "git"
-      - "rsync"
-      - "htop"
-    
-    # Security and hardening for PrivateBox
+    freebsd_packages: ["bash", "nano", "curl", "wget", "git", "rsync", "htop"]
     freebsd_security_hardening: true
     freebsd_ssh_security: true
     freebsd_enable_firewall: true
     freebsd_firewall_type: "simple"
     freebsd_firewall_services: "ssh"
     freebsd_firewall_allowed_ips: "192.168.1.0/24"
-    
-    
+
     # Proxmox API Configuration
-    # These will be set as environment variables in Semaphore
     proxmox_host: "{{ PROXMOX_API_HOST | default('192.168.1.10') }}"
-    # Split the token to get user and token name parts
-    # PROXMOX_TOKEN_ID comes as "automation@pve!ansible" from bootstrap
     proxmox_user: "{{ PROXMOX_USER | default(PROXMOX_TOKEN_ID.split('!')[0] if PROXMOX_TOKEN_ID and '!' in PROXMOX_TOKEN_ID else 'root@pam') }}"
     proxmox_password: "{{ PROXMOX_PASSWORD | default('') }}"
-    # api_token_id needs just the token name part (after the !)
     proxmox_token_id: "{{ PROXMOX_TOKEN_ID.split('!')[1] if PROXMOX_TOKEN_ID and '!' in PROXMOX_TOKEN_ID else '' }}"
     proxmox_token_secret: "{{ PROXMOX_TOKEN_SECRET | default('') }}"
     proxmox_validate_certs: false
-    
-    # API timeout settings
     proxmox_timeout: 300
-    
+
   tasks:
-    # Pre-flight checks and authentication
     - name: "{{ service_name }} - Pre-flight validation"
       tags: [freebsd, preflight, api]
       block:
-        - name: Debug environment variables
-          debug:
-            msg:
-              - "PROXMOX_API_HOST from var: {{ PROXMOX_API_HOST | default('') }}"
-              - "PROXMOX_TOKEN_ID from var: {{ PROXMOX_TOKEN_ID | default('') }}"
-              - "PROXMOX_TOKEN_SECRET exists: {{ PROXMOX_TOKEN_SECRET | default('') != '' }}"
-              - "proxmox_host var: {{ proxmox_host }}"
-              - "proxmox_token_id var: {{ proxmox_token_id }}"
-              
-        - name: Check Proxmox API authentication method
+        - name: Decide auth method
           set_fact:
             use_api_token: "{{ proxmox_token_id != '' and proxmox_token_secret != '' }}"
             use_password: "{{ proxmox_password != '' }}"
-          
-        - name: Validate authentication credentials
+
+        - name: Validate credentials
           assert:
-            that:
-              - use_api_token or use_password
-            fail_msg: "Either API token (PROXMOX_TOKEN_ID/PROXMOX_TOKEN_SECRET) or password (PROXMOX_PASSWORD) must be provided"
-            success_msg: "Proxmox API authentication configured"
-            
-        - name: Test Proxmox API connection
+            that: [use_api_token or use_password]
+            fail_msg: "Provide API token (PROXMOX_TOKEN_ID/PROXMOX_TOKEN_SECRET) or password (PROXMOX_PASSWORD)."
+
+        - name: Probe VM existence
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
             api_user: "{{ proxmox_user }}"
@@ -114,13 +83,13 @@
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
             validate_certs: "{{ proxmox_validate_certs }}"
-            node: "proxmox"
+            node: "{{ proxmox_node }}"
             vmid: "{{ vmid }}"
             state: current
           register: vm_current_state
           failed_when: false
-          
-        - name: Remove existing VM if present
+
+        - name: Remove existing VM (if present)
           when: vm_current_state.msg is not defined or "does not exist" not in vm_current_state.msg
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
@@ -129,38 +98,38 @@
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
             validate_certs: "{{ proxmox_validate_certs }}"
-            node: "proxmox"
+            node: "{{ proxmox_node }}"
             vmid: "{{ vmid }}"
             state: absent
             force: true
             timeout: "{{ proxmox_timeout }}"
 
-    # NOTE: Custom auto-installer ISO must be created first using freebsd-create-iso.yml
-
     - name: "{{ service_name }} - Verify custom installer ISO exists"
       tags: [freebsd, verify, api]
       block:
-        - name: Check if custom installer ISO exists on Proxmox
+        - name: List local ISO content
           uri:
-            url: "https://{{ proxmox_host }}:8006/api2/json/nodes/proxmox/storage/local/content"
+            url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ proxmox_node }}/storage/{{ iso_storage }}/content"
             method: GET
             headers:
               Authorization: "{{ 'PVEAPIToken=' + PROXMOX_TOKEN_ID + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
             validate_certs: "{{ proxmox_validate_certs }}"
           register: storage_content
-          
-        - name: Verify custom ISO is present
+
+        - name: Assert custom ISO present
           assert:
             that:
-              - storage_content.json.data | selectattr('volid', 'search', 'FreeBSD-' + freebsd_version + '-auto.iso') | list | length > 0
-            fail_msg: "Custom installer ISO not found. Please run freebsd-create-iso.yml first"
-            success_msg: "Custom installer ISO found"
+              - (storage_content.json.data | selectattr('volid','search', freebsd_iso_name) | list | length) > 0
+                or (storage_content.json.data
+                    | selectattr('volid','search', 'mfsbsd-.*-auto-' ~ (auto_iso_build_id | default(9970) | string) ~ '\\.iso')
+                    | list | length) > 0
+            fail_msg: "Custom installer ISO {{ freebsd_iso_name }} not found on '{{ iso_storage }}'. Build it first."
+            success_msg: "Found {{ freebsd_iso_name }}."
 
-    # VM creation using Proxmox API
     - name: "{{ service_name }} - VM creation via API"
       tags: [freebsd, create, api]
       block:
-        - name: Create VM via Proxmox API
+        - name: Create VM
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
             api_user: "{{ proxmox_user }}"
@@ -168,31 +137,25 @@
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
             validate_certs: "{{ proxmox_validate_certs }}"
-            node: "proxmox"
+            node: "{{ proxmox_node }}"
             vmid: "{{ vmid }}"
             name: "{{ vm_name }}"
             memory: "{{ vm_memory }}"
             cores: "{{ vm_cores }}"
             ostype: other
             boot: "order=ide2"
-            serial:
-              serial0: socket
+            serial: { serial0: socket }
             vga: serial0
-            net:
-              net0: "virtio,bridge={{ network_bridge }}"
-            virtio:
-              virtio0: "{{ vm_storage }}:{{ vm_disk_size }}"
-            ide:
-              ide2: "local:iso/{{ freebsd_iso_name }},media=cdrom"
+            net: { net0: "virtio,bridge={{ network_bridge }}" }
+            virtio: { virtio0: "{{ vm_storage }}:{{ vm_disk_size }}" }
+            ide: { ide2: "{{ iso_storage }}:iso/{{ freebsd_iso_name }},media=cdrom" }
             state: present
             timeout: "{{ proxmox_timeout }}"
-          register: vm_create
 
-    # VM startup and installation monitoring
     - name: "{{ service_name }} - Automated installation via API"
       tags: [freebsd, install, api]
       block:
-        - name: Start VM for installation
+        - name: Start VM
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
             api_user: "{{ proxmox_user }}"
@@ -200,12 +163,12 @@
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
             validate_certs: "{{ proxmox_validate_certs }}"
-            node: "proxmox"
+            node: "{{ proxmox_node }}"
             vmid: "{{ vmid }}"
             state: started
             timeout: "{{ proxmox_timeout }}"
-          
-        - name: Wait for VM to start
+
+        - name: Wait until VM is running
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
             api_user: "{{ proxmox_user }}"
@@ -213,33 +176,15 @@
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
             validate_certs: "{{ proxmox_validate_certs }}"
-            node: "proxmox"
+            node: "{{ proxmox_node }}"
             vmid: "{{ vmid }}"
             state: current
           register: vm_status
           until: vm_status.status == "running"
           retries: 30
           delay: 10
-          
-        - name: Monitor installation progress (polling VM state)
-          block:
-            - name: Wait for installation to complete
-              community.general.proxmox_kvm:
-                api_host: "{{ proxmox_host }}"
-                api_user: "{{ proxmox_user }}"
-                api_password: "{{ proxmox_password if use_password else omit }}"
-                api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
-                api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
-                validate_certs: "{{ proxmox_validate_certs }}"
-                vmid: "{{ vmid }}"
-                state: current
-              register: installation_status
-              until: installation_status.status == "stopped"
-              retries: 60
-              delay: 60
-              timeout: "{{ proxmox_timeout }}"
-              
-        - name: Update VM configuration - remove ISOs and set boot from disk
+
+        - name: Wait for installer to finish (VM stops itself)
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
             api_user: "{{ proxmox_user }}"
@@ -247,15 +192,30 @@
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
             validate_certs: "{{ proxmox_validate_certs }}"
-            node: "proxmox"
+            vmid: "{{ vmid }}"
+            state: current
+          register: installation_status
+          until: installation_status.status == "stopped"
+          retries: 90
+          delay: 30
+          timeout: "{{ proxmox_timeout }}"
+
+        - name: Switch boot to disk, detach ISO
+          community.general.proxmox_kvm:
+            api_host: "{{ proxmox_host }}"
+            api_user: "{{ proxmox_user }}"
+            api_password: "{{ proxmox_password if use_password else omit }}"
+            api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
+            api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
+            validate_certs: "{{ proxmox_validate_certs }}"
+            node: "{{ proxmox_node }}"
             vmid: "{{ vmid }}"
             boot: "order=virtio0"
-            ide:
-              ide2: ""
+            ide: { ide2: "" }
             update: true
             timeout: "{{ proxmox_timeout }}"
-            
-        - name: Start VM after installation
+
+        - name: Start VM from disk
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_host }}"
             api_user: "{{ proxmox_user }}"
@@ -263,130 +223,64 @@
             api_token_id: "{{ proxmox_token_id if use_api_token else omit }}"
             api_token_secret: "{{ proxmox_token_secret if use_api_token else omit }}"
             validate_certs: "{{ proxmox_validate_certs }}"
-            node: "proxmox"
+            node: "{{ proxmox_node }}"
             vmid: "{{ vmid }}"
             state: started
             timeout: "{{ proxmox_timeout }}"
 
-    # Post-installation validation
     - name: "{{ service_name }} - Post-installation validation"
       tags: [freebsd, validate, api]
       block:
-        - name: Wait for SSH to be available
+        - name: Wait for SSH
           wait_for:
             host: "{{ vm_static_ip }}"
             port: 22
             timeout: 300
-            
-        - name: Install sshpass for SSH testing
+
+        - name: Install sshpass (if available)
           package:
             name: sshpass
             state: present
           become: true
-          when: ansible_facts['pkg_mgr'] in ['apt', 'yum', 'dnf', 'zypper']
-            
-        - name: Test SSH connection
+          when: ansible_facts['pkg_mgr'] in ['apt','yum','dnf','zypper']
+
+        - name: Test SSH
           shell: >
-            sshpass -p '{{ freebsd_password }}' ssh -o StrictHostKeyChecking=no 
-            -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 
+            sshpass -p '{{ freebsd_password }}' ssh -o StrictHostKeyChecking=no
+            -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10
             {{ freebsd_username }}@{{ vm_static_ip }} 'uname -a'
           register: ssh_test
           changed_when: false
           retries: 5
           delay: 10
-          
-        - name: Verify SSH test succeeded
-          assert:
-            that:
-              - ssh_test.rc == 0
-              - "'FreeBSD' in ssh_test.stdout"
-            fail_msg: "SSH test failed or FreeBSD not detected"
-            success_msg: "FreeBSD VM successfully installed and accessible via API"
 
-    # Cleanup and final reporting
+        - name: Verify SSH
+          assert:
+            that: [ssh_test.rc == 0, "'FreeBSD' in ssh_test.stdout"]
+            fail_msg: "SSH test failed or FreeBSD not detected"
+            success_msg: "FreeBSD VM installed and reachable"
+
     - name: "{{ service_name }} - Cleanup and reporting"
       tags: [freebsd, cleanup, api]
       block:
-        # No cleanup needed - custom ISO remains on Proxmox for future use
-            
-        - name: Display installation completion
+        - name: Summary
           debug:
             msg:
               - "=============================================="
               - "{{ service_name }} Installation COMPLETE"
+              - "VM ID: {{ vmid }}, Name: {{ vm_name }}, Disk: {{ vm_disk_size }}G, RAM: {{ vm_memory }}M"
+              - "ISO used: {{ freebsd_iso_name }}"
+              - "SSH: ssh {{ freebsd_username }}@{{ vm_static_ip }}"
               - "=============================================="
-              - ""
-              - "VM Configuration:"
-              - "- VM ID: {{ vmid }}"
-              - "- VM Name: {{ vm_name }}"
-              - "- Memory: {{ vm_memory }} MB"
-              - "- Cores: {{ vm_cores }}"
-              - "- Disk: {{ vm_disk_size }} GB"
-              - ""
-              - "Network Configuration:"
-              - "- IP Address: {{ vm_static_ip }}"
-              - "- Netmask: {{ vm_netmask }}"
-              - "- Gateway: {{ vm_gateway }}"
-              - "- DNS: {{ vm_dns1 }}, {{ vm_dns2 }}"
-              - ""
-              - "PrivateBox Integration:"
-              - "- Hostname: {{ freebsd_hostname }}"
-              - "- User: {{ freebsd_username }}"
-              - "- SSH: ssh {{ freebsd_username }}@{{ vm_static_ip }}"
-              - "- Firewall: {{ 'Enabled' if freebsd_enable_firewall else 'Disabled' }}"
-              - "- Security Hardening: {{ 'Enabled' if freebsd_security_hardening else 'Disabled' }}"
-              - ""
-              - "API Method: Proxmox API"
-              - "- Host: {{ proxmox_host }}"
-              - "- Auth: {{ 'API Token' if use_api_token else 'Username/Password' }}"
-              - ""
-              - "VM Management via API:"
-              - "- Get Status: Check Proxmox UI or API"
-              - "- Console: Via Proxmox VNC or serial console"
-              - "- Stop/Start: Via Proxmox UI or API calls"
-              - "=============================================="
-              
-        - name: Save deployment information for PrivateBox
+
+        - name: Save deployment info
           copy:
-            content: |
-              FreeBSD 14.3 VM Deployment Information (API Method)
-              =================================================
-              Deployed: {{ ansible_date_time.iso8601 }}
-              Method: Proxmox API
-              Host: {{ proxmox_host }}
-              Auth: {{ 'API Token' if use_api_token else 'Username/Password' }}
-              
-              VM Configuration:
-              - VM ID: {{ vmid }}
-              - VM Name: {{ vm_name }}
-              - Memory: {{ vm_memory }} MB
-              - Cores: {{ vm_cores }}
-              - Disk: {{ vm_disk_size }} GB
-              - Storage: {{ vm_storage }}
-              - Bridge: {{ network_bridge }}
-              
-              Network Configuration:
-              - IP Address: {{ vm_static_ip }}
-              - Netmask: {{ vm_netmask }}
-              - Gateway: {{ vm_gateway }}
-              - DNS Servers: {{ vm_dns1 }}, {{ vm_dns2 }}
-              
-              PrivateBox Configuration:
-              - Hostname: {{ freebsd_hostname }}
-              - SSH User: {{ freebsd_username }}
-              - FreeBSD Version: {{ freebsd_version }}
-              - Firewall Enabled: {{ freebsd_enable_firewall }}
-              - Security Hardening: {{ freebsd_security_hardening }}
-              - SSH Allowed From: {{ freebsd_firewall_allowed_ips }}
-              
-              Installation Results:
-              - SSH Test: {{ ssh_test.stdout | default('Not tested') }}
-              - Status: Installation completed successfully via API
-              
-              Environment Variables Used:
-              - PROXMOX_HOST: {{ proxmox_host }}
-              - PROXMOX_USER: {{ proxmox_user }}
-              - PROXMOX_TOKEN_ID: {{ 'Set' if use_api_token else 'Not set' }}
-              - SERVICES_PASSWORD: {{ 'Set' if freebsd_password != 'privatebox123' else 'Default used' }}
             dest: "/tmp/freebsd-{{ vmid }}-api-deployment-info.txt"
-            mode: '0644'
+            mode: "0644"
+            content: |
+              FreeBSD {{ freebsd_version }} VM Deployment (API)
+              Deployed: {{ ansible_date_time.iso8601 }}
+              VM: id={{ vmid }}, name={{ vm_name }}, cpu={{ vm_cores }}, ram={{ vm_memory }}MB, disk={{ vm_disk_size }}GB
+              Network: {{ vm_static_ip }} / {{ vm_netmask }}, gw={{ vm_gateway }}, dns={{ vm_dns1 }},{{ vm_dns2 }}
+              ISO: {{ freebsd_iso_name }}
+              Auth: {{ 'API Token' if use_api_token else 'Username/Password' }}
