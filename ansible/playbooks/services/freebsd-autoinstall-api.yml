@@ -6,7 +6,7 @@
   vars:
     proxmox_node: "{{ PROXMOX_NODE | default('proxmox') }}"
     iso_storage: "{{ ISO_STORAGE | default('local') }}"
-    service_name: "FreeBSD 14.3 VM (API)"
+    service_name: "FreeBSD VM (API)"
     service_description: "Automated FreeBSD VM installation using Proxmox API"
     service_tag: "freebsd-api"
 
@@ -23,9 +23,7 @@
     network_bridge: "vmbr0"
 
     # FreeBSD Image Configuration
-    freebsd_version: "14.3"
-    # new default matches your builder output (uses build-id 9970 unless overridden)
-    freebsd_iso_name: "mfsbsd-{{ freebsd_version }}-auto-{{ auto_iso_build_id | default(9970) }}.iso"
+    # Using fixed ISO names for consistency
 
     # Network Configuration (guest)
     vm_static_ip: "192.168.1.55"
@@ -119,12 +117,9 @@
         - name: Assert custom ISO present
           assert:
             that:
-              - (storage_content.json.data | selectattr('volid','search', freebsd_iso_name) | list | length) > 0
-                or (storage_content.json.data
-                    | selectattr('volid','search', 'mfsbsd-.*-auto-' ~ (auto_iso_build_id | default(9970) | string) ~ '\\.iso')
-                    | list | length) > 0
-            fail_msg: "Custom installer ISO {{ freebsd_iso_name }} not found on '{{ iso_storage }}'. Build it first."
-            success_msg: "Found {{ freebsd_iso_name }}."
+              - (storage_content.json.data | selectattr('volid','search', 'mfsbsd-freebsd-autoinstaller.iso') | list | length) > 0
+            fail_msg: "Custom installer ISO mfsbsd-freebsd-autoinstaller.iso not found on '{{ iso_storage }}'. Build it first."
+            success_msg: "Found mfsbsd-freebsd-autoinstaller.iso."
 
     - name: "{{ service_name }} - VM creation via API"
       tags: [freebsd, create, api]
@@ -148,7 +143,9 @@
             vga: serial0
             net: { net0: "virtio,bridge={{ network_bridge }}" }
             virtio: { virtio0: "{{ vm_storage }}:{{ vm_disk_size }}" }
-            ide: { ide2: "{{ iso_storage }}:iso/{{ freebsd_iso_name }},media=cdrom" }
+            ide:
+              ide2: "{{ iso_storage }}:iso/mfsbsd-freebsd-autoinstaller.iso,media=cdrom"
+              ide3: "{{ iso_storage }}:iso/freebsd-installer-config.iso,media=cdrom"
             state: present
             timeout: "{{ proxmox_timeout }}"
 
@@ -269,7 +266,7 @@
               - "=============================================="
               - "{{ service_name }} Installation COMPLETE"
               - "VM ID: {{ vmid }}, Name: {{ vm_name }}, Disk: {{ vm_disk_size }}G, RAM: {{ vm_memory }}M"
-              - "ISO used: {{ freebsd_iso_name }}"
+              - "ISO used: mfsbsd-freebsd-autoinstaller.iso"
               - "SSH: ssh {{ freebsd_username }}@{{ vm_static_ip }}"
               - "=============================================="
 
@@ -278,9 +275,9 @@
             dest: "/tmp/freebsd-{{ vmid }}-api-deployment-info.txt"
             mode: "0644"
             content: |
-              FreeBSD {{ freebsd_version }} VM Deployment (API)
+              FreeBSD VM Deployment (API)
               Deployed: {{ ansible_date_time.iso8601 }}
               VM: id={{ vmid }}, name={{ vm_name }}, cpu={{ vm_cores }}, ram={{ vm_memory }}MB, disk={{ vm_disk_size }}GB
               Network: {{ vm_static_ip }} / {{ vm_netmask }}, gw={{ vm_gateway }}, dns={{ vm_dns1 }},{{ vm_dns2 }}
-              ISO: {{ freebsd_iso_name }}
+              ISO: mfsbsd-freebsd-autoinstaller.iso
               Auth: {{ 'API Token' if use_api_token else 'Username/Password' }}
