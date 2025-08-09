@@ -161,8 +161,8 @@ generate_config() {
     local base_network="$BASE_NETWORK"
     local proxmox_host="$PROXMOX_HOST"
     
-    # Detect Proxmox node name
-    local proxmox_node=$(pvesh get /nodes --output-format json | jq -r '.[0].node' 2>/dev/null || echo "pve")
+    # Detect Proxmox node name - use hostname as it's more reliable
+    local proxmox_node=$(hostname -s 2>/dev/null || echo "proxmox")
     
     # Generate passwords
     local admin_password=$(generate_password admin)
