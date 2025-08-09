@@ -1,21 +1,20 @@
 ---
-- name: "FreeBSD: Create Config Drive ISO on Proxmox Host"
+- name: "FreeBSD: Create Custom Installer ISO with Auto-config"
   hosts: proxmox
   become: true
   gather_facts: true
   
   vars:
     # ISO configuration
+    vmid: 9998
+    freebsd_version: "14.3"
     iso_dir: "/var/lib/vz/template/iso"
-    iso_name: "freebsd-config-{{ vmid }}.iso"
-    iso_path: "{{ iso_dir }}/{{ iso_name }}"
+    base_iso: "{{ iso_dir }}/FreeBSD-{{ freebsd_version }}-RELEASE-amd64-disc1.iso"
+    # Use a fixed name for the custom ISO (not unique per vmid)
+    auto_iso: "{{ iso_dir }}/FreeBSD-{{ freebsd_version }}-auto.iso"
     temp_dir: "/tmp/freebsd-config-{{ vmid }}"
     
-    # Default VM settings (can be overridden)
-    vmid: 9998
-    
     # FreeBSD configuration - generate password hash locally
-    freebsd_version: "14.3"
     freebsd_password: "{{ SERVICES_PASSWORD | default('privatebox123') }}"
     freebsd_hostname: "{{ hostname | default('freebsd-privatebox') }}"
     freebsd_username: "{{ username | default('freebsd') }}"
@@ -56,18 +55,6 @@
         name: xorriso
         state: present
         update_cache: yes
-      when: ansible_os_family == "Debian"
-      
-    - name: Ensure ISO directory exists
-      file:
-        path: "{{ iso_dir }}"
-        state: directory
-        mode: '0755'
-        
-    - name: Remove old ISO if present
-      file:
-        path: "{{ iso_path }}"
-        state: absent
         
     - name: Create temporary directory for config files
       file:
@@ -89,22 +76,20 @@
         dest: "{{ temp_dir }}/postinstall"
         mode: '0755'
         
-    - name: Build config drive ISO with xorriso
-      command: >
-        xorriso -as mkisofs 
-        -o "{{ iso_path }}" 
-        -V "FBSD_CONFIG" 
-        -volset "FreeBSD_AutoInstall"
-        -J -R 
-        "{{ temp_dir }}"
-      args:
-        creates: "{{ iso_path }}"
-      register: iso_build
-      
-    - name: Set proper permissions on ISO
+    - name: Remove old custom ISO if present
       file:
-        path: "{{ iso_path }}"
-        mode: '0644'
+        path: "{{ auto_iso }}"
+        state: absent
+        
+    - name: Build auto ISO (preserve boot data)
+      command: >
+        xorriso -indev "{{ base_iso }}" 
+                -outdev "{{ auto_iso }}"
+                -map "{{ temp_dir }}/installerconfig" /etc/installerconfig
+                -map "{{ temp_dir }}/postinstall" /etc/postinstall
+                -boot_image any keep
+      args:
+        creates: "{{ auto_iso }}"
         
     - name: Clean up temporary directory
       file:
@@ -114,7 +99,7 @@
     - name: Report ISO creation success
       debug:
         msg:
-          - "FreeBSD config ISO created successfully"
-          - "ISO Path: {{ iso_path }}"
-          - "ISO Name: {{ iso_name }}"
-          - "VM ID: {{ vmid }}"
+          - "FreeBSD custom installer ISO created successfully"
+          - "ISO Path: {{ auto_iso }}"
+          - "ISO Name: FreeBSD-{{ freebsd_version }}-auto.iso"
+          - "Config embedded at: /etc/installerconfig"
