@@ -147,7 +147,7 @@ log "Powering off…"
 shutdown -p now
 '
 
-KEEP_BUILDER="${KEEP_BUILDER:-1}"
+KEEP_BUILDER="${KEEP_BUILDER:-0}"
 cleanup() {
   set +e
   [ "$KEEP_BUILDER" = "1" ] && { echo "Keeping builder VM $BID for debugging"; return; }
