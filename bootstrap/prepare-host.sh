@@ -161,6 +161,9 @@ generate_config() {
     local base_network="$BASE_NETWORK"
     local proxmox_host="$PROXMOX_HOST"
     
+    # Detect Proxmox node name
+    local proxmox_node=$(pvesh get /nodes --output-format json | jq -r '.[0].node' 2>/dev/null || echo "pve")
+    
     # Generate passwords
     local admin_password=$(generate_password admin)
     local services_password=$(generate_password services)
@@ -244,6 +247,7 @@ SERVICES_PASSWORD="$services_password"
 PROXMOX_TOKEN_ID="$proxmox_token_id"
 PROXMOX_TOKEN_SECRET="$proxmox_token_secret"
 PROXMOX_API_HOST="$proxmox_host_ip"
+PROXMOX_NODE="$proxmox_node"
 
 # Legacy compatibility
 STORAGE="$STORAGE"
