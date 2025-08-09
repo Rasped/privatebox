@@ -15,6 +15,7 @@
     vmid: 9998
     
     # FreeBSD configuration - generate password hash locally
+    freebsd_version: "14.3"
     freebsd_password: "{{ SERVICES_PASSWORD | default('privatebox123') }}"
     freebsd_hostname: "{{ hostname | default('freebsd-privatebox') }}"
     freebsd_username: "{{ username | default('freebsd') }}"
