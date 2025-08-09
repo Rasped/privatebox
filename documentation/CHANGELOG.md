@@ -10,6 +10,12 @@ Newest entries at top. Archive old entries annually.
 
 ### August
 
+- 2025-08-09: [Fix] Embedded installerconfig directly into FreeBSD installer ISO - single ISO solution, no second CD needed
+- 2025-08-09: [Fix] Fixed Proxmox API token authentication - split token ID to extract user and token name separately  
+- 2025-08-09: [Task] Created FreeBSD automated deployment playbooks - supports unattended installation via Proxmox API
+- 2025-08-09: [Fix] Added required node parameter to proxmox_kvm module tasks - fixes API calls
+- 2025-08-09: [Fix] Created localhost inventory for Semaphore container-based playbooks
+- 2025-08-09: [Fix] Implemented Semaphore admin user creation via stop/start dance - works around running container limitation
 - 2025-08-04: [Task] Optimized bootstrap libraries - reduced 1,466 lines to 382 lines (74% reduction)
 - 2025-08-04: [Fix] Fixed Debian image cache validation - no more unnecessary re-downloads
 - 2025-08-04: [Task] Removed unused functions from semaphore-api.sh - reduced by 278 lines
