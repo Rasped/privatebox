@@ -8,7 +8,7 @@ BID="${BID:-9970}"                                 # Ephemeral builder VMID
 STORAGE="${STORAGE:-local-lvm}"                    # Storage for temp disk (e.g., local-lvm or local)
 ISO_STORAGE="${ISO_STORAGE:-local}"                # Storage that serves ISO_DIR
 ISO_DIR="${ISO_DIR:-/var/lib/vz/template/iso}"     # Directory for ISO_STORAGE (e.g., /var/lib/vz/template/iso)
-PBX_URL="${PBX_URL:-}"                             # HTTPS URL to installerconfig (optional)
+PBX_URL="${PBX_URL:-https://raw.githubusercontent.com/Rasped/privatebox/main/bootstrap/config/installerconfig}"  # GitHub installerconfig URL
 PBX_INSECURE="${PBX_INSECURE:-0}"                  # 1 = skip TLS verify for PBX_URL
 # =================
 
