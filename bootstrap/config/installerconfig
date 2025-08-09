@@ -1,5 +1,6 @@
-DISTRIBUTIONS="kernel.txz base.txz"
+DISTRIBUTIONS="base.txz kernel.txz"
 PARTITIONS="vtbd0"
+BSDINSTALL_DISTSITE="http://download.freebsd.org/ftp/releases/amd64/14.2-RELEASE/"
 
 #!/bin/sh
 set -eu

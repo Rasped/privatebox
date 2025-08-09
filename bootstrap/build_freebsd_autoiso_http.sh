@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ===== Vars =====
-FBSD_VER="${FBSD_VER:-14.3}"                       # Target FreeBSD version (for your info)
-MFSBSD_VER="${MFSBSD_VER:-$FBSD_VER}"              # mfsBSD version to base on (falls back to 14.2)
+FBSD_VER="${FBSD_VER:-14.2}"                       # Target FreeBSD version
+MFSBSD_VER="${MFSBSD_VER:-14.2}"                   # mfsBSD version (pinned to 14.2)
 BID="${BID:-9970}"                                 # Ephemeral builder VMID
 STORAGE="${STORAGE:-local-lvm}"                    # Storage for temp disk (e.g., local-lvm or local)
 ISO_STORAGE="${ISO_STORAGE:-local}"                # Storage that serves ISO_DIR
@@ -22,6 +22,8 @@ umask 022
 LOG=/var/log/pbx-rc.log
 exec >>"$LOG" 2>&1
 echo "[PBX] rc.local start $(date -u +%FT%TZ)"
+PATH="/sbin:/bin:/usr/sbin:/usr/bin:/rescue:$PATH"
+kldload virtio_blk 2>/dev/null || true
 
 run_install() {
   echo "[PBX] running installer from: $1"
@@ -90,6 +92,8 @@ umask 022
 LOG=/var/log/pbx-rc.log
 exec >>"$LOG" 2>&1
 echo "[PBX] rc.local start $(date -u +%FT%TZ)"
+PATH="/sbin:/bin:/usr/sbin:/usr/bin:/rescue:$PATH"
+kldload virtio_blk 2>/dev/null || true
 
 run_install() {
   echo "[PBX] running installer from: $1"
@@ -145,23 +149,11 @@ mount -t ufs -o rw /dev/vtbd0 /mnt/mfs
 log "Installing rc.local shim…"
 cp -f "$RC_SRC" /mnt/mfs/etc/rc.local && chmod 0755 /mnt/mfs/etc/rc.local
 
-# Copy URL from cfg ISO if available, otherwise use fallback
-if [ -f /cfg/pbx_url ]; then
-  cp -f /cfg/pbx_url /mnt/mfs/etc/pbx_url && chmod 0644 /mnt/mfs/etc/pbx_url
-elif [ -n "$PBX_URL_FALLBACK" ] && [ "$PBX_URL_FALLBACK" != "__PBX_URL__" ]; then
-  printf "%s\n" "$PBX_URL_FALLBACK" > /mnt/mfs/etc/pbx_url
-  chmod 0644 /mnt/mfs/etc/pbx_url
-  log "Using fallback URL: $PBX_URL_FALLBACK"
-fi
-
-# Copy insecure flag from cfg ISO if available, otherwise use fallback
-if [ -f /cfg/pbx_insecure ]; then
-  cp -f /cfg/pbx_insecure /mnt/mfs/etc/pbx_insecure && chmod 0644 /mnt/mfs/etc/pbx_insecure
-elif [ "${PBX_INSECURE_FALLBACK:-0}" = "1" ] && [ "$PBX_INSECURE_FALLBACK" != "__PBX_INSECURE__" ]; then
-  : > /mnt/mfs/etc/pbx_insecure
-  chmod 0644 /mnt/mfs/etc/pbx_insecure
-  log "Using fallback insecure flag"
-fi
+# Always write URL marker (will be replaced by sed with actual value)
+printf "%s\n" "__PBX_URL__" > /mnt/mfs/etc/pbx_url
+[ "__PBX_INSECURE__" = "1" ] && : > /mnt/mfs/etc/pbx_insecure
+chmod 0644 /mnt/mfs/etc/pbx_url 2>/dev/null || true
+chmod 0644 /mnt/mfs/etc/pbx_insecure 2>/dev/null || true
 
 ls -l /mnt/mfs/etc/rc.local || true
 ls -l /mnt/mfs/etc/pbx_url 2>/dev/null || true
@@ -190,18 +182,17 @@ apt-get install -y -qq xorriso expect socat curl >/dev/null
 
 mkdir -p "$ISO_DIR" "$WORK"
 
-# --- Download mfsBSD (prefer MINI, fallback SE; then fallback to 14.2) ---
+# --- Download mfsBSD (prefer SE, fallback MINI; then fallback to 14.2) ---
 download_mfsbsd() {
-  local ver="$1"
-  local mjr="${ver%%.*}"
-  local mini="$ISO_DIR/mfsbsd-mini-$ver-RELEASE-amd64.iso"
-  local mini_url="https://mfsbsd.vx.sk/files/iso/$mjr/amd64/mfsbsd-mini-$ver-RELEASE-amd64.iso"
+  local ver="${1}"; local mjr="${ver%%.*}"
   local se="$ISO_DIR/mfsbsd-se-$ver-RELEASE-amd64.iso"
   local se_url="https://mfsbsd.vx.sk/files/iso/$mjr/amd64/mfsbsd-se-$ver-RELEASE-amd64.iso"
-  if [ ! -f "$mini" ]; then curl -fL "$mini_url" -o "$mini" || true; fi
-  if [ -f "$mini" ]; then echo "$mini"; return 0; fi
-  if [ ! -f "$se" ];   then curl -fL "$se_url"   -o "$se"   || true; fi
-  if [ -f "$se" ];   then echo "$se";   return 0; fi
+  local mini="$ISO_DIR/mfsbsd-mini-$ver-RELEASE-amd64.iso"
+  local mini_url="https://mfsbsd.vx.sk/files/iso/$mjr/amd64/mfsbsd-mini-$ver-RELEASE-amd64.iso"
+  [ -f "$se" ]   || curl -fL "$se_url"   -o "$se"   || true
+  [ -f "$se" ]   && { echo "$se";   return 0; }
+  [ -f "$mini" ] || curl -fL "$mini_url" -o "$mini" || true
+  [ -f "$mini" ] && { echo "$mini"; return 0; }
   return 1
 }
 
