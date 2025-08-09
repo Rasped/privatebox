@@ -60,12 +60,20 @@ exit 0
 BUILD_SH='#!/bin/sh
 set -eu
 
+# Fallback values (will be replaced via sed)
+PBX_URL_FALLBACK="__PBX_URL__"
+PBX_INSECURE_FALLBACK="__PBX_INSECURE__"
+
 log() { echo "[PBX] $*"; }
 
-# 1) Mount cfg ISO (if present)
+# 1) Mount cfg ISO (best-effort; find the one that has build.sh)
 log "Mounting cfg ISO…"
 mkdir -p /cfg
-mount_cd9660 /dev/cd1 /cfg 2>/dev/null || mount_cd9660 /dev/cd0 /cfg 2>/dev/null || true
+for d in /dev/cd*; do
+  mount_cd9660 "$d" /cfg 2>/dev/null || continue
+  [ -f /cfg/build.sh ] && break
+  umount /cfg 2>/dev/null || true
+done
 
 # 2) Prepare rc.local source: use /cfg/rc.local if available; else write shim
 RC_SRC="/tmp/rc.local"
@@ -136,9 +144,27 @@ mount -t ufs -o rw /dev/vtbd0 /mnt/mfs
 # 4) Install shim + markers
 log "Installing rc.local shim…"
 cp -f "$RC_SRC" /mnt/mfs/etc/rc.local && chmod 0755 /mnt/mfs/etc/rc.local
-[ -f /cfg/pbx_url ] && cp -f /cfg/pbx_url /mnt/mfs/etc/pbx_url && chmod 0644 /mnt/mfs/etc/pbx_url || true
-[ -f /cfg/pbx_insecure ] && cp -f /cfg/pbx_insecure /mnt/mfs/etc/pbx_insecure && chmod 0644 /mnt/mfs/etc/pbx_insecure || true
+
+# Copy URL from cfg ISO if available, otherwise use fallback
+if [ -f /cfg/pbx_url ]; then
+  cp -f /cfg/pbx_url /mnt/mfs/etc/pbx_url && chmod 0644 /mnt/mfs/etc/pbx_url
+elif [ -n "$PBX_URL_FALLBACK" ] && [ "$PBX_URL_FALLBACK" != "__PBX_URL__" ]; then
+  printf "%s\n" "$PBX_URL_FALLBACK" > /mnt/mfs/etc/pbx_url
+  chmod 0644 /mnt/mfs/etc/pbx_url
+  log "Using fallback URL: $PBX_URL_FALLBACK"
+fi
+
+# Copy insecure flag from cfg ISO if available, otherwise use fallback
+if [ -f /cfg/pbx_insecure ]; then
+  cp -f /cfg/pbx_insecure /mnt/mfs/etc/pbx_insecure && chmod 0644 /mnt/mfs/etc/pbx_insecure
+elif [ "${PBX_INSECURE_FALLBACK:-0}" = "1" ] && [ "$PBX_INSECURE_FALLBACK" != "__PBX_INSECURE__" ]; then
+  : > /mnt/mfs/etc/pbx_insecure
+  chmod 0644 /mnt/mfs/etc/pbx_insecure
+  log "Using fallback insecure flag"
+fi
+
 ls -l /mnt/mfs/etc/rc.local || true
+ls -l /mnt/mfs/etc/pbx_url 2>/dev/null || true
 
 # 5) Cleanly unmount and power off (host continues)
 umount /mnt/mfs || true
@@ -239,6 +265,11 @@ mkdir -p "$WORK/cfg"
 printf "%s" "$RC_LOCAL_SHIM" > "$WORK/cfg/rc.local"
 printf "%s" "$BUILD_SH"     > "$WORK/cfg/build.sh"
 chmod 0755 "$WORK/cfg/rc.local" "$WORK/cfg/build.sh"
+
+# Inject actual values into placeholders in build.sh
+sed -i "s|__PBX_URL__|$PBX_URL|g" "$WORK/cfg/build.sh"
+sed -i "s|__PBX_INSECURE__|$PBX_INSECURE|g" "$WORK/cfg/build.sh"
+
 [ -n "$PBX_URL" ]      && printf "%s\n" "$PBX_URL" > "$WORK/cfg/pbx_url"
 [ "$PBX_INSECURE" = "1" ] && touch "$WORK/cfg/pbx_insecure"
 CFG_NAME="freebsd-installer-config.iso"
