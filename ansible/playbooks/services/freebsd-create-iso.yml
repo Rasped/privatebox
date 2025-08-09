@@ -1,0 +1,112 @@
+---
+- name: "FreeBSD: Create Config Drive ISO on Proxmox Host"
+  hosts: proxmox
+  become: true
+  gather_facts: true
+  
+  vars:
+    # ISO configuration
+    iso_dir: "/var/lib/vz/template/iso"
+    iso_name: "freebsd-config-{{ vmid }}.iso"
+    iso_path: "{{ iso_dir }}/{{ iso_name }}"
+    temp_dir: "/tmp/freebsd-config-{{ vmid }}"
+    
+    # Default VM settings (can be overridden)
+    vmid: 9998
+    
+    # FreeBSD configuration passed from main playbook
+    freebsd_password_hash: "{{ password_hash }}"
+    freebsd_hostname: "{{ hostname | default('freebsd-privatebox') }}"
+    freebsd_username: "{{ username | default('freebsd') }}"
+    freebsd_fullname: "{{ fullname | default('FreeBSD PrivateBox User') }}"
+    freebsd_shell: "{{ shell | default('/bin/sh') }}"
+    freebsd_timezone: "{{ timezone | default('UTC') }}"
+    freebsd_swap_size: "{{ swap_size | default('2G') }}"
+    freebsd_interface: "{{ interface | default('vtnet0') }}"
+    
+    # Network configuration
+    vm_static_ip: "{{ static_ip | default('192.168.1.55') }}"
+    vm_netmask: "{{ netmask | default('255.255.255.0') }}"
+    vm_gateway: "{{ gateway | default('192.168.1.1') }}"
+    vm_dns1: "{{ dns1 | default('8.8.8.8') }}"
+    vm_dns2: "{{ dns2 | default('8.8.4.4') }}"
+    
+    # Packages to install
+    freebsd_packages: "{{ packages | default(['bash', 'nano', 'curl', 'wget', 'git', 'rsync', 'htop']) }}"
+    
+    # Security settings
+    freebsd_security_hardening: "{{ security_hardening | default(true) }}"
+    freebsd_ssh_security: "{{ ssh_security | default(true) }}"
+    freebsd_enable_firewall: "{{ enable_firewall | default(true) }}"
+    freebsd_firewall_type: "{{ firewall_type | default('simple') }}"
+    freebsd_firewall_services: "{{ firewall_services | default('ssh') }}"
+    freebsd_firewall_allowed_ips: "{{ firewall_allowed_ips | default('192.168.1.0/24') }}"
+    
+  tasks:
+    - name: Install xorriso for ISO creation
+      apt:
+        name: xorriso
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+      
+    - name: Ensure ISO directory exists
+      file:
+        path: "{{ iso_dir }}"
+        state: directory
+        mode: '0755'
+        
+    - name: Remove old ISO if present
+      file:
+        path: "{{ iso_path }}"
+        state: absent
+        
+    - name: Create temporary directory for config files
+      file:
+        path: "{{ temp_dir }}"
+        state: directory
+        mode: '0755'
+        
+    - name: Create installerconfig file
+      template:
+        src: ../../templates/freebsd/installerconfig.j2
+        dest: "{{ temp_dir }}/installerconfig"
+        mode: '0755'
+      vars:
+        password_hash: "{{ freebsd_password_hash }}"
+        
+    - name: Create postinstall script
+      template:
+        src: ../../templates/freebsd/postinstall.sh.j2
+        dest: "{{ temp_dir }}/postinstall"
+        mode: '0755'
+        
+    - name: Build config drive ISO with xorriso
+      command: >
+        xorriso -as mkisofs 
+        -o "{{ iso_path }}" 
+        -V "FBSD_CONFIG" 
+        -volset "FreeBSD_AutoInstall"
+        -J -R 
+        "{{ temp_dir }}"
+      args:
+        creates: "{{ iso_path }}"
+      register: iso_build
+      
+    - name: Set proper permissions on ISO
+      file:
+        path: "{{ iso_path }}"
+        mode: '0644'
+        
+    - name: Clean up temporary directory
+      file:
+        path: "{{ temp_dir }}"
+        state: absent
+        
+    - name: Report ISO creation success
+      debug:
+        msg:
+          - "FreeBSD config ISO created successfully"
+          - "ISO Path: {{ iso_path }}"
+          - "ISO Name: {{ iso_name }}"
+          - "VM ID: {{ vmid }}"
