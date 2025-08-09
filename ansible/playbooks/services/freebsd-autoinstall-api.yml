@@ -145,7 +145,6 @@
             virtio: { virtio0: "{{ vm_storage }}:{{ vm_disk_size }}" }
             ide:
               ide2: "{{ iso_storage }}:iso/mfsbsd-freebsd-autoinstaller.iso,media=cdrom"
-              ide3: "{{ iso_storage }}:iso/freebsd-installer-config.iso,media=cdrom"
             state: present
             timeout: "{{ proxmox_timeout }}"
 
