@@ -263,6 +263,7 @@ create_proxmox_api_environment() {
     local token_id="${PROXMOX_TOKEN_ID}"
     local token_secret="${PROXMOX_TOKEN_SECRET}"
     local api_host="${PROXMOX_API_HOST}"
+    local node_name="${PROXMOX_NODE:-pve}"
     
     # Debug: Write values to file for verification
     {
@@ -271,6 +272,7 @@ create_proxmox_api_environment() {
         echo "PROXMOX_TOKEN_ID: '${token_id}'"
         echo "PROXMOX_TOKEN_SECRET: '${token_secret}'"
         echo "PROXMOX_API_HOST: '${api_host}'"
+        echo "PROXMOX_NODE: '${node_name}'"
         echo "Token ID empty? $([[ -z "$token_id" ]] && echo "YES" || echo "NO")"
         echo "Token Secret empty? $([[ -z "$token_secret" ]] && echo "YES" || echo "NO")"
         echo "=================================="
@@ -295,6 +297,7 @@ create_proxmox_api_environment() {
         --arg token_id "$escaped_token_id" \
         --arg token_secret "$token_secret" \
         --arg api_host "$api_host" \
+        --arg node_name "$node_name" \
         '{
             name: $name,
             project_id: $pid,
@@ -322,7 +325,7 @@ create_proxmox_api_environment() {
                 {
                     type: "var",
                     name: "PROXMOX_NODE",
-                    secret: "pve",
+                    secret: $node_name,
                     operation: "create"
                 }
             ]
