@@ -65,9 +65,8 @@
     freebsd_firewall_services: "ssh"
     freebsd_firewall_allowed_ips: "192.168.1.0/24"
     
-    # Config drive paths
-    config_drive_dir: "/tmp/freebsd-config-{{ vmid }}"
-    config_drive_iso: "{{ config_drive_dir }}/config.iso"
+    # Config drive ISO name (must match what freebsd-create-iso.yml creates)
+    config_iso_name: "freebsd-config-{{ vmid }}.iso"
     
     # Proxmox API Configuration
     # These will be set as environment variables in Semaphore
@@ -175,69 +174,25 @@
           register: iso_upload
           failed_when: false
 
-    # Generate configuration files and build config drive
-    - name: "{{ service_name }} - Config drive preparation"
+    # NOTE: Config drive ISO must be created first using freebsd-create-iso.yml
+    - name: "{{ service_name }} - Verify config drive ISO exists"
       tags: [freebsd, config, api]
       block:
-        - name: Clean up old config drive directory
-          file:
-            path: "{{ config_drive_dir }}"
-            state: absent
-            
-        - name: Create config drive directory
-          file:
-            path: "{{ config_drive_dir }}"
-            state: directory
-            mode: '0755'
-            
-        - name: Generate password hash
-          shell: |
-            python3 -c "import crypt, random, string; salt = ''.join(random.choices(string.ascii_letters + string.digits, k=8)); print(crypt.crypt('{{ freebsd_password }}', '$1$' + salt + '$'))"
-          register: password_hash
-          changed_when: false
-          no_log: true
-          
-        - name: Create installerconfig from template
-          template:
-            src: ../../templates/freebsd/installerconfig.j2
-            dest: "{{ config_drive_dir }}/installerconfig"
-            mode: '0755'
-            
-        - name: Create postinstall script from template
-          template:
-            src: ../../templates/freebsd/postinstall.sh.j2
-            dest: "{{ config_drive_dir }}/postinstall"
-            mode: '0755'
-            
-        - name: Install genisoimage for creating ISO
-          package:
-            name: genisoimage
-            state: present
-          become: true
-          when: ansible_facts['pkg_mgr'] in ['apt', 'yum', 'dnf', 'zypper']
-            
-        - name: Build config drive ISO with volume label
-          command: >
-            genisoimage -r -J -o "{{ config_drive_iso }}" 
-            -V "FBSD_CONFIG" -volset "FreeBSD_AutoInstall"
-            "{{ config_drive_dir }}"
-          args:
-            creates: "{{ config_drive_iso }}"
-          register: iso_build
-          
-        - name: Upload config drive ISO to Proxmox storage
+        - name: Check if config drive ISO exists on Proxmox
           uri:
-            url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ inventory_hostname | default('localhost') }}/storage/local/upload"
-            method: POST
+            url: "https://{{ proxmox_host }}:8006/api2/json/nodes/pve/storage/local/content"
+            method: GET
             headers:
               Authorization: "{{ 'PVEAPIToken=' + PROXMOX_TOKEN_ID + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
-            body_format: form-multipart
-            body:
-              content: "iso"
-              filename: "freebsd-config-{{ vmid }}.iso"
             validate_certs: "{{ proxmox_validate_certs }}"
-            timeout: 300
-          register: config_iso_upload
+          register: storage_content
+          
+        - name: Verify config ISO is present
+          assert:
+            that:
+              - storage_content.json.data | selectattr('volid', 'search', 'freebsd-config-' + vmid|string) | list | length > 0
+            fail_msg: "Config drive ISO not found. Please run freebsd-create-iso.yml first"
+            success_msg: "Config drive ISO found"
 
     # VM creation using Proxmox API
     - name: "{{ service_name }} - VM creation via API"
@@ -266,7 +221,7 @@
               virtio0: "{{ vm_storage }}:{{ vm_disk_size }}"
             ide:
               ide2: "local:iso/{{ freebsd_iso_name }},media=cdrom"
-              ide1: "local:iso/freebsd-config-{{ vmid }}.iso,media=cdrom"
+              ide1: "local:iso/{{ config_iso_name }},media=cdrom"
             state: present
             timeout: "{{ proxmox_timeout }}"
           register: vm_create
@@ -387,10 +342,7 @@
     - name: "{{ service_name }} - Cleanup and reporting"
       tags: [freebsd, cleanup, api]
       block:
-        - name: Clean up temporary config drive directory
-          file:
-            path: "{{ config_drive_dir }}"
-            state: absent
+        # Config drive cleanup not needed as ISO is created on Proxmox host
             
         - name: Clean up local ISO cache (optional)
           file:
@@ -398,16 +350,7 @@
             state: absent
           when: cleanup_iso_cache | default(false)
           
-        - name: Remove uploaded config drive ISO from Proxmox
-          uri:
-            url: "https://{{ proxmox_host }}:8006/api2/json/nodes/{{ inventory_hostname | default('localhost') }}/storage/local/content/local:iso%2Ffreebsd-config-{{ vmid }}.iso"
-            method: DELETE
-            headers:
-              Authorization: "{{ 'PVEAPIToken=' + PROXMOX_TOKEN_ID + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
-            validate_certs: "{{ proxmox_validate_certs }}"
-            status_code: [200, 404]
-          register: config_iso_cleanup
-          failed_when: false
+        # Config ISO cleanup can be done manually or via separate playbook if needed
             
         - name: Display installation completion
           debug:
