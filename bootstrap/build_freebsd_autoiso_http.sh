@@ -13,7 +13,7 @@ PBX_INSECURE="${PBX_INSECURE:-0}"                  # 1 = skip TLS verify for PBX
 # =================
 
 WORK="/var/lib/vz/tmp-autoiso-$BID"
-AUTO_ISO="$ISO_DIR/mfsbsd-$MFSBSD_VER-auto-$BID.iso"
+AUTO_ISO="$ISO_DIR/mfsbsd-freebsd-autoinstaller.iso"
 
 RC_LOCAL_SHIM='#!/bin/sh
 # /etc/rc.local inside the installer mfsroot
@@ -154,7 +154,7 @@ cleanup() {
   qm stop "$BID" >/dev/null 2>&1 || true
   qm destroy "$BID" --purge >/dev/null 2>&1 || true
   rm -rf "$WORK"
-  rm -f "$ISO_DIR/cfg-$BID.iso"
+  rm -f "$ISO_DIR/freebsd-installer-config.iso"
   rm -f "$ISO_DIR/mfsbsd-*-serial-$BID.iso"
 }
 trap cleanup EXIT
@@ -241,7 +241,7 @@ printf "%s" "$BUILD_SH"     > "$WORK/cfg/build.sh"
 chmod 0755 "$WORK/cfg/rc.local" "$WORK/cfg/build.sh"
 [ -n "$PBX_URL" ]      && printf "%s\n" "$PBX_URL" > "$WORK/cfg/pbx_url"
 [ "$PBX_INSECURE" = "1" ] && touch "$WORK/cfg/pbx_insecure"
-CFG_NAME="cfg-$BID.iso"
+CFG_NAME="freebsd-installer-config.iso"
 xorriso -as mkisofs -o "$ISO_DIR/$CFG_NAME" -V BUILDERCFG -J -R "$WORK/cfg" >/dev/null
 
 # --- Create builder VM (no hotplug; boot from SATA CD) ---
