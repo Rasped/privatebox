@@ -180,7 +180,7 @@
       block:
         - name: Check if config drive ISO exists on Proxmox
           uri:
-            url: "https://{{ proxmox_host }}:8006/api2/json/nodes/pve/storage/local/content"
+            url: "https://{{ proxmox_host }}:8006/api2/json/nodes/proxmox/storage/local/content"
             method: GET
             headers:
               Authorization: "{{ 'PVEAPIToken=' + PROXMOX_TOKEN_ID + '=' + proxmox_token_secret if use_api_token else 'Basic ' + ((proxmox_user + ':' + proxmox_password) | b64encode) }}"
