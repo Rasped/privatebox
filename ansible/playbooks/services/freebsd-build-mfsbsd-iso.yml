@@ -1,0 +1,72 @@
+---
+- name: "FreeBSD: Build mfsBSD Auto-Install ISO"
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  
+  vars:
+    service_name: "FreeBSD mfsBSD ISO Builder"
+    service_description: "Build custom mfsBSD ISO with auto-installer"
+    service_tag: "freebsd-mfsbsd-builder"
+    
+    # Build configuration
+    build_id: "{{ auto_iso_build_id | default(9970) }}"
+    freebsd_version: "{{ FBSD_VER | default('14.3') }}"
+    mfsbsd_version: "{{ MFSBSD_VER | default(freebsd_version) }}"
+    storage: "{{ STORAGE | default('local-lvm') }}"
+    iso_storage: "{{ ISO_STORAGE | default('local') }}"
+    iso_dir: "{{ ISO_DIR | default('/var/lib/vz/template/iso') }}"
+    
+    # Optional HTTP config URL
+    pbx_url: "{{ PBX_URL | default('') }}"
+    pbx_insecure: "{{ PBX_INSECURE | default(0) }}"
+    
+  tasks:
+    - name: Check if build script exists
+      stat:
+        path: /root/privatebox/bootstrap/build_freebsd_autoiso_http.sh
+      register: build_script_stat
+      
+    - name: Clone/update PrivateBox repository if needed
+      git:
+        repo: https://github.com/Rasped/privatebox.git
+        dest: /root/privatebox
+        version: main
+        force: yes
+      when: not build_script_stat.stat.exists
+      
+    - name: Make build script executable
+      file:
+        path: /root/privatebox/bootstrap/build_freebsd_autoiso_http.sh
+        mode: '0755'
+        
+    - name: Run mfsBSD ISO builder
+      shell: |
+        cd /root/privatebox/bootstrap
+        export BID="{{ build_id }}"
+        export FBSD_VER="{{ freebsd_version }}"
+        export MFSBSD_VER="{{ mfsbsd_version }}"
+        export STORAGE="{{ storage }}"
+        export ISO_STORAGE="{{ iso_storage }}"
+        export ISO_DIR="{{ iso_dir }}"
+        export PBX_URL="{{ pbx_url }}"
+        export PBX_INSECURE="{{ pbx_insecure }}"
+        export KEEP_BUILDER=0
+        bash ./build_freebsd_autoiso_http.sh
+      register: build_result
+      changed_when: true
+      
+    - name: Verify ISO was created
+      stat:
+        path: "{{ iso_dir }}/mfsbsd-{{ mfsbsd_version }}-auto-{{ build_id }}.iso"
+      register: iso_stat
+      failed_when: not iso_stat.stat.exists
+      
+    - name: Report build success
+      debug:
+        msg:
+          - "mfsBSD auto-installer ISO built successfully"
+          - "ISO Path: {{ iso_dir }}/mfsbsd-{{ mfsbsd_version }}-auto-{{ build_id }}.iso"
+          - "ISO Size: {{ (iso_stat.stat.size / 1024 / 1024) | round(2) }} MB"
+          - "Build Output:"
+          - "{{ build_result.stdout_lines[-10:] }}"
