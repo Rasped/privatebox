@@ -31,7 +31,6 @@
       "Bash(mkdir:*)",
       "Bash(mv:*)",
       "Bash(nc:*)",
-      "Bash(sshpass -p 'Changeme123' ssh ubuntuadmin@192.168.1.23 \"find /opt /home/ubuntuadmin -name ''*.sh'' -type f 2>/dev/null | grep -E ''(setup|initial|proxmox|discover)'' | head -10\")",
       "Bash(for file in deploy-opnsense-vlans.yml opnsense-deploy.yml configure-opnsense-boot.yml download-opnsense.yml create-opnsense-vm.yml)",
       "Bash(do sed -i 's/hosts: proxmox-host/hosts: proxmox/g' \"$file\")",
       "Bash(echo:*)",

@@ -1,17 +1,19 @@
 # Config-Based Installation Design
 
 ## Overview
+
 This document defines the config-driven installation approach for PrivateBox, with sensible defaults and auto-generation capabilities for zero-configuration deployment.
 
 ## Current State Analysis
 
 ### Existing Config Issues
+
 1. **Mixed Concerns**: Infrastructure settings mixed with service configurations
-2. **Hardcoded Passwords**: "Changeme123" scattered throughout codebase
-3. **No Defaults**: Users must configure everything manually
-4. **Inconsistent Generation**: Only Semaphore password is auto-generated
+2. **No Defaults**: Users must configure everything manually
+3. **Inconsistent Generation**: Only Semaphore password is auto-generated
 
 ### Config Loading Flow
+
 ```
 network-discovery.sh → creates config with hardcoded values
 create-ubuntu-vm.sh → sources config but ignores most values
@@ -21,10 +23,11 @@ create-ubuntu-vm.sh → sources config but ignores most values
 ## New Config-Based Design
 
 ### Minimal User Configuration
+
 ```bash
 # Infrastructure IPs (auto-generated if not provided)
 CONTAINER_HOST_IP="192.168.1.20"    # Ubuntu VM with containers
-CADDY_HOST_IP="192.168.1.21"        # Alpine VM with Caddy  
+CADDY_HOST_IP="192.168.1.21"        # Alpine VM with Caddy
 OPNSENSE_IP="192.168.1.47"          # OPNsense firewall
 GATEWAY="192.168.1.3"               # Network gateway
 
@@ -38,7 +41,9 @@ VM_CORES="2"
 ```
 
 ### Default Network Layout
+
 When auto-detecting network configuration:
+
 1. Detect gateway IP (e.g., 192.168.1.3)
 2. Extract base network (e.g., 192.168.1)
 3. Apply standard host IPs:
@@ -49,12 +54,15 @@ When auto-detecting network configuration:
 ## Password Generation Strategy
 
 ### Phonetic Password Design
+
 Passwords are generated using phonetic words that are:
+
 - Easy to remember
 - Easy to type
 - Secure through length and complexity
 
 ### Services Password (3 words)
+
 - **Format**: `Word1-Word2-Word3`
 - **Example**: `Spr1ng-M0nk3y-Blu3`
 - **Characteristics**:
@@ -65,6 +73,7 @@ Passwords are generated using phonetic words that are:
   - Hyphen separators
 
 ### Admin Password (5 words)
+
 - **Format**: `Word1-Word2-Word3-Word4-Word5`
 - **Example**: `Eagl3-T0w3r-Silv3r-M0unta1n-Str0ng`
 - **Characteristics**:
@@ -73,7 +82,9 @@ Passwords are generated using phonetic words that are:
   - Longer for infrastructure access
 
 ### Number Substitution Rules
+
 Common letter-to-number substitutions for memorability:
+
 - `e` → `3`
 - `o` → `0`
 - `i` → `1`
@@ -82,7 +93,9 @@ Common letter-to-number substitutions for memorability:
 - `l` → `1` (when lowercase)
 
 ### Word Categories
+
 To ensure variety and memorability:
+
 - **Adjectives**: Swift, Bright, Strong, Clear, Sharp, Quick, Bold
 - **Nouns**: Eagle, Tower, River, Mountain, Forest, Thunder, Ocean
 - **Colors**: Blue, Green, Silver, Golden, Crimson, Azure, Amber
@@ -91,6 +104,7 @@ To ensure variety and memorability:
 ## Config Generation Flow
 
 ### 1. Check Existing Config
+
 ```bash
 if [[ -f "privatebox.conf" ]]; then
     source privatebox.conf
@@ -102,6 +116,7 @@ fi
 ```
 
 ### 2. Network Auto-Detection
+
 ```bash
 # Detect gateway
 GATEWAY=$(ip route | grep default | awk '{print $3}')
@@ -116,15 +131,16 @@ OPNSENSE_IP="${BASE_NETWORK}.47"
 ```
 
 ### 3. Password Generation
+
 ```bash
 generate_phonetic_password() {
     local word_count=$1
     local words=()
-    
+
     # Select random words from categories
     # Apply number substitutions
     # Join with hyphens
-    
+
     echo "${words[*]}"
 }
 
@@ -134,6 +150,7 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(generate_phonetic_password 5)}"
 ```
 
 ### 4. Display and Save
+
 ```bash
 echo "=== Generated Configuration ==="
 echo "Network:"
@@ -151,12 +168,15 @@ echo "Configuration saved to: privatebox.conf"
 ## Implementation Plan
 
 ### Phase 1: Core Implementation
+
 1. **Create phonetic password generator**
+
    - Word lists and selection logic
    - Number substitution function
    - Hyphen joining
 
 2. **Update network-discovery.sh**
+
    - Add IP defaults (.20, .21, .47)
    - Integrate password generation
    - Create complete config
@@ -167,12 +187,14 @@ echo "Configuration saved to: privatebox.conf"
    - Add clear comments
 
 ### Phase 2: Integration
+
 1. **Update create-ubuntu-vm.sh**
+
    - Use config passwords consistently
-   - Remove hardcoded "Changeme123"
    - Validate password complexity
 
 2. **Update service deployments**
+
    - Read passwords from config/secrets
    - Remove password generation from services
    - Ensure consistent password usage
@@ -183,12 +205,15 @@ echo "Configuration saved to: privatebox.conf"
    - Delete config after bootstrap
 
 ### Phase 3: Testing
+
 1. **Test auto-generation**
+
    - No config file scenario
    - Partial config scenario
    - Full config scenario
 
 2. **Test network detection**
+
    - Various network configurations
    - Gateway detection reliability
    - IP conflict handling
@@ -201,12 +226,14 @@ echo "Configuration saved to: privatebox.conf"
 ## Security Considerations
 
 ### Password Storage
+
 - Config file: chmod 600 during bootstrap
 - Secure storage: /opt/privatebox/secrets/ after bootstrap
 - Environment: Clear passwords after use
 - Logs: Never log passwords
 
 ### Password Strength
+
 - Services: ~15-18 characters with complexity
 - Admin: ~25-30 characters with higher complexity
 - Both exceed typical brute-force thresholds
