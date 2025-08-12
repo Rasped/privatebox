@@ -60,7 +60,7 @@ exit 0
 '
 
 BUILD_SH='#!/bin/sh
-set -eu
+set -eu °°
 
 # Fallback values (will be replaced via sed)
 PBX_URL_FALLBACK="__PBX_URL__"
@@ -319,14 +319,13 @@ VOLID="${STORAGE}:vm-${BID}-disk-0"
 VOLPATH="$(pvesm path "$VOLID")"
 dd if="$VOLPATH" of="$WORK/mfsroot.patched" bs=1M status=none
 
-case "$RAMDISK_PATH" in
-  *.gz)   gzip -c "$WORK/mfsroot.patched" > "$WORK/mfsroot.new" ;;
-  *.uzip) echo "This ISO uses .uzip; set MFSBSD_VER=14.2 (gz) or add mkuzip support." >&2; exit 1 ;;
-  *)      cp "$WORK/mfsroot.patched" "$WORK/mfsroot.new" ;;
-esac
+# Produce both compressed and uncompressed versions
+gzip -c "$WORK/mfsroot.patched" > "$WORK/mfsroot.patched.gz"
 
+# Remaster ISO: map to BOTH /mfsroot and /mfsroot.gz to ensure compatibility
 xorriso -indev "$MFSBSD_ISO" -outdev "$AUTO_ISO" \
-  -map "$WORK/mfsroot.new" "$RAMDISK_PATH" \
+  -map "$WORK/mfsroot.patched.gz" "/mfsroot.gz" \
+  -map "$WORK/mfsroot.patched"    "/mfsroot" \
   -boot_image any keep >/dev/null
 
 echo "OK -> $AUTO_ISO"
