@@ -77,7 +77,8 @@
       "WebFetch(domain:www.freshports.org)",
       "WebFetch(domain:pve.proxmox.com)",
       "Bash(SSHPASS='4gency-5ilica-dec3PtiOn-p0Ppy-cath0use' sshpass -e ssh debian@192.168.1.20 'cd /opt/privatebox && sudo git pull')",
-      "WebSearch"
+      "WebSearch",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
