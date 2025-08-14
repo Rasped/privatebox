@@ -17,9 +17,7 @@ run_install() {
   bsdinstall script "$1"
   rc=$?
   echo "[PBX] bsdinstall rc=$rc"
-  sync; sleep 2
-  shutdown -p now
-  exit 0
+  return $rc
 }
 
 # 1) HTTP via baked marker
@@ -28,10 +26,15 @@ url=""
 if [ -n "$url" ]; then
   echo "[PBX] fetching installerconfig from $url"
   if [ -f /etc/pbx_insecure ]; then
-    fetch --no-verify-peer -o /tmp/installerconfig "$url" && run_install /tmp/installerconfig || echo "[PBX] fetch failed"
+    fetch --no-verify-peer -o /tmp/installerconfig "$url" && run_install /tmp/installerconfig
   else
-    fetch -o /tmp/installerconfig "$url" && run_install /tmp/installerconfig || echo "[PBX] fetch failed"
+    fetch -o /tmp/installerconfig "$url" && run_install /tmp/installerconfig
   fi
+  # Force shutdown after install regardless of return code
+  echo "[PBX] Installation complete, powering off..."
+  sync; sleep 2
+  shutdown -p now || halt -p || poweroff || reboot
+  exit 0
 fi
 
 # 2) Fallback: look for /etc/installerconfig on secondary media
@@ -40,7 +43,14 @@ mkdir -p /mnt/cfg
 for d in /dev/cd1 /dev/cd0 /dev/da1 /dev/vtbd1; do
   mount_cd9660 "$d" /mnt/cfg 2>/dev/null && break
 done
-[ -f /mnt/cfg/etc/installerconfig ] && run_install /mnt/cfg/etc/installerconfig
+if [ -f /mnt/cfg/etc/installerconfig ]; then
+  run_install /mnt/cfg/etc/installerconfig
+  # Force shutdown after install regardless of return code
+  echo "[PBX] Installation complete, powering off..."
+  sync; sleep 2
+  shutdown -p now || halt -p || poweroff || reboot
+  exit 0
+fi
 
 echo "[PBX] no installerconfig found; continuing normal boot"
 exit 0
