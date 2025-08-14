@@ -21,8 +21,9 @@ done
 
 # 3) Mount UFS and install shim + markers
 fsck_ufs -y /dev/vtbd0 || true
-mkdir -p /mnt/mfs/etc
+mkdir -p /mnt/mfs
 mount -t ufs -o rw /dev/vtbd0 /mnt/mfs
+mkdir -p /mnt/mfs/etc
 
 install -m 0755 /cfg/rc.local /mnt/mfs/etc/rc.local
 [ -f /cfg/pbx_url ]      && install -m 0644 /cfg/pbx_url /mnt/mfs/etc/pbx_url || true
