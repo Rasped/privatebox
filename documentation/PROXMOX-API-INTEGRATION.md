@@ -79,8 +79,7 @@ sudo /opt/privatebox/scripts/register-proxmox-api.sh
 - `/tmp/proxmox-api-env.json` - Temporary Semaphore config
 
 ### Ansible Integration
-- `ansible/playbooks/services/freebsd-autoinstall-api.yml` - Uses ProxmoxAPI environment
-- `ansible/group_vars/freebsd-api.yml` - Configuration for FreeBSD autoinstall
+- Playbooks can use the ProxmoxAPI environment for VM operations
 
 ## Environment Variables
 
@@ -127,11 +126,10 @@ curl -s -b /tmp/cookie http://localhost:3000/api/project/1/environment | \
   jq '.[] | select(.name=="ProxmoxAPI")'
 ```
 
-### Test FreeBSD Autoinstall
+### Test API Access
 ```bash
-# Should use API tokens from environment
-ansible-playbook -i ansible/inventory.yml \
-  ansible/playbooks/services/freebsd-autoinstall-api.yml
+# Test that API tokens work from Semaphore templates
+# Run any template that uses ProxmoxAPI environment
 ```
 
 ## Troubleshooting

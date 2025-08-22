@@ -98,7 +98,7 @@ This guide orients LLMs contributing to PrivateBox. It defines the flow, platfor
 - Always bind services to the management VM IP; do not expose on `0.0.0.0`.
 - Keep Proxmox “latest-only” assumption and Debian 13 base.
 - Use Quadlet for containers; avoid docker-compose.
-- Write logs and success markers; do not proceed to OPNsense Stage 3.
+- Write logs and success markers; OPNsense uses VM template approach.
 - Update docs when changing flow/UX; never commit plaintext secrets.
 
 ## Success Criteria
