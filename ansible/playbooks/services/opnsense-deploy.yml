@@ -56,10 +56,10 @@
       semaphore_category: "infrastructure"
     
     # Template source
-    template_url: "https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/opnsense-25.7-template.vma.zst"
-    template_filename: "opnsense-25.7-template.vma.zst"
-    template_md5: "c5f59be8f4c32d54c6a0056edb265f33"
-    template_size_mb: 766
+    template_url: "https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/opnsense-vm-backup.vma.zst"
+    template_filename: "opnsense-vm-backup.vma.zst"
+    template_md5: "e7cf310cd3386eed54d1ff43c6c98837"
+    template_size_mb: 772
     
     # Storage requirements (MB)
     required_space_mb: 5120  # 5GB for compressed + extracted
@@ -94,7 +94,7 @@
           - "VM ID: {{ vm_id }}"
           - "VM Name: {{ vm_name }}"
           - "Storage: {{ vm_storage }}"
-          - "Template: {{ template_filename }} ({{ template_size_mb }}MB)"
+          - "VM Backup: {{ template_filename }} ({{ template_size_mb }}MB)"
           - "Auto-start: {{ start_after_restore }}"
           - "Custom config: {{ apply_custom_config }}"
           - "======================================"
@@ -247,12 +247,6 @@
           set_fact:
             needs_download: "{{ not cached_template.stat.exists or (cached_template.stat.exists and cached_checksum.stat.checksum | default('') != template_md5) }}"
                  
-        - name: Debug cache variables
-          debug:
-            msg:
-              - "cached_template.stat.exists: {{ cached_template.stat.exists }}"
-              - "needs_download: {{ needs_download }}"
-              
         - name: Template cache status
           debug:
             msg: >-
