@@ -21,7 +21,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - VM OS: Debian 13 cloud image.
 - Bridges: `vmbr0` = WAN, `vmbr1` = LAN.
 - IPs configurable; defaults from detected `BASE_NETWORK` (e.g., `.20`).
-- OPNsense Stage 3: do not implement yet.
+- OPNsense: use VM template approach (manual config → convert to template → store on GitHub).
 
 ## Flow Summary
 1. Quickstart → `bootstrap/bootstrap.sh`.

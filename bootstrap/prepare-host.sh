@@ -211,7 +211,6 @@ generate_config() {
     # VM network settings (using hardcoded design)
     local container_host_ip="${base_network}.20"
     local caddy_host_ip="${base_network}.21"
-    local opnsense_ip="${base_network}.47"
     
     # Write configuration file
     cat > "$CONFIG_FILE" <<EOF
@@ -229,7 +228,6 @@ NETMASK="24"
 STATIC_IP="$container_host_ip"
 CONTAINER_HOST_IP="$container_host_ip"
 CADDY_HOST_IP="$caddy_host_ip"
-OPNSENSE_IP="$opnsense_ip"
 
 # VM Configuration
 VMID="$VMID"
