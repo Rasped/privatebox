@@ -172,7 +172,7 @@ vars_prompt:
 
 ### 🚧 In Development
 
-- **OPNsense Integration**: Firewall and router functionality
+- **OPNsense Integration**: Firewall and router functionality (template available: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense))
 - **Network Segmentation**: VLAN-based network isolation (design phase)
 - **Additional Privacy Services**: Unbound DNS, WireGuard VPN
 
