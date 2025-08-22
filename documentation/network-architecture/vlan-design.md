@@ -14,6 +14,8 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 
 ## VLAN Assignments
 
+**Total VLANs**: 8 (Management, Services, Trusted, Guest, IoT Cloud, IoT Local, Cameras Cloud, Cameras Local)
+
 ### VLAN 10 - Management Network (10.10.10.0/24)
 
 **Purpose**: Infrastructure management and administration
@@ -136,9 +138,9 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 **Devices Examples**:
 - Smart TVs and streaming devices
 - Voice assistants (Alexa, Google Home)
-- Cloud security cameras
 - Smart thermostats
 - Weather stations
+- Cloud-connected appliances
 
 **Rationale**:
 - 100 addresses accommodate modern smart homes
@@ -168,10 +170,10 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 
 **Device Examples**:
 - Zigbee/Z-Wave hubs
-- Local security cameras with NVR
 - Smart switches/bulbs with local hub
 - Printers
 - Local media servers
+- Home automation hubs
 
 **Rationale**:
 - Blocking internet prevents data collection and phoning home
@@ -179,12 +181,85 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Local control is more reliable
 - 100 addresses support extensive home automation
 
+### VLAN 70 - Cameras Cloud (10.10.70.0/24)
+
+**Purpose**: Security cameras requiring cloud connectivity
+
+**IP Assignments**:
+- 10.10.70.1 - OPNsense (VLAN gateway)
+- 10.10.70.100-150 - DHCP pool (50 addresses)
+
+**Configuration**:
+- DHCP: Enabled
+- DNS: 10.10.20.10 (AdGuard Home)
+- Gateway: 10.10.70.1
+
+**Access Policy**:
+- Internet access allowed (for cloud services)
+- DNS to Services VLAN allowed
+- NTP to Services VLAN allowed (critical for timestamps)
+- Can respond to connections from Trusted LAN
+- Cannot initiate connections to other VLANs
+- Isolated from other cameras (no camera-to-camera)
+
+**Device Examples**:
+- Ring cameras and doorbells
+- Nest/Google cameras
+- Arlo cameras
+- Wyze cameras
+- Blink cameras
+- Any camera with cloud recording/AI features
+
+**Rationale**:
+- Separate from IoT due to privacy implications
+- Cloud access enables mobile notifications and AI detection
+- Isolation prevents compromised camera from network scanning
+- 50 addresses sufficient for typical home camera deployments
+
+### VLAN 80 - Cameras Local (10.10.80.0/24)
+
+**Purpose**: Security cameras with local-only recording
+
+**IP Assignments**:
+- 10.10.80.1 - OPNsense (VLAN gateway)
+- 10.10.80.100-150 - DHCP pool (50 addresses)
+
+**Configuration**:
+- DHCP: Enabled
+- DNS: 10.10.20.10 (AdGuard Home)
+- Gateway: 10.10.80.1
+
+**Access Policy**:
+- NO internet access (blocked at firewall)
+- DNS to Services VLAN allowed (for local resolution)
+- NTP to Services VLAN allowed (critical for timestamps)
+- Can respond to connections from Trusted LAN
+- Can be accessed by Services VLAN (for NVR containers)
+- Cannot initiate connections to other VLANs
+- Isolated from other cameras (no camera-to-camera)
+
+**Device Examples**:
+- IP cameras with local NVR (Blue Iris, Frigate, Synology)
+- ONVIF/RTSP cameras
+- Reolink cameras (local mode)
+- Amcrest cameras (local mode)
+- UniFi Protect cameras (local mode)
+- Any camera used purely for local recording
+
+**Rationale**:
+- Maximum privacy - no cloud data leakage
+- No dependency on internet or cloud services
+- Recordings stay completely local
+- Prevents camera firmware from phoning home
+- 50 addresses sufficient for extensive local surveillance
+
 ## Firewall Rules Summary
 
 ### Trusted LAN → Other VLANs
 - ✅ Management: Allow SSH (22), HTTPS (8006)
 - ✅ Services: Allow DNS (53), HTTP (80), HTTPS (443), Semaphore (3000), AdGuard (8080), Portainer (9000)
 - ✅ IoT Cloud/Local: Allow all (to control devices)
+- ✅ Cameras Cloud/Local: Allow all (to view streams and configure)
 - ❌ Guest: Deny all
 
 ### Guest → Other VLANs
@@ -202,6 +277,18 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - ✅ Services: Allow DNS (53) and NTP (123) only
 - ❌ All others: Deny all (stateful responses to Trusted allowed)
 
+### Cameras Cloud → Other VLANs
+- ✅ Internet: Allow all
+- ✅ Services: Allow DNS (53) and NTP (123) only
+- ❌ All others: Deny all (stateful responses to Trusted allowed)
+- ❌ Other cameras: Deny all (prevent lateral movement)
+
+### Cameras Local → Other VLANs
+- ❌ Internet: Deny all
+- ✅ Services: Allow DNS (53) and NTP (123) only, allow from Services for NVR
+- ❌ All others: Deny all (stateful responses to Trusted allowed)
+- ❌ Other cameras: Deny all (prevent lateral movement)
+
 ### Services → Other VLANs
 - ✅ Internet: Allow (for updates)
 - ❌ All others: Deny all
@@ -218,7 +305,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
    - Template provides base configuration with LAN at 10.10.10.1/24
    - Enable DHCP server on appropriate VLANs
    - Configure firewall rules as specified
-   - All 6 VLANs configured regardless of usage
+   - All 8 VLANs configured regardless of usage
 
 2. **Proxmox Configuration**:
    - vmbr0: WAN bridge (not VLAN-aware, direct internet connection)
@@ -270,7 +357,7 @@ For users with typical home WiFi routers:
 For users with UniFi, Omada, or similar APs:
 
 **What to use**:
-- All 6 VLANs as designed
+- All 8 VLANs as designed
 - Create separate SSIDs mapped to appropriate VLANs
 
 **Setup**:
@@ -279,6 +366,7 @@ For users with UniFi, Omada, or similar APs:
    - "Home-Guest" → VLAN 40 (Guest)
    - "Home-IoT" → VLAN 50 (IoT Cloud)
    - "Home-NoCloud" → VLAN 60 (IoT Local)
+   - "Home-Cameras" → VLAN 70/80 (based on cloud preference)
 2. Connect AP to LAN network (vmbr1) with trunk port for all VLANs
 
 **Result**: Full network segmentation with maximum privacy
