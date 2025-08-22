@@ -249,6 +249,12 @@
               {{ not cached_template.stat.exists or 
                  (cached_template.stat.exists and cached_checksum.stat.checksum | default('') != template_md5) }}
                  
+        - name: Debug cache variables
+          debug:
+            msg:
+              - "cached_template.stat.exists: {{ cached_template.stat.exists }}"
+              - "needs_download: {{ needs_download }}"
+              
         - name: Template cache status
           debug:
             msg: >-
