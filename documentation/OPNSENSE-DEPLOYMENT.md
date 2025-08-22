@@ -9,7 +9,8 @@ OPNsense is deployed using a pre-configured Proxmox template that provides a min
 - **Version**: OPNsense 25.7 (amd64)
 - **Release**: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense)
 - **Size**: 771MB (compressed with zstd)
-- **Format**: Proxmox VMA backup (`.vma.zst`)
+- **Format**: Proxmox VMA backup (`vzdump-qemu-*.vma.zst`)
+- **Filename**: `vzdump-qemu-101-opnsense.vma.zst`
 
 ## Default Configuration
 
@@ -50,14 +51,14 @@ ansible-playbook -i ansible/inventory.yml \
 
 ```bash
 # Download template
-wget https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/opnsense-vm-backup.vma.zst
+wget https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/vzdump-qemu-101-opnsense.vma.zst
 
 # Transfer to Proxmox host
-scp opnsense-vm-backup.vma.zst root@192.168.1.10:/tmp/
+scp vzdump-qemu-101-opnsense.vma.zst root@192.168.1.10:/tmp/
 
 # SSH to Proxmox and restore
 ssh root@192.168.1.10
-qmrestore /tmp/opnsense-vm-backup.vma.zst 101
+qmrestore /tmp/vzdump-qemu-101-opnsense.vma.zst 101
 qm set 101 --name opnsense-fw --onboot 1
 qm start 101
 ```
@@ -66,10 +67,15 @@ qm start 101
 
 ### Accessing OPNsense
 
-1. **SSH Access** (from management network):
-   ```bash
-   ssh root@10.10.10.1
-   ```
+1. **SSH Access**:
+   - From LAN network (10.10.10.0/24):
+     ```bash
+     ssh root@10.10.10.1
+     ```
+   - From Proxmox host to WAN interface:
+     ```bash
+     SSHPASS='opnsense' sshpass -e ssh root@<WAN_IP>
+     ```
 
 2. **Web Interface**:
    - URL: https://10.10.10.1
@@ -170,6 +176,12 @@ ansible/files/opnsense/
 - Check GitHub releases page
 - Verify network connectivity
 - Manual download and transfer as fallback
+
+### VMA Restore Fails
+
+- Ensure filename follows `vzdump-qemu-*` pattern
+- Proxmox requires this naming convention for VMA backups
+- File must be accessible to qmrestore command
 
 ## Updating the Template
 
