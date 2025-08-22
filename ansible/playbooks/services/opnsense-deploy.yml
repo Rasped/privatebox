@@ -305,12 +305,13 @@
         - name: Validate template integrity
           assert:
             that:
+              - final_checksum.stat.exists
               - final_checksum.stat.checksum == template_md5
             fail_msg: |
               Template checksum mismatch!
               Expected: {{ template_md5 }}
-              Got: {{ final_checksum.stat.checksum }}
-              The template file may be corrupted.
+              Got: {{ final_checksum.stat.checksum | default('file not found') }}
+              The template file may be corrupted or missing.
               
         - name: Display template status
           debug:
