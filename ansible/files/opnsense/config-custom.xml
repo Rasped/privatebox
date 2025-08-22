@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- 
+  OPNsense Custom Configuration Placeholder
+  
+  This file is a placeholder for custom OPNsense configurations.
+  To use a custom configuration:
+  
+  1. Export your configuration from an existing OPNsense installation:
+     System -> Configuration -> Backups -> Download
+     
+  2. Replace this file with your exported config.xml
+  
+  3. Run the deployment playbook with apply_custom_config=yes
+  
+  Note: The custom config will be applied after the VM is restored
+  from the template, replacing the default configuration.
+  
+  IMPORTANT: Ensure your custom config is compatible with the
+  network setup (WAN on vmbr0, LAN on vmbr1).
+-->
+<opnsense>
+  <!-- Your custom configuration goes here -->
+</opnsense>
