@@ -1,0 +1,625 @@
+---
+# OPNsense Firewall Deployment from GitHub Template
+# This playbook deploys OPNsense VMs from a pre-built Proxmox template
+# stored as a GitHub release. It follows PrivateBox patterns for
+# consistent, idempotent deployments with proper error handling.
+
+- name: "OPNsense: Deploy Firewall VM from Template"
+  hosts: proxmox
+  gather_facts: yes
+  become: false  # Running as root on Proxmox
+  
+  vars_prompt:
+    - name: vm_id
+      prompt: "VM ID for OPNsense"
+      default: "101"
+      private: no
+      
+    - name: vm_name
+      prompt: "VM name"
+      default: "opnsense-fw"
+      private: no
+      
+    - name: vm_storage
+      prompt: "Storage location"
+      default: "local-lvm"
+      private: no
+      
+    - name: start_after_restore
+      prompt: "Start VM after deployment?"
+      default: "yes"
+      private: no
+      
+    - name: apply_custom_config
+      prompt: "Apply custom configuration?"
+      default: "no"
+      private: no
+      
+  vars:
+    # Semaphore template metadata (for template sync)
+    # These are parsed by tools/generate-templates.py
+    semaphore_template_vars:
+      vm_id:
+        type: integer
+        description: "Unique VM ID for the OPNsense firewall instance (100-999)"
+        min: 100
+        max: 999
+        default: 101
+      vm_name:
+        type: string
+        description: "Name for the OPNsense VM (alphanumeric and hyphens only)"
+        default: "opnsense-fw"
+      vm_storage:
+        type: string
+        description: "Proxmox storage pool for the VM (e.g., local-lvm, local-zfs)"
+        default: "local-lvm"
+      start_after_restore:
+        type: boolean
+        description: "Automatically start the VM after successful deployment"
+        default: true
+      apply_custom_config:
+        type: boolean
+        description: "Apply custom OPNsense config.xml if available"
+        default: false
+        
+    # Service metadata
+    service_name: "OPNsense Firewall"
+    service_description: "Enterprise-grade firewall and router"
+    service_tag: "opnsense"
+    
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "ProxmoxAccess"
+      semaphore_type: "deploy"
+      semaphore_category: "infrastructure"
+    
+    # Template source
+    template_url: "https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/opnsense-25.7-template.vma.zst"
+    template_filename: "opnsense-25.7-template.vma.zst"
+    template_md5: "c5f59be8f4c32d54c6a0056edb265f33"
+    template_size_mb: 766
+    
+    # Storage requirements (MB)
+    required_space_mb: 5120  # 5GB for compressed + extracted
+    cache_dir: "/var/tmp/opnsense-template"
+    
+    # OPNsense network configuration
+    opnsense_lan_ip: "10.10.10.1"
+    opnsense_lan_network: "10.10.10.0/24"
+    opnsense_default_user: "root"
+    opnsense_default_password: "opnsense"
+    
+    # Deployment markers
+    deployment_marker_dir: "/var/log/privatebox"
+    deployment_info_file: "/var/log/privatebox/opnsense-{{ vm_id }}-deployment.log"
+    
+    # Timeouts and retries
+    download_timeout: 600
+    download_retries: 3
+    vm_start_timeout: 300
+    ssh_connect_timeout: 300
+    
+  tasks:
+    # =================================================================
+    # Pre-deployment Validation
+    # =================================================================
+    - name: "{{ service_name }} - Pre-deployment validation"
+      tags: [opnsense, preflight, validate]
+      block:
+        - name: Display deployment plan
+          debug:
+            msg:
+              - "======================================"
+              - "{{ service_name }} Deployment Plan"
+              - "======================================"
+              - "VM ID: {{ vm_id }}"
+              - "VM Name: {{ vm_name }}"
+              - "Storage: {{ vm_storage }}"
+              - "Template: {{ template_filename }}"
+              - "Auto-start: {{ start_after_restore }}"
+              - "Custom config: {{ apply_custom_config }}"
+              - "======================================"
+              
+        - name: Check if VM ID already exists
+          shell: qm status {{ vm_id }} 2>/dev/null
+          register: vm_exists
+          failed_when: false
+          changed_when: false
+          
+        - name: Fail if VM ID is already in use
+          fail:
+            msg: |
+              VM ID {{ vm_id }} is already in use!
+              Please choose a different VM ID or remove the existing VM first.
+              To remove: qm stop {{ vm_id }} && qm destroy {{ vm_id }}
+          when: vm_exists.rc == 0
+          
+        - name: Validate VM name format
+          assert:
+            that:
+              - vm_name | regex_search('^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$')
+              - vm_name | length <= 32
+            fail_msg: "VM name must be alphanumeric with hyphens, max 32 chars"
+            
+        - name: Check Proxmox version
+          shell: pveversion | grep -oP 'pve-manager/\K[0-9]+\.[0-9]+'
+          register: pve_version
+          changed_when: false
+          
+        - name: Validate Proxmox version
+          assert:
+            that:
+              - pve_version.stdout is version('7.0', '>=')
+            fail_msg: "This playbook requires Proxmox VE 7.0 or later (found: {{ pve_version.stdout }})"
+            
+        - name: Check available storage pools
+          shell: pvesm status --enabled | awk 'NR>1 {print $1}'
+          register: storage_pools
+          changed_when: false
+          
+        - name: Validate storage pool exists
+          assert:
+            that:
+              - vm_storage in storage_pools.stdout_lines
+            fail_msg: |
+              Storage pool '{{ vm_storage }}' not found!
+              Available pools: {{ storage_pools.stdout_lines | join(', ') }}
+              
+        - name: Check available disk space
+          shell: |
+            df -BM /var/tmp | awk 'NR==2 {print $4}' | sed 's/M//'
+          register: available_space
+          changed_when: false
+          
+        - name: Validate sufficient disk space
+          assert:
+            that:
+              - available_space.stdout | int >= required_space_mb
+            fail_msg: |
+              Insufficient disk space!
+              Required: {{ required_space_mb }}MB
+              Available: {{ available_space.stdout }}MB
+              Please free up space in /var/tmp
+              
+        - name: Check network bridges
+          shell: "ip link show type bridge | grep -oP '^\\d+: \\K[^:]+' | sort"
+          register: bridges
+          changed_when: false
+          
+        - name: Validate required bridges exist
+          assert:
+            that:
+              - "'vmbr0' in bridges.stdout_lines"
+              - "'vmbr1' in bridges.stdout_lines"
+            fail_msg: |
+              Required network bridges not found!
+              Found: {{ bridges.stdout_lines | join(', ') }}
+              Required: vmbr0 (WAN), vmbr1 (LAN)
+              
+        - name: Check if zstd is available
+          shell: which zstd
+          register: zstd_check
+          changed_when: false
+          failed_when: false
+          
+        - name: Install zstd if not present
+          apt:
+            name: zstd
+            state: present
+            update_cache: yes
+          when: zstd_check.rc != 0
+          
+        - name: Check qmrestore capabilities
+          shell: qmrestore --help 2>&1 | grep -q "\.zst" && echo "supports_zst" || echo "no_zst"
+          register: qmrestore_caps
+          changed_when: false
+          
+        - name: Set decompression requirement
+          set_fact:
+            needs_decompression: "{{ qmrestore_caps.stdout == 'no_zst' }}"
+            
+    # =================================================================
+    # Template Download and Verification
+    # =================================================================
+    - name: "{{ service_name }} - Template management"
+      tags: [opnsense, template, download]
+      block:
+        - name: Create cache directory
+          file:
+            path: "{{ cache_dir }}"
+            state: directory
+            mode: '0755'
+            
+        - name: Create deployment marker directory
+          file:
+            path: "{{ deployment_marker_dir }}"
+            state: directory
+            mode: '0755'
+            
+        - name: Check if template already cached
+          stat:
+            path: "{{ cache_dir }}/{{ template_filename }}"
+          register: cached_template
+          
+        - name: Verify cached template checksum
+          stat:
+            path: "{{ cache_dir }}/{{ template_filename }}"
+            checksum_algorithm: md5
+          register: cached_checksum
+          when: cached_template.stat.exists
+          
+        - name: Set download requirement
+          set_fact:
+            needs_download: >-
+              {{ not cached_template.stat.exists or 
+                 (cached_checksum.stat.checksum | default('') != template_md5) }}
+                 
+        - name: Download template from GitHub
+          when: needs_download | bool
+          block:
+            - name: Remove invalid cached file
+              file:
+                path: "{{ cache_dir }}/{{ template_filename }}"
+                state: absent
+              when: 
+                - cached_template.stat.exists
+                - cached_checksum.stat.checksum | default('') != template_md5
+                
+            - name: Download template (attempt {{ item }})
+              get_url:
+                url: "{{ template_url }}"
+                dest: "{{ cache_dir }}/{{ template_filename }}.tmp"
+                mode: '0644'
+                timeout: "{{ download_timeout }}"
+              register: download_result
+              until: download_result is succeeded
+              retries: "{{ download_retries }}"
+              delay: 30
+              
+            - name: Move downloaded file to final location
+              shell: |
+                mv "{{ cache_dir }}/{{ template_filename }}.tmp" \
+                   "{{ cache_dir }}/{{ template_filename }}"
+              when: download_result is succeeded
+              
+        - name: Final checksum verification
+          stat:
+            path: "{{ cache_dir }}/{{ template_filename }}"
+            checksum_algorithm: md5
+          register: final_checksum
+          
+        - name: Validate template integrity
+          assert:
+            that:
+              - final_checksum.stat.checksum == template_md5
+            fail_msg: |
+              Template checksum mismatch!
+              Expected: {{ template_md5 }}
+              Got: {{ final_checksum.stat.checksum }}
+              The template file may be corrupted.
+              
+        - name: Display template status
+          debug:
+            msg: "Template ready: {{ cache_dir }}/{{ template_filename }} ({{ template_size_mb }}MB)"
+            
+    # =================================================================
+    # VM Restoration
+    # =================================================================
+    - name: "{{ service_name }} - VM restoration"
+      tags: [opnsense, restore, deploy]
+      block:
+        - name: Prepare template for restoration
+          when: needs_decompression | bool
+          block:
+            - name: Check if decompressed file exists
+              stat:
+                path: "{{ cache_dir }}/{{ template_filename | regex_replace('\\.zst$', '') }}"
+              register: decompressed_file
+              
+            - name: Decompress template
+              shell: |
+                cd "{{ cache_dir }}"
+                zstd -d -k "{{ template_filename }}"
+              when: not decompressed_file.stat.exists
+              
+            - name: Set restoration file
+              set_fact:
+                restore_file: "{{ cache_dir }}/{{ template_filename | regex_replace('\\.zst$', '') }}"
+                
+        - name: Set restoration file (direct)
+          set_fact:
+            restore_file: "{{ cache_dir }}/{{ template_filename }}"
+          when: not needs_decompression | bool
+          
+        - name: Start deployment logging
+          shell: |
+            echo "=====================================" > "{{ deployment_info_file }}"
+            echo "{{ service_name }} Deployment Log" >> "{{ deployment_info_file }}"
+            echo "=====================================" >> "{{ deployment_info_file }}"
+            echo "Date: $(date -Iseconds)" >> "{{ deployment_info_file }}"
+            echo "VM ID: {{ vm_id }}" >> "{{ deployment_info_file }}"
+            echo "VM Name: {{ vm_name }}" >> "{{ deployment_info_file }}"
+            echo "Storage: {{ vm_storage }}" >> "{{ deployment_info_file }}"
+            echo "Template: {{ template_filename }}" >> "{{ deployment_info_file }}"
+            echo "=====================================" >> "{{ deployment_info_file }}"
+            
+        - name: Restore VM from template
+          shell: |
+            echo "[$(date +%T)] Starting VM restoration..." >> "{{ deployment_info_file }}"
+            qmrestore "{{ restore_file }}" {{ vm_id }} \
+              --storage {{ vm_storage }} \
+              --unique 1 2>&1 | tee -a "{{ deployment_info_file }}"
+            echo "[$(date +%T)] VM restoration completed" >> "{{ deployment_info_file }}"
+          register: restore_result
+          
+        - name: Configure VM settings
+          shell: |
+            echo "[$(date +%T)] Configuring VM settings..." >> "{{ deployment_info_file }}"
+            
+            # Set VM name
+            qm set {{ vm_id }} --name "{{ vm_name }}" 2>&1 | tee -a "{{ deployment_info_file }}"
+            
+            # Enable auto-start
+            qm set {{ vm_id }} --onboot 1 2>&1 | tee -a "{{ deployment_info_file }}"
+            
+            # Set startup order (firewall starts first)
+            qm set {{ vm_id }} --startup order=1,up=60 2>&1 | tee -a "{{ deployment_info_file }}"
+            
+            # Add description
+            qm set {{ vm_id }} --description "{{ service_description }}
+            Deployed: $(date -Iseconds)
+            Template: {{ template_filename }}
+            LAN: {{ opnsense_lan_ip }}/24
+            Default credentials: {{ opnsense_default_user }}/{{ opnsense_default_password }}" \
+              2>&1 | tee -a "{{ deployment_info_file }}"
+              
+            echo "[$(date +%T)] VM configuration completed" >> "{{ deployment_info_file }}"
+            
+        - name: Clean up decompressed file if created
+          file:
+            path: "{{ cache_dir }}/{{ template_filename | regex_replace('\\.zst$', '') }}"
+            state: absent
+          when: 
+            - needs_decompression | bool
+            - false  # Disabled by default to save time on re-runs
+            
+    # =================================================================
+    # VM Startup and Validation
+    # =================================================================
+    - name: "{{ service_name }} - VM startup"
+      when: start_after_restore | bool
+      tags: [opnsense, start, validate]
+      block:
+        - name: Start VM
+          shell: |
+            echo "[$(date +%T)] Starting VM {{ vm_id }}..." >> "{{ deployment_info_file }}"
+            qm start {{ vm_id }} 2>&1 | tee -a "{{ deployment_info_file }}"
+          register: vm_start
+          
+        - name: Wait for VM to be running
+          shell: 'qm status {{ vm_id }} | grep -q "status: running"'
+          register: vm_running
+          until: vm_running.rc == 0
+          retries: 30
+          delay: 2
+          
+        - name: Log VM status
+          shell: |
+            echo "[$(date +%T)] VM status: running" >> "{{ deployment_info_file }}"
+            qm status {{ vm_id }} >> "{{ deployment_info_file }}"
+            
+        - name: Give OPNsense time to boot
+          pause:
+            seconds: 45
+            prompt: "Waiting for OPNsense to initialize..."
+            
+        - name: Wait for SSH on LAN interface
+          wait_for:
+            host: "{{ opnsense_lan_ip }}"
+            port: 22
+            delay: 10
+            timeout: "{{ ssh_connect_timeout }}"
+            msg: "Timeout waiting for SSH on {{ opnsense_lan_ip }}:22"
+          register: ssh_available
+          
+        - name: Test SSH connectivity
+          shell: |
+            timeout 10 sshpass -p '{{ opnsense_default_password }}' \
+              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+              {{ opnsense_default_user }}@{{ opnsense_lan_ip }} \
+              "uname -a && echo 'SSH test successful'"
+          register: ssh_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Log connectivity status
+          shell: |
+            if [ "{{ ssh_test.rc }}" -eq 0 ]; then
+              echo "[$(date +%T)] SSH connectivity verified" >> "{{ deployment_info_file }}"
+            else
+              echo "[$(date +%T)] WARNING: SSH test failed (may need time)" >> "{{ deployment_info_file }}"
+            fi
+            
+        - name: Check WAN interface status
+          shell: |
+            qm guest cmd {{ vm_id }} network-get-interfaces 2>/dev/null | \
+              grep -A5 '"name".*"vtnet0"' | grep -q '"ip-address"' && echo "has_ip" || echo "no_ip"
+          register: wan_status
+          failed_when: false
+          changed_when: false
+          
+        - name: Display network status
+          debug:
+            msg:
+              - "LAN Interface: {{ opnsense_lan_ip }} (static)"
+              - "WAN Interface: {{ 'DHCP configured' if wan_status.stdout == 'has_ip' else 'Awaiting DHCP' }}"
+              - "SSH Access: {{ 'Available' if ssh_test.rc == 0 else 'Initializing' }}"
+              
+    # =================================================================
+    # Custom Configuration Application
+    # =================================================================
+    - name: "{{ service_name }} - Custom configuration"
+      when:
+        - apply_custom_config | bool
+        - start_after_restore | bool
+      tags: [opnsense, configure, custom]
+      block:
+        - name: Check for custom config file
+          stat:
+            path: "{{ playbook_dir }}/../../files/opnsense/config-custom.xml"
+          register: custom_config_file
+          delegate_to: localhost
+          
+        - name: Display config status
+          debug:
+            msg: >-
+              Custom config {{ 'found' if custom_config_file.stat.exists else 'not found' }}
+              at ansible/files/opnsense/config-custom.xml
+              
+        - name: Apply custom configuration
+          when: custom_config_file.stat.exists
+          block:
+            - name: Backup current config
+              shell: |
+                sshpass -p '{{ opnsense_default_password }}' \
+                  ssh -o StrictHostKeyChecking=no \
+                  {{ opnsense_default_user }}@{{ opnsense_lan_ip }} \
+                  "cp /conf/config.xml /conf/config.xml.pre-custom"
+              register: backup_result
+              failed_when: false
+              
+            - name: Upload custom config
+              shell: |
+                sshpass -p '{{ opnsense_default_password }}' \
+                  scp -o StrictHostKeyChecking=no \
+                  "{{ playbook_dir }}/../../files/opnsense/config-custom.xml" \
+                  {{ opnsense_default_user }}@{{ opnsense_lan_ip }}:/conf/config.xml
+              delegate_to: localhost
+              
+            - name: Log configuration change
+              shell: |
+                echo "[$(date +%T)] Custom configuration applied" >> "{{ deployment_info_file }}"
+                echo "[$(date +%T)] Original config backed up to /conf/config.xml.pre-custom" >> "{{ deployment_info_file }}"
+                
+            - name: Reload OPNsense configuration
+              shell: |
+                sshpass -p '{{ opnsense_default_password }}' \
+                  ssh -o StrictHostKeyChecking=no \
+                  {{ opnsense_default_user }}@{{ opnsense_lan_ip }} \
+                  "configctl firmware restart"
+              register: reload_result
+              
+            - name: Wait for OPNsense to restart
+              pause:
+                seconds: 60
+                prompt: "Waiting for OPNsense to reload with custom config..."
+                
+            - name: Verify OPNsense is accessible after reload
+              wait_for:
+                host: "{{ opnsense_lan_ip }}"
+                port: 22
+                delay: 10
+                timeout: 180
+                
+            - name: Log custom config status
+              shell: |
+                echo "[$(date +%T)] OPNsense restarted with custom configuration" >> "{{ deployment_info_file }}"
+                
+    # =================================================================
+    # Post-deployment Validation
+    # =================================================================
+    - name: "{{ service_name }} - Post-deployment validation"
+      tags: [opnsense, validate, final]
+      block:
+        - name: Gather final VM information
+          shell: |
+            qm config {{ vm_id }} | grep -E "^(name|memory|cores|net0|net1):"
+          register: vm_config
+          changed_when: false
+          
+        - name: Check VM resource usage
+          shell: |
+            qm status {{ vm_id }} | grep -E "(status|cpu|mem|disk)"
+          register: vm_resources
+          changed_when: false
+          when: start_after_restore | bool
+          
+        - name: Create deployment summary
+          shell: |
+            cat >> "{{ deployment_info_file }}" <<EOF
+            
+            =====================================
+            Deployment Summary
+            =====================================
+            VM ID: {{ vm_id }}
+            VM Name: {{ vm_name }}
+            Status: {{ 'Running' if start_after_restore else 'Stopped' }}
+            
+            Network Configuration:
+            - WAN: Bridge vmbr0 (DHCP)
+            - LAN: Bridge vmbr1 ({{ opnsense_lan_ip }}/24)
+            
+            Access Information:
+            - SSH: ssh {{ opnsense_default_user }}@{{ opnsense_lan_ip }}
+            - Web UI: https://{{ opnsense_lan_ip }}
+            - Username: {{ opnsense_default_user }}
+            - Password: {{ opnsense_default_password }}
+            
+            Custom Config: {{ 'Applied' if (apply_custom_config and custom_config_file.stat.exists) else 'Not applied' }}
+            
+            Deployment completed: $(date -Iseconds)
+            =====================================
+            EOF
+            
+        - name: Display deployment summary
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "VM ID: {{ vm_id }}"
+              - "VM Name: {{ vm_name }}"
+              - "Status: {{ 'Running' if start_after_restore else 'Stopped (manual start required)' }}"
+              - ""
+              - "Network Configuration:"
+              - "  WAN: DHCP on vmbr0"
+              - "  LAN: {{ opnsense_lan_ip }}/24 on vmbr1"
+              - ""
+              - "Access Methods:"
+              - "  SSH: ssh {{ opnsense_default_user }}@{{ opnsense_lan_ip }}"
+              - "  Web: https://{{ opnsense_lan_ip }}"
+              - "  Credentials: {{ opnsense_default_user }}/{{ opnsense_default_password }}"
+              - ""
+              - "IMPORTANT: Change the default password immediately!"
+              - ""
+              - "Management Commands:"
+              - "  Start: qm start {{ vm_id }}"
+              - "  Stop: qm stop {{ vm_id }}"
+              - "  Remove: qm stop {{ vm_id }} && qm destroy {{ vm_id }}"
+              - "  Console: qm terminal {{ vm_id }}"
+              - ""
+              - "Logs: {{ deployment_info_file }}"
+              - "=========================================="
+              
+        - name: Create completion marker
+          file:
+            path: "{{ deployment_marker_dir }}/opnsense-{{ vm_id }}.deployed"
+            state: touch
+            mode: '0644'
+            
+  handlers:
+    - name: cleanup on failure
+      block:
+        - name: Stop failed VM if running
+          shell: qm stop {{ vm_id }}
+          failed_when: false
+          
+        - name: Destroy failed VM
+          shell: qm destroy {{ vm_id }}
+          failed_when: false
+          
+        - name: Log failure
+          shell: |
+            echo "[$(date +%T)] DEPLOYMENT FAILED - Cleanup performed" >> "{{ deployment_info_file }}"
+          failed_when: false
