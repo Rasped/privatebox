@@ -132,7 +132,7 @@ For playbooks without metadata or custom configurations:
 
 ### In Development
 
-- **OPNsense FreeBSD Bootstrap** - New approach using FreeBSD cloud-init (see `documentation/features/opnsense-freebsd-bootstrap/`)
+- **OPNsense VM Template** - Deploy OPNsense from pre-configured Proxmox template
 
 ### Planned
 

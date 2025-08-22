@@ -222,10 +222,8 @@ curl -s -b /tmp/semaphore-cookie \
 - **Token storage (Proxmox)**: `/root/.proxmox-api-token`
 - **Setup script**: `bootstrap/scripts/setup-proxmox-api-token.sh`
 - **Registration script**: `bootstrap/scripts/register-proxmox-api.sh`
-- **FreeBSD playbook**: `ansible/playbooks/services/freebsd-autoinstall-api.yml`
 
 ## Related Documentation
 
-- [FreeBSD Autoinstall README](../ansible/playbooks/services/README-freebsd-api.md)
 - [Proxmox API Documentation](https://pve.proxmox.com/wiki/Proxmox_VE_API)
 - [Semaphore Environment Variables](https://docs.semaphoreui.com/user-guide/environment/)
