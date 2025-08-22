@@ -32,21 +32,22 @@
 - Size: 62,680 bytes
 
 ## Backup Details
-- **Filename**: opnsense-vm-backup.vma.zst
+- **Filename**: vzdump-qemu-101-opnsense.vma.zst
 - **Size**: 771MB (compressed with zstd)
 - **MD5**: e7cf310cd3386eed54d1ff43c6c98837
 - **Original Size**: 16GB allocated, 2.83GB used (82% sparse)
 - **Compression**: ~73% reduction from actual data
+- **Note**: Filename must follow `vzdump-qemu-*` pattern for Proxmox compatibility
 
 ## Deployment Usage
 
 ### Method 1: From Backup File (Recommended)
 ```bash
 # Download the backup file from GitHub releases
-wget https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/opnsense-vm-backup.vma.zst
+wget https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/vzdump-qemu-101-opnsense.vma.zst
 
 # Restore to new VM (e.g., VMID 101)
-qmrestore opnsense-vm-backup.vma.zst 101
+qmrestore vzdump-qemu-101-opnsense.vma.zst 101
 
 # Start the VM
 qm start 101
@@ -73,3 +74,5 @@ ssh root@10.10.10.1 "configctl firmware restart"
 - LAN is pre-configured with 10.10.10.1/24
 - No VLANs configured in base template
 - No additional packages installed
+- SSH is enabled on both WAN and LAN interfaces with root/opnsense credentials
+- Firewall blocks WAN SSH access by default (accessible from local network only)
