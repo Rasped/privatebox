@@ -247,7 +247,7 @@
           set_fact:
             needs_download: >-
               {{ not cached_template.stat.exists or 
-                 (cached_checksum.stat.checksum | default('') != template_md5) }}
+                 (cached_template.stat.exists and cached_checksum.stat.checksum | default('') != template_md5) }}
                  
         - name: Template cache status
           debug:
