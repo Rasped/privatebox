@@ -8,7 +8,7 @@ OPNsense is deployed using a pre-configured Proxmox template that provides a min
 
 - **Version**: OPNsense 25.7 (amd64)
 - **Release**: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense)
-- **Size**: 766MB (compressed with zstd)
+- **Size**: 771MB (compressed with zstd)
 - **Format**: Proxmox VMA backup (`.vma.zst`)
 
 ## Default Configuration
@@ -50,14 +50,14 @@ ansible-playbook -i ansible/inventory.yml \
 
 ```bash
 # Download template
-wget https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/opnsense-25.7-template.vma.zst
+wget https://github.com/Rasped/privatebox/releases/download/v1.0.0-opnsense/opnsense-vm-backup.vma.zst
 
 # Transfer to Proxmox host
-scp opnsense-25.7-template.vma.zst root@192.168.1.10:/tmp/
+scp opnsense-vm-backup.vma.zst root@192.168.1.10:/tmp/
 
 # SSH to Proxmox and restore
 ssh root@192.168.1.10
-qmrestore /tmp/opnsense-25.7-template.vma.zst 101
+qmrestore /tmp/opnsense-vm-backup.vma.zst 101
 qm set 101 --name opnsense-fw --onboot 1
 qm start 101
 ```
