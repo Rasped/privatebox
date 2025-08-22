@@ -212,16 +212,21 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 ## Implementation Notes
 
 1. **OPNsense Configuration**:
-   - Configure as router-on-a-stick with VLAN subinterfaces
+   - Deployed from template: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense)
+   - Two physical interfaces: WAN (vmbr0) and LAN (vmbr1)
+   - LAN interface carries all VLANs as tagged subinterfaces
+   - Template provides base configuration with LAN at 10.10.10.1/24
    - Enable DHCP server on appropriate VLANs
    - Configure firewall rules as specified
    - All 6 VLANs configured regardless of usage
 
 2. **Proxmox Configuration**:
-   - Make vmbr0 VLAN-aware
-   - Tag VM interfaces with appropriate VLAN IDs
+   - vmbr0: WAN bridge (not VLAN-aware, direct internet connection)
+   - vmbr1: LAN bridge (VLAN-aware, carries internal VLANs)
    - Management VM on VLAN 20
-   - OPNsense with trunk port (all VLANs)
+   - OPNsense VM with two NICs:
+     - NIC1: vmbr0 (WAN)
+     - NIC2: vmbr1 (LAN trunk with all VLANs)
 
 3. **DNS Configuration**:
    - All DHCP servers point to 10.10.20.10
@@ -274,7 +279,7 @@ For users with UniFi, Omada, or similar APs:
    - "Home-Guest" → VLAN 40 (Guest)
    - "Home-IoT" → VLAN 50 (IoT Cloud)
    - "Home-NoCloud" → VLAN 60 (IoT Local)
-2. Trunk port from OPNsense to AP
+2. Connect AP to LAN network (vmbr1) with trunk port for all VLANs
 
 **Result**: Full network segmentation with maximum privacy
 

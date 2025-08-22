@@ -9,33 +9,15 @@
   gather_facts: yes
   become: false  # Running as root on Proxmox
   
-  vars_prompt:
-    - name: vm_id
-      prompt: "VM ID for OPNsense"
-      default: "101"
-      private: no
-      
-    - name: vm_name
-      prompt: "VM name"
-      default: "opnsense-fw"
-      private: no
-      
-    - name: vm_storage
-      prompt: "Storage location"
-      default: "local-lvm"
-      private: no
-      
-    - name: start_after_restore
-      prompt: "Start VM after deployment?"
-      default: "yes"
-      private: no
-      
-    - name: apply_custom_config
-      prompt: "Apply custom configuration?"
-      default: "no"
-      private: no
-      
   vars:
+    # Deployment variables with sensible defaults
+    # These can be overridden via extra vars in Semaphore or CLI
+    vm_id: "{{ opnsense_vm_id | default('101') }}"
+    vm_name: "{{ opnsense_vm_name | default('opnsense') }}"
+    vm_storage: "{{ opnsense_vm_storage | default('local-lvm') }}"
+    start_after_restore: "{{ opnsense_start_after_restore | default(true) }}"
+    apply_custom_config: "{{ opnsense_apply_custom_config | default(false) }}"
+    
     # Semaphore template metadata (for template sync)
     # These are parsed by tools/generate-templates.py
     semaphore_template_vars:
@@ -101,24 +83,33 @@
     
   tasks:
     # =================================================================
+    # Initial Status Output
+    # =================================================================
+    - name: "{{ service_name }} - Starting deployment"
+      debug:
+        msg:
+          - "======================================"
+          - "{{ service_name }} Deployment Starting"
+          - "======================================"
+          - "VM ID: {{ vm_id }}"
+          - "VM Name: {{ vm_name }}"
+          - "Storage: {{ vm_storage }}"
+          - "Template: {{ template_filename }} ({{ template_size_mb }}MB)"
+          - "Auto-start: {{ start_after_restore }}"
+          - "Custom config: {{ apply_custom_config }}"
+          - "======================================"
+          - "Starting deployment process..."
+      tags: [always]
+      
+    # =================================================================
     # Pre-deployment Validation
     # =================================================================
     - name: "{{ service_name }} - Pre-deployment validation"
       tags: [opnsense, preflight, validate]
       block:
-        - name: Display deployment plan
+        - name: Validation phase starting
           debug:
-            msg:
-              - "======================================"
-              - "{{ service_name }} Deployment Plan"
-              - "======================================"
-              - "VM ID: {{ vm_id }}"
-              - "VM Name: {{ vm_name }}"
-              - "Storage: {{ vm_storage }}"
-              - "Template: {{ template_filename }}"
-              - "Auto-start: {{ start_after_restore }}"
-              - "Custom config: {{ apply_custom_config }}"
-              - "======================================"
+            msg: "Phase 1/4: Running pre-deployment validation checks..."
               
         - name: Check if VM ID already exists
           shell: qm status {{ vm_id }} 2>/dev/null
@@ -224,6 +215,10 @@
     - name: "{{ service_name }} - Template management"
       tags: [opnsense, template, download]
       block:
+        - name: Template phase starting
+          debug:
+            msg: "Phase 2/4: Managing template (download/cache)..."
+            
         - name: Create cache directory
           file:
             path: "{{ cache_dir }}"
@@ -254,9 +249,24 @@
               {{ not cached_template.stat.exists or 
                  (cached_checksum.stat.checksum | default('') != template_md5) }}
                  
+        - name: Template cache status
+          debug:
+            msg: >-
+              {{ 'Template found in cache, skipping download' 
+                 if not (needs_download | bool) 
+                 else 'Template not in cache or invalid, downloading...' }}
+                 
         - name: Download template from GitHub
           when: needs_download | bool
           block:
+            - name: Starting template download
+              debug:
+                msg:
+                  - "Downloading OPNsense template..."
+                  - "URL: {{ template_url }}"
+                  - "Size: {{ template_size_mb }}MB"
+                  - "This may take several minutes depending on connection speed..."
+                  
             - name: Remove invalid cached file
               file:
                 path: "{{ cache_dir }}/{{ template_filename }}"
@@ -281,6 +291,10 @@
                 mv "{{ cache_dir }}/{{ template_filename }}.tmp" \
                    "{{ cache_dir }}/{{ template_filename }}"
               when: download_result is succeeded
+              
+            - name: Download completed
+              debug:
+                msg: "Template download completed successfully!"
               
         - name: Final checksum verification
           stat:
@@ -308,6 +322,10 @@
     - name: "{{ service_name }} - VM restoration"
       tags: [opnsense, restore, deploy]
       block:
+        - name: Restoration phase starting
+          debug:
+            msg: "Phase 3/4: Restoring VM from template..."
+            
         - name: Prepare template for restoration
           when: needs_decompression | bool
           block:
@@ -390,6 +408,10 @@
       when: start_after_restore | bool
       tags: [opnsense, start, validate]
       block:
+        - name: Startup phase starting
+          debug:
+            msg: "Phase 4/4: Starting and validating VM..."
+            
         - name: Start VM
           shell: |
             echo "[$(date +%T)] Starting VM {{ vm_id }}..." >> "{{ deployment_info_file }}"

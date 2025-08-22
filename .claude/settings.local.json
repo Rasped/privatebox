@@ -78,9 +78,19 @@
       "WebFetch(domain:pve.proxmox.com)",
       "Bash(SSHPASS='4gency-5ilica-dec3PtiOn-p0Ppy-cath0use' sshpass -e ssh debian@192.168.1.20 'cd /opt/privatebox && sudo git pull')",
       "WebSearch",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@10.10.10.1 \"hostname && uname -a\")",
+      "WebFetch(domain:kifarunix.com)",
+      "Bash(SSHPASS='alpine' sshpass -e ssh root@192.168.1.17 \"grep -E ''root|location'' /etc/nginx/http.d/default.conf 2>/dev/null || grep -E ''root|location'' /etc/nginx/nginx.conf | head -10\")",
+      "Bash(SSHPASS='alpine' sshpass -e ssh root@192.168.1.17 \"ls -la /mnt/\")",
+      "Bash(SSHPASS='alpine' sshpass -e ssh root@192.168.1.17 \"ls -la /srv/\")",
+      "Bash(SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@192.168.1.109 \"opnsense-version && echo ''---'' && ls -la /conf/config.xml\")",
+      "Bash(traceroute:*)"
     ],
     "deny": [],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "acceptEdits",
+    "additionalDirectories": [
+      "/private/tmp"
+    ]
   }
 }
