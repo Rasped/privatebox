@@ -1,61 +1,181 @@
 ---
 - name: "OPNsense: Discover IP address via MAC lookup"
-  hosts: localhost
+  hosts: proxmox
   gather_facts: yes
   vars:
     vm_name: "opnsense"
-    proxmox_host: "{{ lookup('env', 'PROXMOX_HOST') | default('192.168.1.10', true) }}"
-    proxmox_user: "root@pam"
-    proxmox_password: "{{ lookup('env', 'PROXMOX_PASSWORD') | default('', true) }}"
     scan_timeout: 60
     verify_timeout: 10
+    max_scan_retries: 6
+    enable_debug: true
 
   tasks:
-    - name: Get VM configuration from Proxmox to find MAC address
+    - name: Debug - Show host information
+      debug:
+        msg:
+          - "Running on host: {{ inventory_hostname }}"
+          - "Host IP: {{ ansible_default_ipv4.address | default('unknown') }}"
+          - "Available network interfaces: {{ ansible_interfaces }}"
+      when: enable_debug | bool
+
+    - name: Debug - List all VMs on this host
+      shell: qm list
+      register: all_vms
+      changed_when: false
+      
+    - name: Debug - Show all VMs
+      debug:
+        msg: "VMs on this host:\n{{ all_vms.stdout }}"
+      when: enable_debug | bool
+
+    - name: Find VM ID by name
       shell: |
-        ssh root@{{ proxmox_host }} "qm config \$(qm list | grep -w {{ vm_name }} | awk '{print \$1}') | grep -E '^net0:' | grep -oP 'virtio=\K[^,]+'"
+        qm list | grep -w "{{ vm_name }}" | awk '{print $1}' || echo "NOT_FOUND"
+      register: vm_id_result
+      changed_when: false
+      
+    - name: Check if VM was found
+      fail:
+        msg: |
+          VM '{{ vm_name }}' not found on this Proxmox host!
+          Available VMs:
+          {{ all_vms.stdout }}
+      when: vm_id_result.stdout == "NOT_FOUND"
+      
+    - name: Set VM ID fact
+      set_fact:
+        vm_id: "{{ vm_id_result.stdout }}"
+        
+    - name: Debug - Show VM ID
+      debug:
+        msg: "Found VM '{{ vm_name }}' with ID: {{ vm_id }}"
+
+    - name: Get VM configuration
+      shell: qm config {{ vm_id }}
+      register: vm_config
+      changed_when: false
+      
+    - name: Debug - Show VM configuration
+      debug:
+        msg: "VM Configuration:\n{{ vm_config.stdout }}"
+      when: enable_debug | bool
+
+    - name: Extract MAC address from VM config
+      shell: |
+        qm config {{ vm_id }} | grep -E '^net0:' | grep -oP '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' || echo "NO_MAC"
       register: mac_result
       changed_when: false
-      failed_when: mac_result.rc != 0
-
-    - name: Display discovered MAC address
-      debug:
-        msg: "OPNsense VM MAC address: {{ mac_result.stdout }}"
+      
+    - name: Check if MAC was found
+      fail:
+        msg: |
+          Could not extract MAC address from VM {{ vm_id }} configuration!
+          Network config line:
+          {{ vm_config.stdout | regex_search('^net0:.*', multiline=True) }}
+      when: mac_result.stdout == "NO_MAC"
 
     - name: Set MAC address fact
       set_fact:
         opnsense_mac: "{{ mac_result.stdout | lower }}"
-
-    - name: Detect local network subnet
-      shell: |
-        ip route | grep -v default | grep src | head -1 | awk '{print $1}'
-      register: network_subnet
-      changed_when: false
-
-    - name: Display network to scan
+        
+    - name: Display discovered MAC address
       debug:
-        msg: "Will scan network: {{ network_subnet.stdout }}"
+        msg: "OPNsense VM MAC address: {{ opnsense_mac }}"
+
+    - name: Check VM status
+      shell: qm status {{ vm_id }}
+      register: vm_status
+      changed_when: false
+      
+    - name: Debug - Show VM status
+      debug:
+        msg: "VM Status: {{ vm_status.stdout }}"
+
+    - name: Detect network bridges
+      shell: |
+        ip link show type bridge | grep -oP '^\d+: \K[^:]+' | paste -sd ',' -
+      register: bridges
+      changed_when: false
+      
+    - name: Debug - Show available bridges
+      debug:
+        msg: "Available bridges: {{ bridges.stdout }}"
+      when: enable_debug | bool
+
+    - name: Detect networks to scan
+      shell: |
+        ip route | grep -E "dev (vmbr0|vmbr1)" | grep -v default | awk '{print $1}' | paste -sd ' ' -
+      register: networks_to_scan
+      changed_when: false
+      
+    - name: Set scan networks
+      set_fact:
+        scan_networks: "{{ networks_to_scan.stdout.split() | default(['192.168.1.0/24']) }}"
+        
+    - name: Display networks to scan
+      debug:
+        msg: "Will scan networks: {{ scan_networks }}"
 
     - name: Wait for OPNsense to boot and get DHCP
       pause:
         seconds: 30
         prompt: "Waiting for OPNsense to obtain DHCP lease..."
 
+    - name: Debug - Show ARP table before scan
+      shell: ip neigh show | wc -l
+      register: arp_before
+      changed_when: false
+      when: enable_debug | bool
+      
+    - name: Debug - ARP entries before scan
+      debug:
+        msg: "ARP table entries before scan: {{ arp_before.stdout }}"
+      when: enable_debug | bool
+
     - name: Perform network scan to populate ARP table
       shell: |
-        nmap -sn {{ network_subnet.stdout }} > /dev/null 2>&1 || true
-        sleep 2
+        for network in {{ scan_networks | join(' ') }}; do
+          echo "Scanning $network..."
+          nmap -sn $network 2>&1 | grep -E "(scan report|hosts up)" || true
+        done
+      register: scan_result
       changed_when: false
       ignore_errors: yes
+      
+    - name: Debug - Show scan results
+      debug:
+        msg: "Scan output:\n{{ scan_result.stdout }}"
+      when: enable_debug | bool
+
+    - name: Debug - Show ARP table after scan
+      shell: |
+        echo "Total ARP entries: $(ip neigh show | wc -l)"
+        echo "=== Full ARP table ==="
+        ip neigh show
+      register: arp_after
+      changed_when: false
+      when: enable_debug | bool
+      
+    - name: Debug - Display ARP table
+      debug:
+        msg: "{{ arp_after.stdout }}"
+      when: enable_debug | bool
 
     - name: Look up IP address from ARP table using MAC
       shell: |
         ip neigh show | grep -i "{{ opnsense_mac }}" | awk '{print $1}' | head -1
       register: arp_lookup
       changed_when: false
-      retries: 6
+      retries: "{{ max_scan_retries }}"
       delay: 10
       until: arp_lookup.stdout != ""
+      
+    - name: Debug - Show retry attempts
+      debug:
+        msg: "Retry {{ arp_lookup.attempts }}/{{ max_scan_retries }} - Found: {{ arp_lookup.stdout | default('nothing yet') }}"
+      when: 
+        - enable_debug | bool
+        - arp_lookup.attempts is defined
 
     - name: Set OPNsense IP fact
       set_fact:
@@ -64,10 +184,15 @@
 
     - name: Display discovered IP
       debug:
-        msg: "Found OPNsense at IP: {{ opnsense_ip }}"
+        msg: 
+          - "========================================"
+          - "SUCCESS: Found OPNsense!"
+          - "IP Address: {{ opnsense_ip }}"
+          - "MAC Address: {{ opnsense_mac }}"
+          - "========================================"
       when: opnsense_ip is defined
 
-    - name: Verify OPNsense is accessible
+    - name: Verify OPNsense is accessible via SSH
       wait_for:
         host: "{{ opnsense_ip }}"
         port: 22
@@ -77,18 +202,27 @@
 
     - name: Verify it's actually OPNsense
       shell: |
-        SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@{{ opnsense_ip }} 'uname -s' || true
+        SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@{{ opnsense_ip }} 'uname -s && hostname' || echo "CONNECTION_FAILED"
       register: os_check
       changed_when: false
       when: opnsense_ip is defined
+      
+    - name: Debug - Show OS verification
+      debug:
+        msg: "OS verification output: {{ os_check.stdout }}"
+      when: 
+        - opnsense_ip is defined
+        - enable_debug | bool
 
     - name: Confirm OPNsense discovery
       assert:
         that:
-          - os_check.stdout == "FreeBSD"
+          - "'FreeBSD' in os_check.stdout"
         fail_msg: "IP {{ opnsense_ip }} does not appear to be OPNsense (got {{ os_check.stdout }})"
-        success_msg: "Successfully discovered OPNsense at {{ opnsense_ip }}"
-      when: opnsense_ip is defined
+        success_msg: "Successfully verified OPNsense at {{ opnsense_ip }}"
+      when: 
+        - opnsense_ip is defined
+        - os_check.stdout != "CONNECTION_FAILED"
 
     - name: Save discovered IP for future use
       copy:
@@ -96,19 +230,41 @@
           # OPNsense Discovery Results
           OPNSENSE_IP={{ opnsense_ip }}
           OPNSENSE_MAC={{ opnsense_mac }}
+          OPNSENSE_VM_ID={{ vm_id }}
           DISCOVERED_AT={{ ansible_date_time.iso8601 }}
+          DISCOVERED_ON_HOST={{ inventory_hostname }}
         dest: /tmp/opnsense-discovery.env
       when: opnsense_ip is defined
+      
+    - name: Display discovery file location
+      debug:
+        msg: "Discovery results saved to: /tmp/opnsense-discovery.env on {{ inventory_hostname }}"
+      when: opnsense_ip is defined
 
-    - name: Failed to discover OPNsense
+    - name: Failed to discover OPNsense - Show diagnostic info
       fail:
         msg: |
-          Could not discover OPNsense IP address.
-          MAC address: {{ opnsense_mac }}
-          Please check:
-          1. OPNsense VM is running
-          2. WAN interface has obtained DHCP
-          3. Network allows ARP scanning
+          ========================================
+          FAILED: Could not discover OPNsense IP
+          ========================================
           
-          Manual discovery: Check your router's DHCP client list for MAC {{ opnsense_mac }}
+          VM Information:
+          - VM Name: {{ vm_name }}
+          - VM ID: {{ vm_id }}
+          - MAC Address: {{ opnsense_mac }}
+          - VM Status: {{ vm_status.stdout }}
+          
+          Debugging steps:
+          1. Check if VM is running: qm status {{ vm_id }}
+          2. Check console for DHCP: qm terminal {{ vm_id }}
+          3. Check your DHCP server for MAC {{ opnsense_mac }}
+          4. Manually check ARP: ip neigh show | grep -i {{ opnsense_mac }}
+          5. Try broadcast ping: ping -b -c 2 {{ scan_networks[0] | regex_replace('/\d+$', '.255') }}
+          
+          Networks scanned: {{ scan_networks | join(', ') }}
+          Total ARP entries found: {{ arp_after.stdout_lines[0] if arp_after is defined else 'unknown' }}
+          
+          Manual discovery:
+          - Check router DHCP client list for MAC {{ opnsense_mac }}
+          - Access OPNsense console via Proxmox
       when: opnsense_ip is not defined
