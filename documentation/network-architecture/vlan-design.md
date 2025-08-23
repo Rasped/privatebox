@@ -16,6 +16,21 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 
 **Total VLANs**: 8 (Management, Services, Trusted, Guest, IoT Cloud, IoT Local, Cameras Cloud, Cameras Local)
 
+### VLAN ID/Tag Mapping
+
+| VLAN ID/Tag | Network | Purpose | SSID (if wireless) |
+|-------------|---------|---------|-------------------|
+| 10 | 10.10.10.0/24 | Management | (No WiFi - wired only) |
+| 20 | 10.10.20.0/24 | Services | (No WiFi - wired only) |
+| 30 | 10.10.30.0/24 | Trusted LAN | Home-WiFi |
+| 40 | 10.10.40.0/24 | Guest | Home-Guest |
+| 50 | 10.10.50.0/24 | IoT Cloud | Home-IoT |
+| 60 | 10.10.60.0/24 | IoT Local | Home-NoCloud |
+| 70 | 10.10.70.0/24 | Cameras Cloud | Home-Cameras-Cloud |
+| 80 | 10.10.80.0/24 | Cameras Local | Home-Cameras-Local |
+
+**Note**: The VLAN ID (802.1Q tag) matches the third octet of the IP range for easy memorization.
+
 ### VLAN 10 - Management Network (10.10.10.0/24)
 
 **Purpose**: Infrastructure management and administration
@@ -395,6 +410,43 @@ The same OPNsense/PrivateBox configuration handles both setups. Users can start 
 6. **Easy Upgrade Path**: Start simple, add segmentation when ready
 
 ## Recommended Hardware
+
+### Access Point VLAN Configuration
+
+When configuring VLAN-capable access points, use these settings:
+
+**Trunk Port Configuration** (AP uplink to switch/OPNsense):
+- Native/Untagged VLAN: None (all tagged)
+- Tagged VLANs: 30, 40, 50, 60, 70, 80
+- Management VLAN: 30 (for AP management interface)
+
+**SSID to VLAN Mapping**:
+```
+SSID: Home-WiFi         → VLAN Tag: 30
+SSID: Home-Guest        → VLAN Tag: 40  
+SSID: Home-IoT          → VLAN Tag: 50
+SSID: Home-NoCloud      → VLAN Tag: 60
+SSID: Home-Cameras      → VLAN Tag: 70 or 80
+```
+
+**Switch Port Example** (Cisco/HP syntax):
+```
+interface GigabitEthernet0/1
+  description Access-Point-Uplink
+  switchport mode trunk
+  switchport trunk allowed vlan 30,40,50,60,70,80
+  no shutdown
+```
+
+**UniFi Controller Example**:
+- Networks: Create networks with VLAN IDs 30, 40, 50, 60, 70, 80
+- Wireless Networks: Assign each SSID to corresponding network/VLAN
+- AP Port Profile: Set to "All" or custom trunk profile
+
+**TP-Link Omada Example**:
+- LAN: Create VLANs 30, 40, 50, 60, 70, 80
+- Wireless: Create SSIDs and set VLAN ID for each
+- Port Config: Set AP port to "Trunk" with all VLANs
 
 ### For Full Network Segmentation
 To utilize all security features of PrivateBox, we recommend:
