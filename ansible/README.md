@@ -148,6 +148,28 @@ For playbooks without metadata or custom configurations:
 All service configuration is contained within each playbook. Variables have sensible defaults and can be overridden through Semaphore's survey variables when running job templates.
 
 
+## Naming Conventions
+
+### Playbook Files
+All service playbooks follow a consistent naming pattern:
+- **File naming**: `service-action.yml` (lowercase, hyphenated)
+  - Examples: `adguard-deploy.yml`, `opnsense-discover-ip.yml`, `unbound-configure.yml`
+- **Location**: All service playbooks go in `playbooks/services/` (flat structure, no subfolders)
+
+### Playbook Names
+The `name` field inside playbooks follows this pattern:
+- **Format**: `"Service: Action description"`
+- **Examples**:
+  - `"AdGuard: Deploy DNS filtering service"`
+  - `"OPNsense: Discover IP address via MAC lookup"`
+  - `"Unbound: Configure DNS resolver"`
+
+This convention ensures:
+- Playbooks sort alphabetically by service
+- Actions for the same service group together
+- Clear, consistent naming in Semaphore UI
+- Easy to find related playbooks
+
 ## Adding New Services
 
 Each service playbook is self-contained, including all necessary variables, tasks, and configurations within a single file. This design prioritizes simplicity and maintainability.

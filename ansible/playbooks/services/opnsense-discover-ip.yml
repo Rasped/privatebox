@@ -1,0 +1,114 @@
+---
+- name: "OPNsense: Discover IP address via MAC lookup"
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    vm_name: "opnsense"
+    proxmox_host: "{{ lookup('env', 'PROXMOX_HOST') | default('192.168.1.10', true) }}"
+    proxmox_user: "root@pam"
+    proxmox_password: "{{ lookup('env', 'PROXMOX_PASSWORD') | default('', true) }}"
+    scan_timeout: 60
+    verify_timeout: 10
+
+  tasks:
+    - name: Get VM configuration from Proxmox to find MAC address
+      shell: |
+        ssh root@{{ proxmox_host }} "qm config \$(qm list | grep -w {{ vm_name }} | awk '{print \$1}') | grep -E '^net0:' | grep -oP 'virtio=\K[^,]+'"
+      register: mac_result
+      changed_when: false
+      failed_when: mac_result.rc != 0
+
+    - name: Display discovered MAC address
+      debug:
+        msg: "OPNsense VM MAC address: {{ mac_result.stdout }}"
+
+    - name: Set MAC address fact
+      set_fact:
+        opnsense_mac: "{{ mac_result.stdout | lower }}"
+
+    - name: Detect local network subnet
+      shell: |
+        ip route | grep -v default | grep src | head -1 | awk '{print $1}'
+      register: network_subnet
+      changed_when: false
+
+    - name: Display network to scan
+      debug:
+        msg: "Will scan network: {{ network_subnet.stdout }}"
+
+    - name: Wait for OPNsense to boot and get DHCP
+      pause:
+        seconds: 30
+        prompt: "Waiting for OPNsense to obtain DHCP lease..."
+
+    - name: Perform network scan to populate ARP table
+      shell: |
+        nmap -sn {{ network_subnet.stdout }} > /dev/null 2>&1 || true
+        sleep 2
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Look up IP address from ARP table using MAC
+      shell: |
+        ip neigh show | grep -i "{{ opnsense_mac }}" | awk '{print $1}' | head -1
+      register: arp_lookup
+      changed_when: false
+      retries: 6
+      delay: 10
+      until: arp_lookup.stdout != ""
+
+    - name: Set OPNsense IP fact
+      set_fact:
+        opnsense_ip: "{{ arp_lookup.stdout }}"
+      when: arp_lookup.stdout != ""
+
+    - name: Display discovered IP
+      debug:
+        msg: "Found OPNsense at IP: {{ opnsense_ip }}"
+      when: opnsense_ip is defined
+
+    - name: Verify OPNsense is accessible
+      wait_for:
+        host: "{{ opnsense_ip }}"
+        port: 22
+        timeout: "{{ verify_timeout }}"
+        msg: "OPNsense SSH not responding at {{ opnsense_ip }}"
+      when: opnsense_ip is defined
+
+    - name: Verify it's actually OPNsense
+      shell: |
+        SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@{{ opnsense_ip }} 'uname -s' || true
+      register: os_check
+      changed_when: false
+      when: opnsense_ip is defined
+
+    - name: Confirm OPNsense discovery
+      assert:
+        that:
+          - os_check.stdout == "FreeBSD"
+        fail_msg: "IP {{ opnsense_ip }} does not appear to be OPNsense (got {{ os_check.stdout }})"
+        success_msg: "Successfully discovered OPNsense at {{ opnsense_ip }}"
+      when: opnsense_ip is defined
+
+    - name: Save discovered IP for future use
+      copy:
+        content: |
+          # OPNsense Discovery Results
+          OPNSENSE_IP={{ opnsense_ip }}
+          OPNSENSE_MAC={{ opnsense_mac }}
+          DISCOVERED_AT={{ ansible_date_time.iso8601 }}
+        dest: /tmp/opnsense-discovery.env
+      when: opnsense_ip is defined
+
+    - name: Failed to discover OPNsense
+      fail:
+        msg: |
+          Could not discover OPNsense IP address.
+          MAC address: {{ opnsense_mac }}
+          Please check:
+          1. OPNsense VM is running
+          2. WAN interface has obtained DHCP
+          3. Network allows ARP scanning
+          
+          Manual discovery: Check your router's DHCP client list for MAC {{ opnsense_mac }}
+      when: opnsense_ip is not defined
