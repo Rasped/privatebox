@@ -130,7 +130,7 @@
           -o PasswordAuthentication=yes \
           -o PreferredAuthentications=password \
           root@{{ item }} \
-          "ifconfig vtnet0 2>/dev/null | grep ether | cut -d' ' -f2" 2>/dev/null || echo "FAILED"
+          "ifconfig vtnet0 2>/dev/null | grep ether | sed 's/.*ether //'" 2>/dev/null || echo "FAILED"
       register: mac_check
       with_items: "{{ live_hosts.stdout_lines }}"
       when: opnsense_ip == ""
