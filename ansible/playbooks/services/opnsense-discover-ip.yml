@@ -3,7 +3,8 @@
   hosts: proxmox
   gather_facts: yes
   vars:
-    vm_name: "opnsense"
+    # You can override this with -e vm_name=exact-name or set in Semaphore
+    vm_name: "{{ opnsense_vm_name | default('opnsense') }}"
     scan_timeout: 60
     verify_timeout: 10
     max_scan_retries: 6
@@ -30,7 +31,7 @@
 
     - name: Find VM ID by name
       shell: |
-        qm list | grep -w "{{ vm_name }}" | awk '{print $1}' || echo "NOT_FOUND"
+        qm list | awk -v name="{{ vm_name }}" '$2 == name {print $1}' | head -1 || echo "NOT_FOUND"
       register: vm_id_result
       changed_when: false
       
