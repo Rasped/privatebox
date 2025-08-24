@@ -1,0 +1,269 @@
+---
+- name: "OPNsense: Register SSH key and inventory in Semaphore"
+  hosts: proxmox
+  gather_facts: yes
+  vars:
+    # These come from SemaphoreAPI environment
+    semaphore_url: "{{ SEMAPHORE_URL | default('http://192.168.1.20:3000') }}"
+    semaphore_token: "{{ SEMAPHORE_API_TOKEN }}"
+    project_id: 1
+    
+    # File paths
+    ssh_setup_file: "/tmp/opnsense-ssh-setup.env"
+    registration_file: "/tmp/opnsense-semaphore-registration.env"
+    
+    # Resource names in Semaphore
+    key_name: "opnsense"
+    inventory_name: "opnsense"
+    
+    enable_debug: true
+
+  tasks:
+    - name: Check if SSH setup has been completed
+      stat:
+        path: "{{ ssh_setup_file }}"
+      register: ssh_setup_check
+
+    - name: Fail if SSH setup not completed
+      fail:
+        msg: |
+          OPNsense SSH setup has not been completed!
+          Please run the opnsense-setup-ssh.yml playbook first.
+          Expected file not found: {{ ssh_setup_file }}
+      when: not ssh_setup_check.stat.exists
+
+    - name: Read SSH setup state
+      slurp:
+        src: "{{ ssh_setup_file }}"
+      register: ssh_setup_content
+
+    - name: Parse SSH setup state
+      set_fact:
+        setup_lines: "{{ (ssh_setup_content.content | b64decode).split('\n') }}"
+
+    - name: Extract OPNsense IP
+      set_fact:
+        opnsense_ip: "{{ item.split('=')[1] }}"
+      when: item.startswith('OPNSENSE_IP=')
+      with_items: "{{ setup_lines }}"
+
+    - name: Extract SSH key path
+      set_fact:
+        ssh_key_path: "{{ item.split('=')[1] }}"
+      when: item.startswith('SSH_KEY_PATH=')
+      with_items: "{{ setup_lines }}"
+
+    - name: Extract SSH key fingerprint
+      set_fact:
+        ssh_key_fingerprint: "{{ item.split('=')[1] }}"
+      when: item.startswith('SSH_KEY_FINGERPRINT=')
+      with_items: "{{ setup_lines }}"
+
+    - name: Extract VM name
+      set_fact:
+        opnsense_vm_name: "{{ item.split('=')[1] }}"
+      when: item.startswith('OPNSENSE_VM_NAME=')
+      with_items: "{{ setup_lines }}"
+
+    - name: Debug - Show extracted information
+      debug:
+        msg:
+          - "OPNsense IP: {{ opnsense_ip }}"
+          - "SSH Key Path: {{ ssh_key_path }}"
+          - "Key Fingerprint: {{ ssh_key_fingerprint }}"
+          - "VM Name: {{ opnsense_vm_name }}"
+      when: enable_debug | bool
+
+    - name: Read SSH private key
+      slurp:
+        src: "{{ ssh_key_path }}"
+      register: ssh_private_key_content
+
+    - name: Set private key fact
+      set_fact:
+        ssh_private_key: "{{ ssh_private_key_content.content | b64decode }}"
+
+    - name: Check existing SSH keys in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: existing_keys
+      failed_when: false
+
+    - name: Debug - Show existing keys
+      debug:
+        msg: "Existing keys: {{ existing_keys.json | default([]) | map(attribute='name') | list }}"
+      when: 
+        - enable_debug | bool
+        - existing_keys.status == 200
+
+    - name: Check if OPNsense key already exists
+      set_fact:
+        existing_key_id: "{{ item.id }}"
+      when: item.name == key_name
+      with_items: "{{ existing_keys.json | default([]) }}"
+      no_log: true
+
+    - name: Create SSH key in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id }}"
+          ssh:
+            private_key: "{{ ssh_private_key }}"
+        status_code: [201, 204]
+      register: create_key_result
+      when: existing_key_id is not defined
+      no_log: true
+
+    - name: Set key ID from creation
+      set_fact:
+        ssh_key_id: "{{ create_key_result.json.id }}"
+      when: 
+        - existing_key_id is not defined
+        - create_key_result is not skipped
+
+    - name: Use existing key ID
+      set_fact:
+        ssh_key_id: "{{ existing_key_id }}"
+      when: existing_key_id is defined
+
+    - name: Display SSH key status
+      debug:
+        msg: "{{ 'Using existing SSH key with ID: ' + ssh_key_id | string if existing_key_id is defined else 'Created new SSH key with ID: ' + ssh_key_id | string }}"
+
+    - name: Check existing inventories in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: existing_inventories
+      failed_when: false
+
+    - name: Debug - Show existing inventories
+      debug:
+        msg: "Existing inventories: {{ existing_inventories.json | default([]) | map(attribute='name') | list }}"
+      when: 
+        - enable_debug | bool
+        - existing_inventories.status == 200
+
+    - name: Check if OPNsense inventory already exists
+      set_fact:
+        existing_inventory_id: "{{ item.id }}"
+        existing_inventory_content: "{{ item.inventory }}"
+      when: item.name == inventory_name
+      with_items: "{{ existing_inventories.json | default([]) }}"
+
+    - name: Build inventory YAML content
+      set_fact:
+        inventory_yaml: |
+          all:
+            hosts:
+              opnsense:
+                ansible_host: {{ opnsense_ip }}
+                ansible_user: root
+                ansible_ssh_private_key_file: /root/.credentials/opnsense/id_ed25519
+                ansible_python_interpreter: /usr/local/bin/python3
+
+    - name: Create inventory in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ inventory_name }}"
+          type: "static"
+          project_id: "{{ project_id }}"
+          inventory: "{{ inventory_yaml }}"
+          ssh_key_id: "{{ ssh_key_id | int }}"
+        status_code: [201, 204]
+      register: create_inventory_result
+      when: existing_inventory_id is not defined
+
+    - name: Update existing inventory if IP changed
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory/{{ existing_inventory_id }}"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ inventory_name }}"
+          type: "static"
+          project_id: "{{ project_id }}"
+          inventory: "{{ inventory_yaml }}"
+          ssh_key_id: "{{ ssh_key_id | int }}"
+        status_code: [200, 204]
+      register: update_inventory_result
+      when: 
+        - existing_inventory_id is defined
+        - opnsense_ip not in (existing_inventory_content | default(''))
+
+    - name: Set inventory ID from creation
+      set_fact:
+        inventory_id: "{{ create_inventory_result.json.id }}"
+      when: 
+        - existing_inventory_id is not defined
+        - create_inventory_result is not skipped
+
+    - name: Use existing inventory ID
+      set_fact:
+        inventory_id: "{{ existing_inventory_id }}"
+      when: existing_inventory_id is defined
+
+    - name: Display inventory status
+      debug:
+        msg: |
+          {{ 'Updated existing inventory with new IP' if (existing_inventory_id is defined and update_inventory_result is not skipped) 
+             else 'Using existing inventory with ID: ' + inventory_id | string if existing_inventory_id is defined 
+             else 'Created new inventory with ID: ' + inventory_id | string }}
+
+    - name: Save registration state
+      copy:
+        content: |
+          # OPNsense Semaphore Registration
+          REGISTRATION_COMPLETE=true
+          OPNSENSE_IP={{ opnsense_ip }}
+          SSH_KEY_ID={{ ssh_key_id }}
+          SSH_KEY_NAME={{ key_name }}
+          INVENTORY_ID={{ inventory_id }}
+          INVENTORY_NAME={{ inventory_name }}
+          SEMAPHORE_URL={{ semaphore_url }}
+          PROJECT_ID={{ project_id }}
+          REGISTRATION_TIMESTAMP={{ ansible_date_time.iso8601 }}
+          REGISTERED_FROM={{ inventory_hostname }}
+        dest: "{{ registration_file }}"
+        mode: '0644'
+
+    - name: Display completion summary
+      debug:
+        msg:
+          - "========================================"
+          - "Semaphore Registration Complete!"
+          - "========================================"
+          - "OPNsense IP: {{ opnsense_ip }}"
+          - "SSH Key ID: {{ ssh_key_id }}"
+          - "Inventory ID: {{ inventory_id }}"
+          - "Semaphore URL: {{ semaphore_url }}"
+          - ""
+          - "OPNsense is now registered in Semaphore and can be"
+          - "managed through playbooks using the '{{ inventory_name }}' inventory."
+          - ""
+          - "Registration state saved to: {{ registration_file }}"
+          - "========================================"
