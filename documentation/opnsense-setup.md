@@ -50,47 +50,96 @@ Each physical unit contains:
 3. OPNsense backup restored
 4. VM starts and WAN interface requests DHCP
 
-### Phase 3: Discovery Challenge
-**Problem**: OPNsense gets unknown DHCP IP on WAN. Semaphore needs to find it to complete configuration.
+### Phase 3: Discovery and SSH Setup
+**Problem**: OPNsense gets unknown DHCP IP on WAN. Semaphore needs to find it and establish secure access.
 
-**Solution**: MAC-based ARP discovery
+**Solution**: SSH-based discovery with MAC verification and key setup
 
-### Phase 4: Network Takeover
-1. OPNsense configured via discovered IP
+The `opnsense-discover-ip.yml` playbook (runs on Proxmox host) handles:
+1. Network scanning to find live hosts
+2. SSH testing each host with default credentials
+3. MAC address verification to identify correct OPNsense instance
+4. SSH key generation and deployment
+5. Semaphore integration for future automation
+
+### Phase 4: Semaphore Integration
+1. Generate SSH keypair for OPNsense access
+2. Deploy public key to OPNsense authorized_keys
+3. Create SSH key object in Semaphore via API (using stored Semaphore credentials)
+4. Create inventory entry with discovered IP
+5. Associate SSH key with inventory
+6. Verify key-based authentication
+7. Clean up temporary key files from filesystem
+8. Disable password authentication on OPNsense
+
+### Phase 5: Network Takeover
+1. OPNsense configured via Semaphore using key-based auth
 2. LAN side activated with DHCP server
 3. Management VM switches to LAN network
 4. OPNsense becomes primary router for the unit
 
-## IP Discovery Mechanism
+## IP Discovery and Onboarding Mechanism
 
-### Primary Method: ARP Scanning
+### Primary Method: SSH-Based Discovery with MAC Verification
 
-Since we control the VM creation process, we know the MAC address of the OPNsense WAN interface. The discovery process:
+Since we control the VM creation process, we know the MAC address of the OPNsense WAN interface. The complete onboarding process:
+
+#### Discovery Phase
 
 1. **Wait for DHCP**: Allow 30-60 seconds for OPNsense to boot and obtain DHCP lease
 
-2. **Network Detection**: From Management VM, identify local network:
-   - Detect current subnet from Semaphore's own IP
-   - Determine network range to scan
+2. **Network Detection**: From Proxmox host, identify local network:
+   - Detect current subnet from host's IP configuration
+   - Determine network range to scan (/24 required)
 
-3. **Trigger ARP Population**: 
-   - Perform network scan to populate ARP tables
-   - This sends ARP requests to all hosts in the subnet
+3. **Active Host Discovery**: 
+   - Use nmap to scan network for live hosts
+   - Build list of IP addresses to test
 
-4. **MAC Lookup**:
-   - Query local ARP table for the known MAC address
-   - Extract corresponding IP address
+4. **SSH Testing with MAC Verification**:
+   - Attempt SSH to each discovered host using default credentials
+   - Extract MAC address from vtnet0 interface
+   - Compare with known MAC from VM creation
+   - Identify correct OPNsense instance (handles multiple OPNsense VMs)
+   - Retry logic if initial attempts fail
 
-5. **Verification**:
-   - Attempt SSH connection to discovered IP
-   - Verify it's the correct OPNsense instance
+#### SSH Key Setup Phase
+
+5. **Key Generation**:
+   - Generate new SSH keypair on Proxmox or Management VM
+   - Use strong RSA or ED25519 keys
+
+6. **Key Deployment**:
+   - SSH to OPNsense using default password
+   - Create .ssh directory with proper permissions
+   - Deploy public key to authorized_keys
+   - Test key-based authentication
+
+#### Semaphore Integration Phase
+
+7. **API Authentication**:
+   - Retrieve Semaphore API credentials from environment/stored variables
+   - Login to Semaphore API using cookie-based auth
+   - Store session cookie for subsequent API calls
+
+8. **Credential Storage**:
+   - Create SSH key object in Semaphore with private key
+   - Create inventory entry with discovered IP address (unique per OPNsense instance)
+   - Link SSH key to inventory for passwordless access
+   - Each OPNsense VM gets its own key/inventory pair
+
+9. **Cleanup and Security**:
+   - Remove all temporary key files from filesystem
+   - Disable password authentication on OPNsense (mandatory)
+   - Save discovery results for audit trail
+   - Log all operations for troubleshooting
 
 ### Why This Works
 
 - **Consumer Networks**: Typically single flat /24 network without VLANs
-- **ARP is Fundamental**: Every IPv4 network maintains ARP mappings
+- **SSH Default Access**: OPNsense backup has SSH enabled with known credentials
 - **No Special Access**: Doesn't require router/switch management access
-- **Broadcast Domain**: Consumer networks allow broadcast/multicast traffic
+- **Automation Ready**: Full integration with Semaphore for ongoing management
 
 ### Limitations and Fallbacks
 
@@ -98,26 +147,28 @@ Since we control the VM creation process, we know the MAC address of the OPNsens
 - Standard home networks
 - Single subnet configurations  
 - Networks up to /24 size (256 addresses)
-- Same broadcast domain for all VMs
+- OPNsense SSH accessible on WAN interface
 
 **May Fail**:
 - Enterprise networks with VLANs
 - Networks larger than /24 (scanning becomes slow)
 - Isolated network segments
-- Security policies blocking ARP scanning
+- Firewalls blocking SSH to new devices
+- Changed default credentials in backup
 
 **Fallback Options**:
 1. Manual discovery via router's DHCP client list
 2. User provides IP after checking router interface
 3. Physical console access for initial configuration
+4. Manual SSH key setup if automation fails
 
 ## Network Requirements
 
 ### Minimum Requirements
 - DHCP server on network (consumer router)
 - Single broadcast domain
-- Network allows ARP traffic
-- Subnet size /24 or smaller
+- Network allows SSH traffic
+- Subnet size must be /24
 
 ### Recommended Setup
 - Static DHCP reservations for predictable IPs
@@ -127,11 +178,15 @@ Since we control the VM creation process, we know the MAC address of the OPNsens
 ## Security Considerations
 
 ### During Deployment
-- OPNsense has default credentials during setup
+- OPNsense has default credentials during initial discovery only
 - Should be on isolated or trusted network
-- Change credentials immediately after discovery
+- SSH keys deployed immediately after discovery
+- Default password access disabled after key setup (mandatory)
+- Temporary key files cleaned up after Semaphore storage
 
 ### Post-Deployment  
+- All access via SSH keys stored in Semaphore
+- No passwords stored or transmitted
 - OPNsense becomes the security boundary
 - Management VM moves behind OPNsense firewall
 - WAN side properly firewalled
@@ -150,6 +205,29 @@ Since we control the VM creation process, we know the MAC address of the OPNsens
 - Simple enough for customer self-service
 - Clear fallback instructions for edge cases
 
+## Playbook Implementation
+
+The `opnsense-discover-ip.yml` playbook implements the complete onboarding workflow:
+
+### Current Features
+- VM identification by exact name match (VM must be named "opnsense")
+- MAC address extraction from VM configuration
+- Network scanning using nmap on /24 networks
+- SSH-based discovery with password authentication
+- MAC verification to ensure correct OPNsense instance (handles multiple units)
+- Discovery results saved to file
+- Error handling with retries and comprehensive logging
+
+### Planned Enhancements
+- SSH keypair generation with secure storage
+- Public key deployment to OPNsense
+- Semaphore API integration using stored credentials
+- Inventory creation with discovered IP (unique per unit)
+- Automated template generation for OPNsense configuration
+- Support for batch processing multiple units
+- Mandatory disabling of password authentication
+- Complete cleanup of temporary files
+
 ## Alternative Approaches Considered
 
 1. **DHCP Reservations**: Requires router access, not consumer friendly
@@ -157,5 +235,6 @@ Since we control the VM creation process, we know the MAC address of the OPNsens
 3. **mDNS/Bonjour**: Often blocked by consumer routers
 4. **Static IPs**: Too complex for consumer deployment
 5. **DHCP Option 61**: Requires DHCP server support
+6. **ARP Cache Lookup**: Unreliable with bridged VMs in Proxmox
 
-The ARP scanning approach provides the best balance of reliability, simplicity, and consumer friendliness for our target market.
+The SSH-based discovery with MAC verification provides the best balance of reliability, security, and consumer friendliness for our target market.

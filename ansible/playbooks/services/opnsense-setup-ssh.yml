@@ -34,17 +34,31 @@
 
     - name: Parse discovery results
       set_fact:
-        discovery_data: "{{ (discovery_content.content | b64decode).split('\n') | 
-                           select('match', '^[A-Z_]+=') | 
-                           map('regex_replace', '([^=]+)=(.*)', '\\1: \\2') | 
-                           join('\n') | from_yaml }}"
+        discovery_lines: "{{ (discovery_content.content | b64decode).split('\n') }}"
 
-    - name: Set OPNsense facts from discovery
+    - name: Extract OPNsense IP
       set_fact:
-        opnsense_ip: "{{ discovery_data.OPNSENSE_IP }}"
-        opnsense_mac: "{{ discovery_data.OPNSENSE_MAC }}"
-        discovered_vm_id: "{{ discovery_data.OPNSENSE_VM_ID }}"
-        discovered_vm_name: "{{ discovery_data.OPNSENSE_VM_NAME }}"
+        opnsense_ip: "{{ item.split('=')[1] }}"
+      when: item.startswith('OPNSENSE_IP=')
+      with_items: "{{ discovery_lines }}"
+
+    - name: Extract OPNsense MAC
+      set_fact:
+        opnsense_mac: "{{ item.split('=')[1] }}"
+      when: item.startswith('OPNSENSE_MAC=')
+      with_items: "{{ discovery_lines }}"
+
+    - name: Extract VM ID
+      set_fact:
+        discovered_vm_id: "{{ item.split('=')[1] }}"
+      when: item.startswith('OPNSENSE_VM_ID=')
+      with_items: "{{ discovery_lines }}"
+
+    - name: Extract VM Name
+      set_fact:
+        discovered_vm_name: "{{ item.split('=')[1] }}"
+      when: item.startswith('OPNSENSE_VM_NAME=')
+      with_items: "{{ discovery_lines }}"
 
     - name: Debug - Show discovered information
       debug:
@@ -68,17 +82,54 @@
 
     - name: Parse existing setup state
       set_fact:
-        setup_data: "{{ (setup_content.content | b64decode).split('\n') | 
-                       select('match', '^[A-Z_]+=') | 
-                       map('regex_replace', '([^=]+)=(.*)', '\\1: \\2') | 
-                       join('\n') | from_yaml }}"
+        setup_lines: "{{ (setup_content.content | b64decode).split('\n') }}"
       when: setup_check.stat.exists
+
+    - name: Extract setup completion status
+      set_fact:
+        setup_complete: "{{ item.split('=')[1] }}"
+      when: 
+        - setup_check.stat.exists
+        - item.startswith('SSH_SETUP_COMPLETE=')
+      with_items: "{{ setup_lines | default([]) }}"
+
+    - name: Extract setup IP
+      set_fact:
+        setup_ip: "{{ item.split('=')[1] }}"
+      when:
+        - setup_check.stat.exists
+        - item.startswith('OPNSENSE_IP=')
+      with_items: "{{ setup_lines | default([]) }}"
+
+    - name: Extract SSH key fingerprint
+      set_fact:
+        setup_fingerprint: "{{ item.split('=')[1] }}"
+      when:
+        - setup_check.stat.exists
+        - item.startswith('SSH_KEY_FINGERPRINT=')
+      with_items: "{{ setup_lines | default([]) }}"
+
+    - name: Extract SSH key path
+      set_fact:
+        setup_key_path: "{{ item.split('=')[1] }}"
+      when:
+        - setup_check.stat.exists
+        - item.startswith('SSH_KEY_PATH=')
+      with_items: "{{ setup_lines | default([]) }}"
+
+    - name: Extract setup timestamp
+      set_fact:
+        setup_timestamp: "{{ item.split('=')[1] }}"
+      when:
+        - setup_check.stat.exists
+        - item.startswith('SETUP_TIMESTAMP=')
+      with_items: "{{ setup_lines | default([]) }}"
 
     - name: Check if setup needs to be done
       set_fact:
         needs_setup: "{{ not setup_check.stat.exists or 
-                        (setup_data.SSH_SETUP_COMPLETE | default('false')) != 'true' or
-                        (setup_data.OPNSENSE_IP | default('')) != opnsense_ip }}"
+                        (setup_complete | default('false')) != 'true' or
+                        (setup_ip | default('')) != opnsense_ip }}"
 
     - name: Display setup status
       debug:
@@ -253,7 +304,7 @@
           - "========================================"
           - "OPNsense IP: {{ opnsense_ip }}"
           - "SSH Key: {{ ssh_key_path }}"
-          - "Key Fingerprint: {{ (key_fingerprint.stdout if key_fingerprint is defined else setup_data.SSH_KEY_FINGERPRINT | default('unknown')) if needs_setup else setup_data.SSH_KEY_FINGERPRINT | default('unknown') }}"
+          - "Key Fingerprint: {{ (key_fingerprint.stdout if key_fingerprint is defined else setup_fingerprint | default('unknown')) if needs_setup else setup_fingerprint | default('unknown') }}"
           - "Password Auth: {{ 'Disabled' if disable_password_auth else 'Still Enabled' }}"
           - ""
           - "Test connection:"
@@ -265,7 +316,7 @@
     - name: Note about existing setup
       debug:
         msg:
-          - "SSH setup was already completed on {{ setup_data.SETUP_TIMESTAMP | default('unknown') }}"
-          - "Using existing key at: {{ setup_data.SSH_KEY_PATH | default(ssh_key_path) }}"
+          - "SSH setup was already completed on {{ setup_timestamp | default('unknown') }}"
+          - "Using existing key at: {{ setup_key_path | default(ssh_key_path) }}"
           - "To force re-setup, remove: {{ setup_state_file }}"
       when: not needs_setup
