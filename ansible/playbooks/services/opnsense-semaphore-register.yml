@@ -179,7 +179,6 @@
               opnsense:
                 ansible_host: {{ opnsense_ip }}
                 ansible_user: root
-                ansible_ssh_private_key_file: /root/.credentials/opnsense/id_ed25519
                 ansible_python_interpreter: /usr/local/bin/python3
 
     - name: Create inventory in Semaphore
