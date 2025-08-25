@@ -193,7 +193,7 @@
             "name": "{{ inventory_name }}",
             "type": "static",
             "project_id": {{ project_id }},
-            "inventory": "{{ inventory_yaml | to_json }}",
+            "inventory": {{ inventory_yaml | to_json }},
             "ssh_key_id": {{ ssh_key_id }}
           }
         body_format: json
@@ -213,7 +213,7 @@
             "name": "{{ inventory_name }}",
             "type": "static",
             "project_id": {{ project_id }},
-            "inventory": "{{ inventory_yaml | to_json }}",
+            "inventory": {{ inventory_yaml | to_json }},
             "ssh_key_id": {{ ssh_key_id }}
           }
         body_format: json
