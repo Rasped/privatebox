@@ -87,10 +87,46 @@ The `opnsense-semaphore-register.yml` playbook:
 7. OPNsense now fully manageable through Semaphore
 
 ### Phase 5: Network Takeover (Planned)
+
+**IMPORTANT**: Before switching the network architecture, OPNsense requires configuration:
+
+#### Pre-Switch Configuration Requirements
+
+1. **LAN Interface Setup** (Currently in template):
+   - vtnet1 already configured as 10.10.10.1/24
+   - Need to verify/enable DHCP server on LAN
+   - Configure DHCP range (e.g., 10.10.10.100-10.10.10.200)
+
+2. **VLAN Configuration** (If using VLANs):
+   - Create VLANs on vtnet1 as per vlan-design.md
+   - VLAN 10: 10.10.10.0/24 (Management)
+   - VLAN 20: 10.10.20.0/24 (Services)
+   - Configure inter-VLAN routing rules
+
+3. **Firewall Rules**:
+   - Allow Management VM to access services
+   - Configure NAT for outbound traffic
+   - Set up port forwarding if needed
+
+4. **DNS Configuration**:
+   - Configure DNS forwarder
+   - Set up local domain resolution
+   - Point to upstream DNS servers
+
+5. **Critical Services Access**:
+   - Ensure Semaphore (port 3000) remains accessible
+   - Ensure Portainer (port 9000) remains accessible
+   - Plan for emergency access if configuration fails
+
+#### Network Switch Process
+
 1. OPNsense configured via Semaphore using key-based auth
 2. LAN side activated with DHCP server
-3. Management VM switches to LAN network
-4. OPNsense becomes primary router for the unit
+3. Management VM switches to LAN network (gets new IP from OPNsense DHCP)
+4. Update Semaphore inventory with new Management VM IP
+5. OPNsense becomes primary router for the unit
+
+**TODO**: Create `opnsense-configure-lan.yml` playbook to automate this configuration before network switch.
 
 ### Future Enhancement: Unified Deployment
 
