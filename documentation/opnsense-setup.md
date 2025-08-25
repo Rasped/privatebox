@@ -38,45 +38,70 @@ Each physical unit contains:
 
 ## Deployment Workflow
 
+### Current Implementation Status
+
+The OPNsense deployment is now fully automated through Semaphore with four separate playbooks that complete the entire chain:
+
+1. **`opnsense-deploy.yml`** - Creates VM from template backup
+2. **`opnsense-discover-ip.yml`** - Discovers IP via MAC verification
+3. **`opnsense-setup-ssh.yml`** - Deploys SSH keys for secure access
+4. **`opnsense-semaphore-register.yml`** - Registers in Semaphore for management
+
+All playbooks are idempotent and include comprehensive state tracking.
+
 ### Phase 1: Initial Setup
 1. Physical units connected to switch
 2. Proxmox hosts get DHCP addresses
 3. Bootstrap script creates Management VM with known IP
 4. Semaphore and Portainer containers start
+5. Generate Templates task creates Semaphore templates from playbooks
 
-### Phase 2: OPNsense Creation
-1. Semaphore runs playbook to create OPNsense VM
-2. VM created with specific or known MAC address
-3. OPNsense backup restored
+### Phase 2: OPNsense Creation (Automated via Semaphore)
+1. Template "OPNsense: Deploy Firewall VM from Template" executed
+2. Downloads OPNsense backup from GitHub releases
+3. Restores VM with known MAC address (bc:24:11:xx:xx:xx)
 4. VM starts and WAN interface requests DHCP
+5. Deployment state logged to `/var/log/privatebox/`
 
-### Phase 3: Discovery and SSH Setup
-**Problem**: OPNsense gets unknown DHCP IP on WAN. Semaphore needs to find it and establish secure access.
+### Phase 3: Discovery and SSH Setup (Automated via Semaphore)
+1. **Discovery** (`opnsense-discover-ip.yml`):
+   - Scans network from Proxmox host
+   - SSH tests each host with default credentials
+   - MAC verification ensures correct OPNsense instance
+   - Results saved to `/tmp/opnsense-discovery.env`
 
-**Solution**: SSH-based discovery with MAC verification and key setup
+2. **SSH Setup** (`opnsense-setup-ssh.yml`):
+   - Generates ED25519 keypair on Proxmox host
+   - Deploys public key to OPNsense
+   - Verifies key-based authentication
+   - Results saved to `/tmp/opnsense-ssh-setup.env`
 
-The `opnsense-discover-ip.yml` playbook (runs on Proxmox host) handles:
-1. Network scanning to find live hosts
-2. SSH testing each host with default credentials
-3. MAC address verification to identify correct OPNsense instance
-4. SSH key generation and deployment
-5. Semaphore integration for future automation
+### Phase 4: Semaphore Integration (Automated)
+The `opnsense-semaphore-register.yml` playbook:
+1. Reads SSH setup state from Proxmox
+2. Uses Bearer token authentication with Semaphore API
+3. Uploads private SSH key to Semaphore (becomes SSH Key object)
+4. Creates inventory entry with discovered IP
+5. Links SSH key to inventory for passwordless access
+6. Saves registration state to `/tmp/opnsense-semaphore-registration.env`
+7. OPNsense now fully manageable through Semaphore
 
-### Phase 4: Semaphore Integration
-1. Generate SSH keypair for OPNsense access
-2. Deploy public key to OPNsense authorized_keys
-3. Create SSH key object in Semaphore via API (using stored Semaphore credentials)
-4. Create inventory entry with discovered IP
-5. Associate SSH key with inventory
-6. Verify key-based authentication
-7. Clean up temporary key files from filesystem
-8. Disable password authentication on OPNsense
-
-### Phase 5: Network Takeover
+### Phase 5: Network Takeover (Planned)
 1. OPNsense configured via Semaphore using key-based auth
 2. LAN side activated with DHCP server
 3. Management VM switches to LAN network
 4. OPNsense becomes primary router for the unit
+
+### Future Enhancement: Unified Deployment
+
+**TODO**: Create a single orchestration playbook that combines all four phases into one streamlined operation. This would:
+- Run all steps in sequence with proper error handling
+- Provide single-click deployment from Semaphore UI
+- Include health checks between phases
+- Support batch deployment of multiple units
+- Offer rollback capabilities on failure
+
+For now, the four-playbook approach provides modularity and debugging flexibility while the system matures.
 
 ## IP Discovery and Onboarding Mechanism
 
@@ -207,26 +232,54 @@ Since we control the VM creation process, we know the MAC address of the OPNsens
 
 ## Playbook Implementation
 
-The `opnsense-discover-ip.yml` playbook implements the complete onboarding workflow:
+The OPNsense automation consists of four fully implemented playbooks:
 
-### Current Features
-- VM identification by exact name match (VM must be named "opnsense")
+### 1. `opnsense-deploy.yml` - VM Deployment
+- Downloads OPNsense template from GitHub releases
+- Validates storage, network bridges, and resources
+- Restores VM from backup with predictable MAC address
+- Configures VM settings (cores, memory, auto-start)
+- Comprehensive logging to `/var/log/privatebox/`
+- Full idempotency with pre-flight checks
+
+### 2. `opnsense-discover-ip.yml` - IP Discovery
+- VM identification by name (default: "opnsense")
 - MAC address extraction from VM configuration
 - Network scanning using nmap on /24 networks
-- SSH-based discovery with password authentication
-- MAC verification to ensure correct OPNsense instance (handles multiple units)
-- Discovery results saved to file
-- Error handling with retries and comprehensive logging
+- SSH-based discovery with default credentials
+- MAC verification to ensure correct OPNsense instance
+- Results saved to `/tmp/opnsense-discovery.env`
+- Retry logic and comprehensive error messages
 
-### Planned Enhancements
-- SSH keypair generation with secure storage
-- Public key deployment to OPNsense
-- Semaphore API integration using stored credentials
-- Inventory creation with discovered IP (unique per unit)
-- Automated template generation for OPNsense configuration
-- Support for batch processing multiple units
-- Mandatory disabling of password authentication
-- Complete cleanup of temporary files
+### 3. `opnsense-setup-ssh.yml` - SSH Key Setup
+- Reads discovery results from previous playbook
+- Generates ED25519 keypair on Proxmox host
+- Deploys public key via password authentication
+- Verifies key-based access works
+- Saves state to `/tmp/opnsense-ssh-setup.env`
+- Idempotent - safe to run multiple times
+- Optional password authentication disable
+
+### 4. `opnsense-semaphore-register.yml` - Semaphore Integration
+- Uses Bearer token authentication (from SemaphoreAPI environment)
+- Uploads SSH private key to Semaphore
+- Creates inventory with discovered IP address
+- Links SSH key to inventory for automation
+- Handles existing resources gracefully
+- State tracking in `/tmp/opnsense-semaphore-registration.env`
+- Proper integer type handling for API compatibility
+
+### Key Implementation Details
+
+**State Management**: Each playbook reads state from previous steps and writes its own state file, creating a clear audit trail.
+
+**Error Handling**: Comprehensive error messages with troubleshooting guidance at each failure point.
+
+**Idempotency**: All playbooks can be safely re-run without side effects.
+
+**Security**: SSH keys stored securely, passwords never logged, temporary files cleaned up.
+
+**API Integration**: Fixed Ansible uri module issues with JSON integer types through raw JSON body formatting.
 
 ## Alternative Approaches Considered
 
