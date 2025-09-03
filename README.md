@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 That's it! The installer will:
 
 - Detect your network configuration automatically
-- Create a management VM (Debian 12 by default) with all tools pre-installed
+- Create a management VM (Debian 13) with all tools pre-installed
 - Set up web interfaces for easy management
 - Display connection information when complete
 
@@ -54,7 +54,7 @@ sudo bash quickstart.sh --help
 ### Privacy Services
 
 - **AdGuard Home**: Network-wide ad and tracker blocking (Available)
-- **OPNsense**: Enterprise-grade firewall and router (Planned - In Development)
+- **OPNsense**: Enterprise-grade firewall and router (Near Complete - Final configuration in progress)
 - **Unbound DNS**: Privacy-focused recursive DNS resolver (Planned)
 
 ### Management Tools
@@ -95,9 +95,9 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 - **Semaphore**: `http://<VM-IP>:3000` - Ansible automation UI
 
 **Semaphore Login:**
-- Username: `ubuntuadmin`
+- Username: `admin`
 - Password: Auto-generated during setup (displayed after installation)
-- To retrieve manually: `ssh ubuntuadmin@<VM-IP>` then `sudo cat /root/.credentials/semaphore_credentials.txt`
+- To retrieve manually: `ssh debian@<VM-IP>` then `sudo cat /etc/privatebox/config.env | grep SERVICES_PASSWORD`
 
 **Semaphore Template Synchronization:**
 - Bootstrap automatically creates a "Generate Templates" task in Semaphore
@@ -105,7 +105,7 @@ After installation completes (5-10 minutes), you can access your PrivateBox VM:
 - Run "Generate Templates" from Semaphore UI to sync new or updated playbooks
 - Initial sync runs automatically during bootstrap setup
 
-**Note:** The VM credentials above are for logging into the Ubuntu VM, not for Proxmox.
+**Note:** The VM credentials above are for logging into the Debian VM, not for Proxmox.
 
 ## Template Synchronization
 
@@ -172,7 +172,7 @@ vars_prompt:
 
 ### 🚧 In Development
 
-- **OPNsense Integration**: Firewall and router functionality (template available: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense))
+- **OPNsense Integration**: Firewall and router functionality (near complete, final VLAN configuration in progress)
 - **Network Segmentation**: VLAN-based network isolation (design phase)
 - **Additional Privacy Services**: Unbound DNS, WireGuard VPN
 
@@ -196,7 +196,7 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## License
 
-This project is licensed under the [LICENSE TYPE] - see the LICENSE file for details.
+This project is licensed under the EUPL - see the LICENSE file for details.
 
 ## Acknowledgments
 
