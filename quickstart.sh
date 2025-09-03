@@ -140,12 +140,23 @@ run_preflight_checks() {
     
     # Check and install git if needed (Proxmox may not have it by default)
     if ! command -v git &> /dev/null; then
-        info_msg "Git not found. Installing git..."
-        if apt-get update &>/dev/null && apt-get install -y git &>/dev/null; then
-            success_msg "Git installed successfully"
-        else
+        warning_msg "Git not found on this system. Installing git..."
+        info_msg "Running: apt-get update"
+        if ! apt-get update; then
+            error_exit "Failed to update package list. Please install git manually: apt-get install git"
+        fi
+        info_msg "Running: apt-get install -y git"
+        if ! apt-get install -y git; then
             error_exit "Failed to install git. Please install manually: apt-get install git"
         fi
+        # Verify git is now available
+        if command -v git &> /dev/null; then
+            success_msg "Git installed successfully"
+        else
+            error_exit "Git installation completed but git command still not found. Please check your system."
+        fi
+    else
+        success_msg "Git is already installed"
     fi
     
     # Check for other required commands
