@@ -138,8 +138,18 @@ run_preflight_checks() {
         error_exit "This script must be run on a Proxmox VE host"
     fi
     
-    # Check for required commands
-    for cmd in git curl wget qm; do
+    # Check and install git if needed (Proxmox may not have it by default)
+    if ! command -v git &> /dev/null; then
+        info_msg "Git not found. Installing git..."
+        if apt-get update &>/dev/null && apt-get install -y git &>/dev/null; then
+            success_msg "Git installed successfully"
+        else
+            error_exit "Failed to install git. Please install manually: apt-get install git"
+        fi
+    fi
+    
+    # Check for other required commands
+    for cmd in curl wget qm; do
         if ! command -v $cmd &> /dev/null; then
             error_exit "Required command '$cmd' not found"
         fi
