@@ -29,6 +29,11 @@ SKIP_CONFIRMATION=false
 DRY_RUN=false
 VERBOSE=false
 
+# Detect if running via pipe (non-interactive)
+if [ ! -t 0 ]; then
+    SKIP_CONFIRMATION=true
+fi
+
 # Color codes for output
 if [[ -t 1 ]]; then
     RED='\033[0;31m'
@@ -194,6 +199,9 @@ download_repository() {
 # Show confirmation prompt
 confirm_installation() {
     if [[ "$SKIP_CONFIRMATION" == true ]]; then
+        if [ ! -t 0 ]; then
+            info_msg "Running in non-interactive mode (piped input detected)"
+        fi
         return 0
     fi
     
@@ -215,10 +223,12 @@ confirm_installation() {
     fi
     
     echo ""
-    read -p "Do you want to continue? (yes/no) " -n 1 -r
-    echo ""
+    read -p "Do you want to continue? (yes/no) " -r REPLY
     
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    # Accept various forms of "yes"
+    if [[ "$REPLY" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        info_msg "Starting installation..."
+    else
         info_msg "Installation cancelled"
         exit 0
     fi
