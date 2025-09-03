@@ -263,6 +263,35 @@ EOF
     display "  VM IP: $container_host_ip"
 }
 
+# Generate SSH keys if they don't exist
+generate_ssh_keys() {
+    display "Checking SSH keys..."
+    
+    if [[ ! -f /root/.ssh/id_rsa ]]; then
+        log "SSH key not found at /root/.ssh/id_rsa, generating new key pair"
+        display "  Generating SSH key pair for VM access..."
+        
+        # Create .ssh directory if it doesn't exist
+        mkdir -p /root/.ssh
+        chmod 700 /root/.ssh
+        
+        # Generate SSH key pair (no passphrase)
+        ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N "" -C "privatebox@$(hostname)" >/dev/null 2>&1
+        
+        if [[ -f /root/.ssh/id_rsa ]]; then
+            chmod 600 /root/.ssh/id_rsa
+            chmod 644 /root/.ssh/id_rsa.pub
+            display "  ✓ SSH key pair generated successfully"
+            log "SSH key pair generated at /root/.ssh/id_rsa"
+        else
+            error_exit "Failed to generate SSH key pair"
+        fi
+    else
+        display "  ✓ SSH key pair already exists"
+        log "SSH key pair already exists at /root/.ssh/id_rsa"
+    fi
+}
+
 # Main execution
 main() {
     display "Starting host preparation..."
@@ -270,6 +299,9 @@ main() {
     
     # Run pre-flight checks
     run_preflight_checks
+    
+    # Generate SSH keys if needed
+    generate_ssh_keys
     
     # Detect network
     detect_network
