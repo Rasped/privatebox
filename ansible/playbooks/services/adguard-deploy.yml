@@ -75,9 +75,11 @@
         - name: Check system requirements
           assert:
             that:
-              - ansible_distribution == "Ubuntu"
-              - ansible_distribution_version is version('22.04', '>=')
-            fail_msg: "This playbook requires Ubuntu 22.04 or later"
+              - ansible_distribution in ["Ubuntu", "Debian"]
+              - >
+                (ansible_distribution == "Ubuntu" and ansible_distribution_version is version('22.04', '>=')) or
+                (ansible_distribution == "Debian" and ansible_distribution_version is version('12', '>='))
+            fail_msg: "This playbook requires Ubuntu 22.04+ or Debian 12+"
             
         - name: Check if Podman is installed
           command: which podman
