@@ -123,8 +123,8 @@
         
     - name: Check each host for OPNsense with matching MAC
       shell: |
-        # Remove any existing SSH host key to avoid conflicts
-        ssh-keygen -f "$HOME/.ssh/known_hosts" -R "{{ item }}" 2>/dev/null || true
+        # Remove any existing SSH host key to avoid conflicts (redirect output to null)
+        ssh-keygen -f "$HOME/.ssh/known_hosts" -R "{{ item }}" >/dev/null 2>&1 || true
         
         # Try to SSH and get MAC address
         SSHPASS='{{ opnsense_default_password }}' sshpass -e ssh \
@@ -168,8 +168,8 @@
 
     - name: Verify OPNsense is accessible
       shell: |
-        # Remove any existing SSH host key to avoid conflicts
-        ssh-keygen -f "$HOME/.ssh/known_hosts" -R "{{ opnsense_ip }}" 2>/dev/null || true
+        # Remove any existing SSH host key to avoid conflicts (redirect output to null)
+        ssh-keygen -f "$HOME/.ssh/known_hosts" -R "{{ opnsense_ip }}" >/dev/null 2>&1 || true
         
         SSHPASS='{{ opnsense_default_password }}' sshpass -e ssh \
           -o StrictHostKeyChecking=no \
