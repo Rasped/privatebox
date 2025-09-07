@@ -29,10 +29,8 @@ SKIP_CONFIRMATION=false
 DRY_RUN=false
 VERBOSE=false
 
-# Detect if running via pipe (non-interactive)
-if [ ! -t 0 ]; then
-    SKIP_CONFIRMATION=true
-fi
+# Note: Pipe detection removed - always require explicit --yes flag for automation
+# This ensures users consciously choose to skip confirmations
 
 # Color codes for output
 if [[ -t 1 ]]; then
@@ -199,9 +197,7 @@ download_repository() {
 # Show confirmation prompt
 confirm_installation() {
     if [[ "$SKIP_CONFIRMATION" == true ]]; then
-        if [ ! -t 0 ]; then
-            info_msg "Running in non-interactive mode (piped input detected)"
-        fi
+        info_msg "Running in non-interactive mode (--yes flag provided)"
         return 0
     fi
     
@@ -223,6 +219,12 @@ confirm_installation() {
     fi
     
     echo ""
+    
+    # Check if we can actually read input (not piped)
+    if [ ! -t 0 ]; then
+        error_exit "Cannot prompt for confirmation when running via pipe. Use --yes flag to skip confirmation."
+    fi
+    
     read -p "Do you want to continue? (yes/no) " -r REPLY
     
     # Accept various forms of "yes"
