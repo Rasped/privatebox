@@ -16,7 +16,7 @@
     vm_name: "{{ opnsense_vm_name | default('opnsense') }}"
     vm_storage: "{{ opnsense_vm_storage | default('local-lvm') }}"
     start_after_restore: "{{ opnsense_start_after_restore | default(true) }}"
-    apply_custom_config: "{{ opnsense_apply_custom_config | default(false) }}"
+    apply_custom_config: "{{ opnsense_apply_custom_config | default(true) }}"
     
     # Semaphore template metadata (for template sync)
     # These are parsed by tools/generate-templates.py
@@ -41,8 +41,8 @@
         default: true
       apply_custom_config:
         type: boolean
-        description: "Apply custom OPNsense config.xml if available"
-        default: false
+        description: "Apply OPNsense configuration from templates/opnsense/config.xml"
+        default: true
         
     # Service metadata
     service_name: "OPNsense Firewall"
@@ -485,20 +485,11 @@
         - start_after_restore | bool
       tags: [opnsense, configure, custom]
       block:
-        - name: Check for custom config file
-          stat:
-            path: "{{ playbook_dir }}/../../files/opnsense/config-custom.xml"
-          register: custom_config_file
-          delegate_to: localhost
-          
         - name: Display config status
           debug:
-            msg: >-
-              Custom config {{ 'found' if custom_config_file.stat.exists else 'not found' }}
-              at ansible/files/opnsense/config-custom.xml
+            msg: "Applying OPNsense configuration from ansible/templates/opnsense/config.xml"
               
         - name: Apply custom configuration
-          when: custom_config_file.stat.exists
           block:
             - name: Backup current config
               shell: |
@@ -513,7 +504,7 @@
               shell: |
                 sshpass -p '{{ opnsense_default_password }}' \
                   scp -o StrictHostKeyChecking=no \
-                  "{{ playbook_dir }}/../../files/opnsense/config-custom.xml" \
+                  "{{ playbook_dir }}/../../templates/opnsense/config.xml" \
                   {{ opnsense_default_user }}@{{ opnsense_lan_ip }}:/conf/config.xml
               delegate_to: localhost
               
