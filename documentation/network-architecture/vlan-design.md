@@ -12,112 +12,89 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 4. **Simple Management**: Trusted devices can access management interfaces
 5. **Flexible Deployment**: Same configuration works with any router setup
 
-## VLAN Assignments
+## Network Architecture
 
-**Total VLANs**: 8 (Management, Services, Trusted, Guest, IoT Cloud, IoT Local, Cameras Cloud, Cameras Local)
+**Default LAN**: Trusted network (untagged) for maximum compatibility
+**VLANs**: 6 additional networks for segmentation (Services, Guest, IoT Cloud, IoT Local, Cameras Cloud, Cameras Local)
 
-### VLAN ID/Tag Mapping
+### Network Mapping
 
-| VLAN ID/Tag | Network | Purpose | SSID (if wireless) |
-|-------------|---------|---------|-------------------|
-| 10 | 10.10.10.0/24 | Management | (No WiFi - wired only) |
-| 20 | 10.10.20.0/24 | Services | (No WiFi - wired only) |
-| 30 | 10.10.30.0/24 | Trusted LAN | Home-WiFi |
-| 40 | 10.10.40.0/24 | Guest | Home-Guest |
-| 50 | 10.10.50.0/24 | IoT Cloud | Home-IoT |
-| 60 | 10.10.60.0/24 | IoT Local | Home-NoCloud |
-| 70 | 10.10.70.0/24 | Cameras Cloud | Home-Cameras-Cloud |
-| 80 | 10.10.80.0/24 | Cameras Local | Home-Cameras-Local |
+| Interface | Network | Purpose | SSID (if wireless) | Type |
+|-----------|---------|---------|-------------------|------|
+| LAN (Default) | 10.10.10.0/24 | Trusted | Home-WiFi | Untagged |
+| VLAN 20 | 10.10.20.0/24 | Services (Proxmox, Semaphore, Portainer, AdGuard) | (No WiFi - wired only) | Tagged |
+| VLAN 30 | 10.10.30.0/24 | Guest | Home-Guest | Tagged |
+| VLAN 40 | 10.10.40.0/24 | IoT Cloud | Home-IoT | Tagged |
+| VLAN 50 | 10.10.50.0/24 | IoT Local | Home-NoCloud | Tagged |
+| VLAN 60 | 10.10.60.0/24 | Cameras Cloud | Home-Cameras-Cloud | Tagged |
+| VLAN 70 | 10.10.70.0/24 | Cameras Local | Home-Cameras-Local | Tagged |
 
-**Note**: The VLAN ID (802.1Q tag) matches the third octet of the IP range for easy memorization.
+**Note**: The default LAN uses 10.10.10.0/24 untagged for maximum compatibility with consumer routers. All VLANs use tags that match their third octet for perfect alignment and easy memorization (VLAN 20 = 10.10.20.x, VLAN 30 = 10.10.30.x, etc.).
 
-### VLAN 10 - Management Network (10.10.10.0/24)
+### Default LAN - Trusted Network (10.10.10.0/24)
 
-**Purpose**: Infrastructure management and administration
+**Purpose**: Family devices and trusted computers
 
 **IP Assignments**:
-- 10.10.10.1 - OPNsense (VLAN gateway)
-- 10.10.10.2 - Proxmox host (SSH port 22, Web UI port 8006)
-- 10.10.10.3-20 - Reserved for managed switches and access points
+- 10.10.10.1 - OPNsense (LAN interface)
+- 10.10.10.2-99 - Static IP reservations
+- 10.10.10.100-200 - DHCP pool (100 addresses)
 
 **Configuration**:
-- DHCP: Disabled (static IPs only)
-- DNS: Points to Services VLAN (10.10.20.10)
+- DHCP: Enabled
+- DNS: 10.10.20.10 (AdGuard Home)
+- Gateway: 10.10.10.1
 
 **Access Policy**:
-- Accessible from Trusted LAN only
-- No access from Guest or IoT VLANs
+- Full access to Services VLAN (all ports)
+- Can control IoT devices
+- Full internet access
 
-**Rationale**: 
-- Separating infrastructure reduces attack surface
-- Static IPs prevent unauthorized devices
-- VLAN 10 is a common convention for management networks
-- Avoiding VLAN 1 prevents default VLAN security issues
+**Rationale**:
+- Default untagged LAN ensures compatibility with all consumer routers
+- No VLAN configuration needed for basic deployments
+- 100 DHCP addresses accommodate large households and growth
+- Full access to services enables easy administration
+- This is YOUR network - convenience over strict security
 
 ### VLAN 20 - Services Network (10.10.20.0/24)
 
-**Purpose**: PrivateBox containerized services
+**Purpose**: All PrivateBox services and infrastructure
 
 **IP Assignments**:
 - 10.10.20.1 - OPNsense (VLAN gateway)
-- 10.10.20.10 - Management VM hosting all containers:
-  - Portainer (port 9000) - Container management UI
-  - Semaphore (port 3000) - Ansible automation UI
-  - AdGuard Home (port 8080 web, port 53 DNS) - Ad blocking and DNS
-  - Consumer Dashboard (port 80/443) - Future user interface
-- 10.10.20.11-20 - Reserved for additional VMs if needed
+- 10.10.20.10 - AdGuard Home (port 53 DNS, port 8080 web)
+- 10.10.20.20 - Management VM (Portainer 9000, Semaphore 3000)
+- 10.10.20.30-39 - Proxmox hosts (SSH port 22, Web UI port 8006)
+- 10.10.20.40-49 - Reserved for additional services
 
 **Configuration**:
 - DHCP: Disabled (static IPs only)
-- All services run as containers sharing the VM's IP
+- All services and infrastructure share this VLAN
 
 **Access Policy**:
 - DNS (port 53) accessible from all VLANs
 - Management ports accessible from Trusted LAN only
 - No access from Guest or IoT to management ports
 
-**Rationale**:
-- Containers sharing one IP simplifies networking
-- Isolated VLAN prevents lateral movement from compromised IoT devices
-- Central DNS ensures all devices benefit from ad blocking
+**Rationale**: 
+- Combining services and infrastructure simplifies management
+- Semaphore can directly manage Proxmox without cross-VLAN rules
+- VLAN 20 maintains perfect tag-to-subnet alignment
+- Static IPs ensure predictable service locations
 
-### VLAN 30 - Trusted LAN (10.10.30.0/24)
+### VLAN 30 - Guest Network (10.10.30.0/24)
 
-**Purpose**: Family devices and trusted computers
+**Purpose**: Visitor devices with internet-only access
 
 **IP Assignments**:
 - 10.10.30.1 - OPNsense (VLAN gateway)
-- 10.10.30.2-99 - Static IP reservations
-- 10.10.30.100-200 - DHCP pool (100 addresses)
+- 10.10.30.100-120 - DHCP pool (20 addresses)
 
 **Configuration**:
 - DHCP: Enabled
 - DNS: 10.10.20.10 (AdGuard Home)
 - Gateway: 10.10.30.1
-
-**Access Policy**:
-- Full access to Management VLAN (ports 22, 8006)
-- Full access to Services VLAN (all service ports)
-- Can control IoT devices
-- Full internet access
-
-**Rationale**:
-- 100 DHCP addresses accommodate large households and growth
-- Full access to management enables easy administration
-- This is YOUR network - convenience over strict security
-
-### VLAN 40 - Guest Network (10.10.40.0/24)
-
-**Purpose**: Visitor devices with internet-only access
-
-**IP Assignments**:
-- 10.10.40.1 - OPNsense (VLAN gateway)
-- 10.10.40.100-120 - DHCP pool (20 addresses)
-
-**Configuration**:
-- DHCP: Enabled
-- DNS: 10.10.20.10 (AdGuard Home)
-- Gateway: 10.10.40.1
 
 **Access Policy**:
 - Internet access only
@@ -130,18 +107,18 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Complete isolation protects home network
 - Guests still benefit from ad blocking via DNS
 
-### VLAN 50 - IoT Cloud (10.10.50.0/24)
+### VLAN 40 - IoT Cloud (10.10.40.0/24)
 
 **Purpose**: IoT devices requiring internet connectivity
 
 **IP Assignments**:
-- 10.10.50.1 - OPNsense (VLAN gateway)
-- 10.10.50.100-200 - DHCP pool (100 addresses)
+- 10.10.40.1 - OPNsense (VLAN gateway)
+- 10.10.40.100-200 - DHCP pool (100 addresses)
 
 **Configuration**:
 - DHCP: Enabled
 - DNS: 10.10.20.10 (AdGuard Home)
-- Gateway: 10.10.50.1
+- Gateway: 10.10.40.1
 
 **Access Policy**:
 - Internet access allowed
@@ -163,32 +140,33 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Isolation prevents compromised devices from attacking home network
 - Separate from local IoT improves privacy
 
-### VLAN 60 - IoT Local (10.10.60.0/24)
+### VLAN 50 - IoT Local (10.10.50.0/24)
 
-**Purpose**: IoT devices operating without internet access
+**Purpose**: IoT devices that work locally without cloud
 
 **IP Assignments**:
-- 10.10.60.1 - OPNsense (VLAN gateway)
-- 10.10.60.100-200 - DHCP pool (100 addresses)
+- 10.10.50.1 - OPNsense (VLAN gateway)
+- 10.10.50.100-200 - DHCP pool (100 addresses)
 
 **Configuration**:
 - DHCP: Enabled
 - DNS: 10.10.20.10 (AdGuard Home)
-- Gateway: 10.10.60.1
+- Gateway: 10.10.50.1
 
 **Access Policy**:
 - NO internet access (blocked at firewall)
-- DNS to Services VLAN allowed (for local resolution)
+- DNS to Services VLAN allowed
+- NTP to Services VLAN allowed
 - Can respond to connections from Trusted LAN
 - Cannot initiate connections to other VLANs
-- NTP allowed from OPNsense
+- Isolated from other IoT devices
 
-**Device Examples**:
-- Zigbee/Z-Wave hubs
-- Smart switches/bulbs with local hub
-- Printers
-- Local media servers
-- Home automation hubs
+**Devices Examples**:
+- Home Assistant controlled devices
+- Zigbee/Z-Wave devices
+- Local-only smart plugs
+- Offline automation devices
+- Devices flashed with Tasmota/ESPHome
 
 **Rationale**:
 - Blocking internet prevents data collection and phoning home
@@ -196,18 +174,18 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Local control is more reliable
 - 100 addresses support extensive home automation
 
-### VLAN 70 - Cameras Cloud (10.10.70.0/24)
+### VLAN 60 - Cameras Cloud (10.10.60.0/24)
 
 **Purpose**: Security cameras requiring cloud connectivity
 
 **IP Assignments**:
-- 10.10.70.1 - OPNsense (VLAN gateway)
-- 10.10.70.100-150 - DHCP pool (50 addresses)
+- 10.10.60.1 - OPNsense (VLAN gateway)
+- 10.10.60.100-150 - DHCP pool (50 addresses)
 
 **Configuration**:
 - DHCP: Enabled
 - DNS: 10.10.20.10 (AdGuard Home)
-- Gateway: 10.10.70.1
+- Gateway: 10.10.60.1
 
 **Access Policy**:
 - Internet access allowed (for cloud services)
@@ -231,25 +209,24 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Isolation prevents compromised camera from network scanning
 - 50 addresses sufficient for typical home camera deployments
 
-### VLAN 80 - Cameras Local (10.10.80.0/24)
+### VLAN 70 - Cameras Local (10.10.70.0/24)
 
 **Purpose**: Security cameras with local-only recording
 
 **IP Assignments**:
-- 10.10.80.1 - OPNsense (VLAN gateway)
-- 10.10.80.100-150 - DHCP pool (50 addresses)
+- 10.10.70.1 - OPNsense (VLAN gateway)
+- 10.10.70.100-150 - DHCP pool (50 addresses)
 
 **Configuration**:
 - DHCP: Enabled
 - DNS: 10.10.20.10 (AdGuard Home)
-- Gateway: 10.10.80.1
+- Gateway: 10.10.70.1
 
 **Access Policy**:
 - NO internet access (blocked at firewall)
 - DNS to Services VLAN allowed (for local resolution)
 - NTP to Services VLAN allowed (critical for timestamps)
 - Can respond to connections from Trusted LAN
-- Can be accessed by Services VLAN (for NVR containers)
 - Cannot initiate connections to other VLANs
 - Isolated from other cameras (no camera-to-camera)
 
@@ -261,18 +238,21 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - UniFi Protect cameras (local mode)
 - Any camera used purely for local recording
 
+**NVR Connection Note**:
+- NVR devices/software connect to Trusted LAN (10.10.10.0/24)
+- From Trusted LAN, NVRs have full access to camera streams
+- Services VLAN is for PrivateBox infrastructure only, not user NVRs
+
 **Rationale**:
-- Maximum privacy - no cloud data leakage
-- No dependency on internet or cloud services
-- Recordings stay completely local
-- Prevents camera firmware from phoning home
-- 50 addresses sufficient for extensive local surveillance
+- Maximum privacy - no data leaves your network
+- NVR access via Trusted LAN maintains proper separation
+- Prevents any telemetry or firmware auto-updates
+- 50 addresses sufficient for home deployments
 
 ## Firewall Rules Summary
 
-### Trusted LAN → Other VLANs
-- ✅ Management: Allow SSH (22), HTTPS (8006)
-- ✅ Services: Allow DNS (53), HTTP (80), HTTPS (443), Semaphore (3000), AdGuard (8080), Portainer (9000)
+### Trusted LAN (Default) → Other VLANs
+- ✅ Services: Allow all ports (SSH, Proxmox 8006, DNS 53, HTTP 80/443, Semaphore 3000, AdGuard 8080, Portainer 9000)
 - ✅ IoT Cloud/Local: Allow all (to control devices)
 - ✅ Cameras Cloud/Local: Allow all (to view streams and configure)
 - ❌ Guest: Deny all
@@ -300,32 +280,30 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 
 ### Cameras Local → Other VLANs
 - ❌ Internet: Deny all
-- ✅ Services: Allow DNS (53) and NTP (123) only, allow from Services for NVR
+- ✅ Services: Allow DNS (53) and NTP (123) only
 - ❌ All others: Deny all (stateful responses to Trusted allowed)
 - ❌ Other cameras: Deny all (prevent lateral movement)
 
 ### Services → Other VLANs
 - ✅ Internet: Allow (for updates)
-- ❌ All others: Deny all
+- ❌ All others: Deny all (Services VLAN is infrastructure only, not for user services)
 
-### Management → Other VLANs
-- ✅ All: Allow all (infrastructure needs full access)
 
 ## Implementation Notes
 
 1. **OPNsense Configuration**:
    - Deployed from template: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense)
    - Two physical interfaces: WAN (vmbr0) and LAN (vmbr1)
-   - LAN interface carries all VLANs as tagged subinterfaces
-   - Template provides base configuration with LAN at 10.10.10.1/24
+   - LAN interface (vtnet1) configured as 10.10.10.1/24 (Trusted)
+   - VLANs carried as tagged subinterfaces on vtnet1
    - Enable DHCP server on appropriate VLANs
    - Configure firewall rules as specified
-   - All 8 VLANs configured regardless of usage
+   - LAN plus 6 VLANs configured regardless of usage
 
 2. **Proxmox Configuration**:
    - vmbr0: WAN bridge (not VLAN-aware, direct internet connection)
    - vmbr1: LAN bridge (VLAN-aware, carries internal VLANs)
-   - Management VM on VLAN 20
+   - Management VM and Proxmox on VLAN 20 (Services)
    - OPNsense VM with two NICs:
      - NIC1: vmbr0 (WAN)
      - NIC2: vmbr1 (LAN trunk with all VLANs)
@@ -346,11 +324,11 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 For users with typical home WiFi routers:
 
 **What to use**:
-- VLAN 30 (Trusted LAN) - Connect router here, ALL devices use this network
-- VLANs 40, 50 & 60 - Not accessible without VLAN-capable equipment
+- Default LAN (Trusted) - Connect router here, ALL devices use this network  
+- VLANs - Not accessible without VLAN-capable equipment
 
 **Setup**:
-1. Connect router (in AP mode) to OPNsense VLAN 30 port
+1. Connect router (in AP mode) to OPNsense LAN port
 2. All devices (family, IoT, and guests) share the same network
 3. Router's "guest network" feature provides wireless-only isolation
 
@@ -372,17 +350,17 @@ For users with typical home WiFi routers:
 For users with UniFi, Omada, or similar APs:
 
 **What to use**:
-- All 8 VLANs as designed
+- Default LAN plus all 6 VLANs as designed
 - Create separate SSIDs mapped to appropriate VLANs
 
 **Setup**:
 1. Configure multiple SSIDs:
-   - "Home-WiFi" → VLAN 30 (Trusted)
-   - "Home-Guest" → VLAN 40 (Guest)
-   - "Home-IoT" → VLAN 50 (IoT Cloud)
-   - "Home-NoCloud" → VLAN 60 (IoT Local)
-   - "Home-Cameras" → VLAN 70/80 (based on cloud preference)
-2. Connect AP to LAN network (vmbr1) with trunk port for all VLANs
+   - "Home-WiFi" → Default LAN (Trusted)
+   - "Home-Guest" → VLAN 30 (Guest)
+   - "Home-IoT" → VLAN 40 (IoT Cloud)
+   - "Home-NoCloud" → VLAN 50 (IoT Local)
+   - "Home-Cameras" → VLAN 60/70 (based on cloud preference)
+2. Connect AP to OPNsense LAN port configured as trunk
 
 **Result**: Full network segmentation with maximum privacy
 
@@ -416,17 +394,17 @@ The same OPNsense/PrivateBox configuration handles both setups. Users can start 
 When configuring VLAN-capable access points, use these settings:
 
 **Trunk Port Configuration** (AP uplink to switch/OPNsense):
-- Native/Untagged VLAN: None (all tagged)
-- Tagged VLANs: 30, 40, 50, 60, 70, 80
-- Management VLAN: 30 (for AP management interface)
+- Native/Untagged VLAN: 10 (maps to Trusted LAN)
+- Tagged VLANs: 20, 30, 40, 50, 60, 70
+- Management VLAN: 10 (for AP management interface)
 
 **SSID to VLAN Mapping**:
 ```
-SSID: Home-WiFi         → VLAN Tag: 30
-SSID: Home-Guest        → VLAN Tag: 40  
-SSID: Home-IoT          → VLAN Tag: 50
-SSID: Home-NoCloud      → VLAN Tag: 60
-SSID: Home-Cameras      → VLAN Tag: 70 or 80
+SSID: Home-WiFi         → Untagged (Trusted LAN)
+SSID: Home-Guest        → VLAN Tag: 30  
+SSID: Home-IoT          → VLAN Tag: 40
+SSID: Home-NoCloud      → VLAN Tag: 50
+SSID: Home-Cameras      → VLAN Tag: 60 or 70
 ```
 
 **Switch Port Example** (Cisco/HP syntax):
@@ -434,17 +412,18 @@ SSID: Home-Cameras      → VLAN Tag: 70 or 80
 interface GigabitEthernet0/1
   description Access-Point-Uplink
   switchport mode trunk
-  switchport trunk allowed vlan 30,40,50,60,70,80
+  switchport trunk native vlan 10
+  switchport trunk allowed vlan 10,20,30,40,50,60,70
   no shutdown
 ```
 
 **UniFi Controller Example**:
-- Networks: Create networks with VLAN IDs 30, 40, 50, 60, 70, 80
+- Networks: Create networks with VLAN IDs 20, 30, 40, 50, 60, 70 (10 is native/untagged)
 - Wireless Networks: Assign each SSID to corresponding network/VLAN
 - AP Port Profile: Set to "All" or custom trunk profile
 
 **TP-Link Omada Example**:
-- LAN: Create VLANs 30, 40, 50, 60, 70, 80
+- LAN: Create VLANs 20, 30, 40, 50, 60, 70
 - Wireless: Create SSIDs and set VLAN ID for each
 - Port Config: Set AP port to "Trunk" with all VLANs
 
