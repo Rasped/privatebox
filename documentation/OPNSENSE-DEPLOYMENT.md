@@ -62,7 +62,9 @@ configctl wireguard restart   # Restart WireGuard service
 ### Method 2: Via Ansible CLI
 
 ```bash
-ansible-playbook -i ansible/inventory.yml \
+# Note: Requires dynamic inventory based on your network
+# Semaphore creates these automatically, for manual use create your own
+ansible-playbook -i <dynamic-inventory> \
   ansible/playbooks/services/opnsense-deploy.yml \
   -e vm_id=101 \
   -e vm_name=opnsense-fw \

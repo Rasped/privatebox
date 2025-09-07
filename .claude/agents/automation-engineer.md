@@ -45,10 +45,12 @@ Task: Deploy service
 
 ## Test Everything
 ```bash
-# Run playbook
-ansible-playbook -i inventory playbook.yml
+# Run playbook through Semaphore (recommended) or with dynamic inventory
+# Semaphore provides dynamic inventories automatically
+# For manual testing, use dynamic inventory based on your network
+ansible-playbook -i <dynamic-inventory> playbook.yml
 # Run again - should show no changes
-ansible-playbook -i inventory playbook.yml
+ansible-playbook -i <dynamic-inventory> playbook.yml
 ```
 
 ## Remember
