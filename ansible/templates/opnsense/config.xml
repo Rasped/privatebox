@@ -363,11 +363,6 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
         <network>(self)</network>
         <port>22</port>
       </destination>
-      <updated>
-        <username>root@192.168.1.175</username>
-        <time>1757075236.99</time>
-        <description>/firewall_rules_edit.php made changes</description>
-      </updated>
       <created>
         <username>admin@console</username>
         <time>1757069881.690316</time>
@@ -396,11 +391,6 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
         <time>1757069881.690324</time>
         <description>/firewall_rules_edit.php made changes</description>
       </created>
-      <updated>
-        <username>admin@console</username>
-        <time>1757069881.690324</time>
-        <description>/firewall_rules_edit.php made changes</description>
-      </updated>
     </rule>
     <rule uuid="7f63c1e9-2f49-4d34-a5a9-1c53fdcf6d86">
       <type>pass</type>
