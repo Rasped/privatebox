@@ -12,9 +12,8 @@
 #
 # Available options:
 #   --dry-run          Run pre-flight checks and generate config only (no VM)
-#   --cleanup          Remove downloaded files after installation
+#   --no-cleanup       Keep downloaded files after installation
 #   --branch <branch>  Use specific git branch (default: main)
-#   --yes, -y          Skip confirmation prompt
 #   --verbose, -v      Show detailed output
 #   --help             Show this help message
 
@@ -25,12 +24,15 @@ REPO_URL="https://github.com/Rasped/privatebox"
 REPO_BRANCH="main"
 TEMP_DIR="/tmp/privatebox-quickstart"
 CLEANUP_AFTER=true
-SKIP_CONFIRMATION=false
 DRY_RUN=false
 VERBOSE=false
 
-# Note: Pipe detection removed - always require explicit --yes flag for automation
-# This ensures users consciously choose to skip confirmations
+# Detect if running via pipe (non-interactive)
+if [ ! -t 0 ]; then
+    PIPED_INPUT=true
+else
+    PIPED_INPUT=false
+fi
 
 # Color codes for output
 if [[ -t 1 ]]; then
@@ -60,16 +62,15 @@ print_usage() {
     echo ""
     echo "Options:"
     echo "  --dry-run          Run pre-flight checks and generate config only"
-    echo "  --cleanup          Remove downloaded files after installation"
+    echo "  --no-cleanup       Keep downloaded files after installation"
     echo "  --branch <branch>  Use specific git branch (default: main)"
-    echo "  --yes, -y          Skip confirmation prompt"
     echo "  --verbose, -v      Show detailed output"
     echo "  --help             Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0                    # Interactive installation"
-    echo "  $0 --yes              # Skip confirmation"
     echo "  $0 --dry-run          # Test without creating VM"
+    echo "  $0 --no-cleanup       # Keep downloaded files"
     echo "  $0 --branch develop   # Use develop branch"
 }
 
@@ -97,8 +98,8 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
-        --cleanup)
-            CLEANUP_AFTER=true
+        --no-cleanup)
+            CLEANUP_AFTER=false
             shift
             ;;
         --branch)
@@ -107,10 +108,6 @@ while [[ $# -gt 0 ]]; do
             fi
             REPO_BRANCH="$2"
             shift 2
-            ;;
-        --yes|-y)
-            SKIP_CONFIRMATION=true
-            shift
             ;;
         --verbose|-v)
             VERBOSE=true
@@ -196,8 +193,8 @@ download_repository() {
 
 # Show confirmation prompt
 confirm_installation() {
-    if [[ "$SKIP_CONFIRMATION" == true ]]; then
-        info_msg "Running in non-interactive mode (--yes flag provided)"
+    if [[ "$PIPED_INPUT" == true ]]; then
+        info_msg "Running in non-interactive mode (piped input detected)"
         return 0
     fi
     
@@ -219,12 +216,6 @@ confirm_installation() {
     fi
     
     echo ""
-    
-    # Check if we can actually read input (not piped)
-    if [ ! -t 0 ]; then
-        error_exit "Cannot prompt for confirmation when running via pipe. Use --yes flag to skip confirmation."
-    fi
-    
     read -p "Do you want to continue? (yes/no) " -r REPLY
     
     # Accept various forms of "yes"
