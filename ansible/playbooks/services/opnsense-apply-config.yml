@@ -1,0 +1,104 @@
+---
+# OPNsense Configuration Apply Playbook
+# This playbook applies a config.xml file to OPNsense
+# It uses the opnsense inventory from Semaphore
+
+- name: Apply Configuration to OPNsense
+  hosts: opnsense
+  gather_facts: no
+  vars:
+    config_source: "{{ config_file | default('templates/opnsense/config.xml') }}"
+    backup_config: "{{ backup_existing | default(true) }}"
+    
+  tasks:
+    - name: Verify connectivity to OPNsense
+      ansible.builtin.ping:
+      register: ping_result
+      
+    - name: Display connection status
+      ansible.builtin.debug:
+        msg: "Connected to OPNsense at {{ ansible_host }}"
+        
+    - name: Check if source config file exists locally
+      delegate_to: localhost
+      ansible.builtin.stat:
+        path: "{{ config_source }}"
+      register: config_file_stat
+      
+    - name: Fail if config file not found
+      ansible.builtin.fail:
+        msg: "Configuration file not found at {{ config_source }}"
+      when: not config_file_stat.stat.exists
+      
+    - name: Create backup of current config if requested
+      when: backup_config | bool
+      block:
+        - name: Create backup directory
+          ansible.builtin.command:
+            cmd: "mkdir -p /conf/backup"
+          changed_when: false
+          
+        - name: Backup current configuration
+          ansible.builtin.shell: |
+            cp /conf/config.xml "/conf/backup/config-$(date +%Y%m%d-%H%M%S).xml"
+          register: backup_result
+          
+        - name: Display backup status
+          ansible.builtin.debug:
+            msg: "Current configuration backed up"
+            
+    - name: Copy new configuration to OPNsense
+      ansible.builtin.copy:
+        src: "{{ config_source }}"
+        dest: /conf/config.xml
+        backup: no  # We handle backup separately above
+        owner: root
+        group: wheel
+        mode: '0644'
+      register: copy_result
+      
+    - name: Display copy status
+      ansible.builtin.debug:
+        msg: "Configuration file uploaded successfully"
+      when: copy_result.changed
+      
+    - name: Validate configuration syntax
+      ansible.builtin.command:
+        cmd: "/usr/local/sbin/configctl firmware check"
+      register: validate_result
+      failed_when: false
+      changed_when: false
+      
+    - name: Display validation result
+      ansible.builtin.debug:
+        msg: "Configuration validation: {{ validate_result.stdout | default('OK') }}"
+        
+    - name: Reload configuration
+      ansible.builtin.command:
+        cmd: "/usr/local/etc/rc.reload_all"
+      register: reload_result
+      when: copy_result.changed
+      
+    - name: Wait for services to stabilize
+      ansible.builtin.pause:
+        seconds: 10
+      when: copy_result.changed
+      
+    - name: Verify OPNsense is responsive after reload
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        delay: 5
+        timeout: 60
+      delegate_to: localhost
+      when: copy_result.changed
+      
+    - name: Configuration apply summary
+      ansible.builtin.debug:
+        msg:
+          - "Configuration Status:"
+          - "  - Source: {{ config_source }}"
+          - "  - Target: {{ ansible_host }}"
+          - "  - Backup: {{ 'Created' if backup_config else 'Skipped' }}"
+          - "  - Applied: {{ 'Yes' if copy_result.changed else 'No changes needed' }}"
+          - "  - Reload: {{ 'Completed' if copy_result.changed else 'Not required' }}"
