@@ -138,6 +138,29 @@ run_preflight_checks() {
         error_exit "This script must be run on a Proxmox VE host"
     fi
     
+    # Fix Proxmox repository configuration first
+    # This prevents enterprise repository warnings/errors
+    info_msg "Configuring Proxmox repositories..."
+    
+    # Disable enterprise repositories
+    if [[ -f /etc/apt/sources.list.d/pve-enterprise.list ]]; then
+        sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/pve-enterprise.list
+        [[ "$VERBOSE" == true ]] && info_msg "  Disabled enterprise repository"
+    fi
+    
+    if [[ -f /etc/apt/sources.list.d/ceph.list ]]; then
+        sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/ceph.list
+        [[ "$VERBOSE" == true ]] && info_msg "  Disabled Ceph enterprise repository"
+    fi
+    
+    # Enable no-subscription repository if not already present
+    if ! grep -q "^deb.*pve-no-subscription" /etc/apt/sources.list.d/*.list 2>/dev/null; then
+        echo "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
+        [[ "$VERBOSE" == true ]] && info_msg "  Enabled no-subscription repository"
+    fi
+    
+    success_msg "Repository configuration fixed"
+    
     # Check and install git if needed (Proxmox may not have it by default)
     if ! command -v git &> /dev/null; then
         warning_msg "Git not found on this system. Installing git..."
