@@ -101,14 +101,17 @@ The VM will be accessible via SSH at the saved IP address with:
 
 ## Usage
 ```bash
-# Run Stage 1
-ansible-playbook -i ansible/inventory.yml ansible/playbooks/services/opnsense-stage1-create-vm.yml
+# Note: These playbooks should be run through Semaphore UI which provides dynamic inventories
+# For manual testing, create a dynamic inventory based on your network configuration
+
+# Run Stage 1 (example with dynamic inventory)
+ansible-playbook -i <dynamic-inventory> ansible/playbooks/services/opnsense-stage1-create-vm.yml
 
 # With custom password
-ansible-playbook -i ansible/inventory.yml ansible/playbooks/services/opnsense-stage1-create-vm.yml -e admin_password=securepass
+ansible-playbook -i <dynamic-inventory> ansible/playbooks/services/opnsense-stage1-create-vm.yml -e admin_password=securepass
 
 # Check mode (dry run)
-ansible-playbook -i ansible/inventory.yml ansible/playbooks/services/opnsense-stage1-create-vm.yml --check
+ansible-playbook -i <dynamic-inventory> ansible/playbooks/services/opnsense-stage1-create-vm.yml --check
 ```
 
 ---
