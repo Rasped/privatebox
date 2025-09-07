@@ -1,8 +1,9 @@
 # OPNsense Configuration Status
 
-**Last Updated**: 2025-08-25 15:30 UTC
+**Last Updated**: 2025-08-25 23:00 UTC
 **OPNsense Version**: 25.7 (amd64)
 **Location**: 192.168.1.173 (temporary WAN IP during configuration)
+**SSH Access**: Use key at `/private/tmp/opnsense-temp-key`
 
 ## Configuration Progress
 
@@ -10,29 +11,28 @@
 
 #### 1. VLAN Configuration
 - **Status**: COMPLETE
-- **Details**: All 8 VLANs created and configured
-  - VLAN 10 (Management): 10.10.10.1/24 - Configured as LAN interface
-  - VLAN 20 (Services): 10.10.20.1/24 - opt1
-  - VLAN 30 (Trusted LAN): 10.10.30.1/24 - opt2
-  - VLAN 40 (Guest): 10.10.40.1/24 - opt3
-  - VLAN 50 (IoT Cloud): 10.10.50.1/24 - opt4
-  - VLAN 60 (IoT Local): 10.10.60.1/24 - opt5
-  - VLAN 70 (Cameras Cloud): 10.10.70.1/24 - opt6
-  - VLAN 80 (Cameras Local): 10.10.80.1/24 - opt7
+- **Details**: All 7 VLANs need to be reconfigured
+  - VLAN 10 (Services): 10.10.10.1/24 - Configured as LAN interface
+  - VLAN 20 (Trusted LAN): 10.10.20.1/24 - opt1
+  - VLAN 30 (Guest): 10.10.30.1/24 - opt2
+  - VLAN 40 (IoT Cloud): 10.10.40.1/24 - opt3
+  - VLAN 50 (IoT Local): 10.10.50.1/24 - opt4
+  - VLAN 60 (Cameras Cloud): 10.10.60.1/24 - opt5
+  - VLAN 70 (Cameras Local): 10.10.70.1/24 - opt6
 - **Verification**: All interfaces UP with correct IPs assigned
 
 #### 2. DHCP Servers
 - **Status**: COMPLETE
 - **Details**: 
-  - DHCP disabled on VLANs 10 (Management) and 20 (Services) - static only
+  - DHCP disabled on VLAN 10 (Services) - static only
   - DHCP enabled with ranges:
-    - VLAN 30: 10.10.30.100-200 (100 addresses)
-    - VLAN 40: 10.10.40.100-120 (20 addresses)
+    - VLAN 20: 10.10.20.100-200 (100 addresses)
+    - VLAN 30: 10.10.30.100-120 (20 addresses)
+    - VLAN 40: 10.10.40.100-200 (100 addresses)
     - VLAN 50: 10.10.50.100-200 (100 addresses)
-    - VLAN 60: 10.10.60.100-200 (100 addresses)
+    - VLAN 60: 10.10.60.100-150 (50 addresses)
     - VLAN 70: 10.10.70.100-150 (50 addresses)
-    - VLAN 80: 10.10.80.100-150 (50 addresses)
-- **DNS Configuration**: Currently pointing to gateway IPs (will change to AdGuard later)
+- **DNS Configuration**: Should point to 10.10.10.10 (AdGuard)
 - **Verification**: DHCP daemon running on all configured VLANs
 
 #### 3. DNS Configuration (Unbound)
@@ -44,7 +44,7 @@
   - Query minimization enabled
 - **Future Change**: When AdGuard is deployed:
   - Unbound will listen only on localhost:5353
-  - AdGuard will listen on 10.10.20.10:53
+  - AdGuard will listen on 10.10.10.10:53
   - DHCP will point to AdGuard
 - **Verification**: DNS resolution working on all VLANs
 
@@ -63,46 +63,93 @@
 - **VLAN Isolation**: Complete (see below)
 - **Verification**: Firewall active with full VLAN segmentation
 
-### ✅ Recently Completed (2025-08-25)
+### ✅ Recently Completed (2025-09-05)
 
 #### Firewall Rules - Inter-VLAN Isolation
 - **Status**: COMPLETE
-- **Implementation Date**: 2025-08-25 15:21 UTC
-- **Method**: Direct config.xml modification via Python script
-- **Rules Added**: 30 firewall rules for complete VLAN isolation
+- **Implementation Date**: 2025-09-05 09:16 UTC
+- **Method**: Python script to add comprehensive firewall rules
+- **Total Rules**: 34 firewall rules implemented
 - **Details**:
-  1. ✅ Guest VLAN (40): Blocks all RFC1918, allows DNS to AdGuard + Internet only
-  2. ✅ IoT Cloud VLAN (50): Blocks inter-VLAN, allows DNS + Internet
-  3. ✅ IoT Local VLAN (60): Blocks Internet and other VLANs, allows DNS + NTP only
-  4. ✅ Camera Cloud VLAN (70): Blocks inter-VLAN, allows DNS + NTP + Internet
-  5. ✅ Camera Local VLAN (80): Blocks all VLANs and Internet, allows DNS + NTP only
-  6. ✅ Services VLAN (20): Protected, only accessible from Trusted VLAN
-  7. ✅ Trusted VLAN (30): Full access except Guest VLAN
-- **Configuration Backup**: `/conf/config.xml.backup-vlan-20250825-132134`
-- **Verification**: Rules in config.xml and firewall active
+  1. ✅ **WAN Protection**: 
+     - Temporary management access from 192.168.1.0/24 (SSH, HTTP, HTTPS)
+     - Block bogons and default deny inbound
+     - ICMP allowed for path MTU discovery
+  2. ✅ **Trusted LAN (10.10.10.0/24)**:
+     - Full access to Services VLAN (pragmatic approach)
+     - Access to all IoT and Camera VLANs for management
+     - Blocked from Guest VLAN
+     - Internet access allowed
+  3. ✅ **Services VLAN (20)**:
+     - DNS services available to all VLANs (port 53 TCP/UDP to 10.10.20.10)
+     - Outbound Internet access for updates
+  4. ✅ **Guest VLAN (30)**:
+     - DNS access to AdGuard only
+     - Blocks all RFC1918 ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+     - Internet access allowed
+  5. ✅ **IoT Cloud VLAN (40)**:
+     - DNS access only
+     - Blocks inter-VLAN communication
+     - Internet access allowed
+  6. ✅ **IoT Local VLAN (50)**:
+     - DNS and NTP only
+     - No Internet access
+     - Complete isolation
+  7. ✅ **Camera Cloud VLAN (60)**:
+     - DNS and NTP access
+     - Blocks inter-VLAN
+     - Internet access allowed
+  8. ✅ **Camera Local VLAN (70)**:
+     - DNS and NTP only
+     - No Internet access
+     - Complete isolation
+- **Configuration Backup**: `/conf/config.xml.backup-firewall-20250905-091610`
+- **Verification**: 34 rules active in config.xml and filter reloaded successfully
 
 ### 🚧 In Progress
 
 *None currently*
 
+### ✅ Recently Configured (2025-08-25 - Session 2)
+
+#### WireGuard VPN Configuration
+- **Status**: COMPLETE
+- **Implementation Date**: 2025-08-25 (current session)
+- **Details**:
+  - WireGuard is built-in to OPNsense 24.1+ (no package install needed)
+  - Server configured on port 51820
+  - Tunnel network: 10.10.100.0/24
+  - Interface assigned as opt8
+  - Firewall rules configured for VPN access
+  - Sample peer configuration created
+  - Keys are placeholders for security (regenerate per deployment)
+- **Verification**: Configuration in config.xml, service enabled
+
+#### OpenVPN Configuration
+- **Status**: COMPLETE
+- **Implementation Date**: 2025-08-25 22:45 UTC
+- **Details**:
+  - Server configured on port 1194 UDP
+  - Tunnel network: 10.10.101.0/24
+  - Interface assigned as opt9 (ovpns1)
+  - Full tunnel mode (redirect-gateway)
+  - Cipher: AES-256-GCM, TLS 1.2 minimum
+  - DNS push: 10.10.20.10 (AdGuard)
+  - PKI structure with placeholder certificates
+  - Firewall rules match WireGuard (Trusted VLAN access)
+- **Verification**: 8 OpenVPN references in config.xml
+
 ### ❌ Not Started
 
-#### 1. WireGuard Installation
-- Package needs to be installed: `pkg install os-wireguard`
-- VPN configuration not started
-
-#### 2. OpenVPN Configuration
-- Built-in, but not configured
-
-#### 3. Firewall Rules - Advanced
+#### 1. Firewall Rules - Advanced
 - Client isolation within VLANs
 - Rate limiting
 - GeoIP rules (if needed)
 
-#### 4. IPv6 Configuration
+#### 2. IPv6 Configuration
 - Currently IPv4 only
 
-#### 5. Suricata IDS
+#### 3. Suricata IDS
 - Not installed (disabled by default per requirements)
 
 ## Important Notes
@@ -114,7 +161,7 @@
 
 2. **DNS Setup**: Currently using OPNsense directly
    - Will change to AdGuard when deployed
-   - DHCP servers will need updating to point to 10.10.20.10
+   - DHCP servers will need updating to point to 10.10.10.10
 
 3. **API Access**: 
    - API key created for configuration
@@ -131,33 +178,94 @@
 
 ### Backup Status
 - Backups created at: `/conf/config.xml.backup-*`
-- Latest backup: config.xml.backup-20250825-140613
+- Latest backups:
+  - config.xml.backup-wireguard-[timestamp]
+  - config.xml.backup-openvpn-[timestamp]
+
+### SSH Access Instructions
+To connect to OPNsense for configuration:
+```bash
+ssh -i /private/tmp/opnsense-temp-key root@192.168.1.173
+```
+
+Note: This temporary key provides root access during configuration phase only
 
 ## Next Configuration Session Should
 
-1. **Complete Firewall Rules**:
-   - Implement Guest isolation first (critical security)
-   - Add Trusted VLAN management access
-   - Implement IoT/Camera isolation
-   - Protect Services VLAN
+### VPN Testing Strategy (Temporary Keys Approach)
 
-2. **Install WireGuard**:
+To validate our VPN configurations work correctly, we will:
+
+1. **Backup Current Configuration**
    ```bash
-   pkg install os-wireguard
+   ssh -i /private/tmp/opnsense-temp-key root@192.168.1.173 \
+     "cp /conf/config.xml /conf/config.xml.backup-before-vpn-test"
    ```
 
-3. **Configure VPN Access**:
-   - WireGuard on port 51820
-   - OpenVPN on port 1194
-   - Both routing to Trusted VLAN
+2. **WireGuard Testing**
+   - Generate temporary server keypair:
+     ```bash
+     wg genkey | tee privatekey | wg pubkey > publickey
+     ```
+   - Generate temporary peer keypair
+   - Update config.xml with real keys
+   - Create client config file
+   - Test connection from external network (phone hotspot)
+   - Verify access to internal VLANs
+   - Verify Guest VLAN is blocked
 
-4. **Clean Up**:
+3. **OpenVPN Testing**
+   - Generate temporary PKI:
+     ```bash
+     easyrsa init-pki
+     easyrsa build-ca nopass
+     easyrsa gen-dh
+     easyrsa build-server-full server nopass
+     easyrsa build-client-full client1 nopass
+     openvpn --genkey --secret ta.key
+     ```
+   - Update config.xml with certificates
+   - Export client .ovpn file
+   - Test connection from external network
+   - Verify same access as WireGuard
+   - Test simultaneous connections
+
+4. **Validation Tests**
+   - Can access Management VLAN (10.10.10.0/24)
+   - Can access Services VLAN (10.10.20.0/24)
+   - Can access Trusted VLAN (10.10.30.0/24)
+   - CANNOT access Guest VLAN (10.10.40.0/24)
+   - DNS resolves through 10.10.20.10
+   - Internet access works (full tunnel)
+
+5. **Revert to Placeholders**
+   - Document all placeholder locations
+   - Replace all real keys with original placeholders:
+     - `PLACEHOLDER_PUBLIC_KEY_REGENERATE_ON_DEPLOY`
+     - `PLACEHOLDER_PRIVATE_KEY_REGENERATE_ON_DEPLOY`
+     - `PLACEHOLDER_CA_CERTIFICATE_REGENERATE_ON_DEPLOY`
+     - `PLACEHOLDER_SERVER_CERTIFICATE_REGENERATE_ON_DEPLOY`
+     - `PLACEHOLDER_TLS_AUTH_KEY_REGENERATE_ON_DEPLOY`
+     - etc.
+   - Delete all generated key files
+   - Clear bash history
+   - Save final config as template
+
+6. **Documentation**
+   - Record test results
+   - Note any issues found
+   - Document the exact reversion process
+   - Create script for key generation in production
+
+### After Testing
+
+1. **Clean Up** (AFTER testing):
    - Remove temporary SSH key
    - Remove temporary API key
    - Disable WAN management access
    - Move management to Trusted VLAN only
 
-5. **Export Final Configuration**:
+3. **Export Final Configuration**:
    - Export clean config.xml
    - Store in repository at `ansible/files/opnsense/config-complete.xml`
    - Document any manual steps required
@@ -173,6 +281,8 @@
 - [x] Outbound internet connectivity
 - [x] Firewall rules configured in config.xml
 - [x] All 30 VLAN isolation rules added
+- [x] WireGuard configuration in place
+- [x] OpenVPN configuration in place
 
 ### ⏳ Pending Tests (Requires devices on VLANs)
 - [ ] Guest VLAN isolation from internal networks (test from actual Guest device)

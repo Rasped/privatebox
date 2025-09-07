@@ -85,7 +85,16 @@
       "Bash(SSHPASS='alpine' sshpass -e ssh root@192.168.1.17 \"ls -la /mnt/\")",
       "Bash(SSHPASS='alpine' sshpass -e ssh root@192.168.1.17 \"ls -la /srv/\")",
       "Bash(SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@192.168.1.109 \"opnsense-version && echo ''---'' && ls -la /conf/config.xml\")",
-      "Bash(traceroute:*)"
+      "Bash(traceroute:*)",
+      "Bash(SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no root@192.168.1.173 \"opnsense-version && echo ''---'' && ifconfig | grep -E ''^vtnet|inet '' | head -20\")",
+      "Bash(SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no root@192.168.1.173 \"ls -la /conf/config.xml && echo ''---'' && ifconfig -l\")",
+      "Bash(SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no root@192.168.1.173 \"ifconfig vtnet1 | grep vlan\")",
+      "Bash(/tmp/create_vlans.sh:*)",
+      "Read(//Users/rasped/tmp/**)",
+      "Bash(SSHPASS='opnsense' sshpass -e ssh -o StrictHostKeyChecking=no root@192.168.1.173 \"sed -i ''s/10\\.10\\.20\\.10/10.10.10.10/g'' /tmp/config_new.xml && sed -i ''s/>opt3</>opt2</g'' /tmp/config_new.xml && echo ''DNS references updated''\")",
+      "Bash(ssh -i /tmp/opnsense-key:*)",
+      "Bash(SSHPASS='opnsense' sshpass:*)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

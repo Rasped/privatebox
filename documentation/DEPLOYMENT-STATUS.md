@@ -139,7 +139,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 2. **Network Implementation**
    - Deploy OPNsense VM with VLAN configuration
    - Implement network design from `/documentation/network-architecture/vlan-design.md`
-   - Migrate services to 10.10.20.0/24 subnet
+   - Migrate services to 10.10.10.0/24 subnet
 
 ### Important (Should Have)
 
@@ -157,7 +157,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 
 1. Fix DNS config playbook auth headers
 2. Fix Caddy backend configurations (AdGuard/Portainer 503s)
-3. Standardize port bindings to 10.10.20.10
+3. Standardize port bindings to 10.10.10.20
 
 ### Deferred to Post-v1
 

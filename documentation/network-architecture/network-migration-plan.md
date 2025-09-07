@@ -18,9 +18,9 @@ Home Router (192.168.1.3)
 Customer ISP
     └── vmbr0 → OPNsense WAN (DHCP)
                     └── vmbr1 → OPNsense LAN
-                                 ├── VLAN 10 → Proxmox (10.10.10.2)
-                                 ├── VLAN 20 → Management VM (10.10.20.10)
-                                 └── VLAN 30-60 → Customer networks
+                                 ├── Default LAN (untagged) → Trusted (10.10.10.0/24)
+                                 ├── VLAN 20 → Services (Proxmox 10.10.20.30, Management VM 10.10.20.20)
+                                 └── VLANs 30-70 → Guest, IoT, and Camera networks
 ```
 
 ## Migration Phases
@@ -33,7 +33,7 @@ Customer ISP
 ### Phase 1: Deploy OPNsense
 - Deploy VM with WAN=vmbr0, LAN=vmbr1
 - WAN gets DHCP from development router
-- LAN configured as 10.10.30.1 (Trusted VLAN gateway)
+- LAN configured as 10.10.10.1 (Trusted network, untagged)
 - **Checkpoint**: OPNsense accessible at WAN IP
 
 ### Phase 2: Configure VLANs
@@ -55,23 +55,23 @@ Execute in this exact order:
 
 1. **Record current IPs** (for rollback)
 2. **Update Proxmox**:
-   - Add VLAN 10 interface: 10.10.10.2/24
-   - Gateway: 10.10.10.1
+   - Add VLAN 20 interface: 10.10.20.30/24
+   - Gateway: 10.10.20.1
    - Remove IP from vmbr0
 3. **Update Management VM**:
    - Change network to vmbr1 + VLAN 20 tag
-   - Static IP: 10.10.20.10/24
+   - Static IP: 10.10.20.20/24
    - Gateway: 10.10.20.1
 4. **Update service configs**:
-   - All services bind to 10.10.20.10
+   - All services bind to 10.10.20.20
    - Update Semaphore inventory
 5. **Update OPNsense**:
    - Remove any dev-specific routes
 
 ### Phase 5: Health Check
 - From OPNsense console:
-  - Ping Proxmox (10.10.10.2)
-  - Ping Management VM (10.10.20.10)
+  - Ping Proxmox (10.10.20.30)
+  - Ping Management VM (10.10.20.20)
   - Curl Semaphore API
   - Verify DNS resolution
 - If ANY fail → execute rollback
@@ -108,8 +108,8 @@ Trigger: Any service unreachable after 5 minutes
    - New: 10.10.x.1 (VLAN-specific)
 
 4. **Firewall Rules**:
-   - VLAN 30 → VLAN 10 (management) must work
-   - Required for customer to access Proxmox
+   - Trusted LAN (default) → VLAN 20 (services) must work
+   - Required for customer to access Proxmox and services
 
 ## Automation Requirements
 

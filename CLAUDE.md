@@ -19,8 +19,8 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 ## Platform & Constraints
 - Proxmox: latest only. Hardware: Intel N100 target.
 - VM OS: Debian 13 cloud image.
-- Bridges: `vmbr0` = WAN, `vmbr1` = LAN.
-- IPs configurable; defaults from detected `BASE_NETWORK` (e.g., `.20`).
+- Bridges: `vmbr0` = WAN, `vmbr1` = LAN (VLAN-aware).
+- Network: Default LAN (untagged) = Trusted (10.10.10.0/24), VLAN 20 = Services (10.10.20.0/24).
 - OPNsense: use VM template approach (manual config → convert to template → store on GitHub).
 
 ## Flow Summary
@@ -36,7 +36,9 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - Add `--dry-run` to generate config only; edit `/tmp/privatebox-config.conf` if you need a different VM IP.
 
 ## Networking & TLS
-- Bind all services to the management VM IP.
+- Services on VLAN 20 (10.10.20.0/24): Proxmox, Management VM, AdGuard.
+- Trusted devices on default LAN (10.10.10.0/24, untagged) for consumer router compatibility.
+- Bind all services to the management VM IP (10.10.20.20).
 - Use dedicated subdomain (e.g., `pb.example.com`) → wildcard `*.pb.example.com` via DNS‑01.
 - Split‑horizon DNS: internal A records only (AdGuard); no public exposure.
 - Store DNS API creds in Semaphore environments for Caddy.

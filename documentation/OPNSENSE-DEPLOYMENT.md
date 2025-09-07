@@ -4,13 +4,35 @@
 
 OPNsense is deployed using a pre-configured Proxmox template that provides a minimal, ready-to-use firewall configuration. The template is stored as a GitHub release and can be deployed via Ansible playbook through Semaphore.
 
+## Current Development Access
+
+During configuration phase, access the OPNsense instance:
+
+```bash
+# SSH access using temporary key
+ssh -i /private/tmp/opnsense-temp-key root@192.168.1.173
+
+# Web UI access
+http://192.168.1.173
+Username: root
+Password: opnsense
+
+# Configuration control commands
+configctl interface reload    # Reload interface configs
+configctl filter reload       # Reload firewall rules
+configctl wireguard restart   # Restart WireGuard service
+```
+
+**Note:** These temporary access methods will be removed in final configuration
+
 ## Template Information
 
 - **Version**: OPNsense 25.7 (amd64)
-- **Release**: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense)
-- **Size**: 771MB (compressed with zstd)
-- **Format**: Proxmox VMA backup (`vzdump-qemu-*.vma.zst`)
-- **Filename**: `vzdump-qemu-101-opnsense.vma.zst`
+- **Current Status**: Configuration complete, ready for testing
+- **Location**: 192.168.1.173 (development instance)
+- **SSH Key**: `/private/tmp/opnsense-temp-key`
+- **Configuration Status**: All core features configured (VLANs, DHCP, Firewall, WireGuard, OpenVPN)
+- **Future Release**: Will be packaged as Proxmox template after testing
 
 ## Default Configuration
 
@@ -94,31 +116,71 @@ If you have a saved configuration from another OPNsense instance:
    ssh root@10.10.10.1 "configctl firmware restart"
    ```
 
-### VLAN Configuration
+### VLAN Configuration (Completed)
 
-For the full VLAN setup described in the network architecture:
+The template includes full VLAN configuration:
 
-1. Access OPNsense web UI
-2. Navigate to Interfaces → Assignments → VLANs
-3. Add VLANs on vtnet1 (LAN):
-   - VLAN 10: Infrastructure
-   - VLAN 20: Management
-   - VLAN 30: Trusted LAN
-   - VLAN 40: IoT
-   - VLAN 50: Guest
-   - VLAN 60: Cameras
+**Configured VLANs:**
+- VLAN 10: Services (10.10.10.1/24) - No DHCP
+- VLAN 20: Trusted LAN (10.10.20.1/24) - DHCP .100-.200
+- VLAN 30: Guest (10.10.30.1/24) - DHCP .100-.120
+- VLAN 40: IoT Cloud (10.10.40.1/24) - DHCP .100-.200
+- VLAN 50: IoT Local (10.10.50.1/24) - DHCP .100-.200
+- VLAN 60: Cameras Cloud (10.10.60.1/24) - DHCP .100-.150
+- VLAN 70: Cameras Local (10.10.70.1/24) - DHCP .100-.150
 
-4. Assign interfaces for each VLAN
-5. Configure IP addresses:
-   - VLAN 10: 10.10.10.1/24
-   - VLAN 20: 10.10.20.1/24
-   - VLAN 30: 10.10.30.1/24
-   - VLAN 40: 10.10.40.1/24
-   - VLAN 50: 10.10.50.1/24
-   - VLAN 60: 10.10.60.1/24
+**Firewall Rules:** Complete VLAN isolation implemented
+**DNS:** Configured to use AdGuard (10.10.10.10) when deployed
+**NTP:** Available on all VLAN gateway IPs
 
-6. Enable DHCP servers as needed
-7. Configure firewall rules per the security model
+### VPN Configuration (Completed)
+
+**WireGuard VPN:**
+- Port: 51820 (UDP)
+- Tunnel Network: 10.10.100.0/24
+- Interface: opt8 (wg0)
+- Access: Equivalent to Trusted VLAN
+- Note: Keys are placeholders, regenerate on deployment
+
+**OpenVPN:**
+- Port: 1194 (UDP)
+- Tunnel Network: 10.10.101.0/24
+- Interface: opt9 (ovpns1)
+- Cipher: AES-256-GCM
+- TLS Minimum: 1.2
+- Full tunnel mode (redirect-gateway)
+- DNS Push: 10.10.10.10 (AdGuard)
+- Access: Equivalent to Trusted VLAN
+- PKI: CA and certificates are placeholders, regenerate on deployment
+
+## Post-Deployment Tasks
+
+When deploying from the template, these tasks must be completed:
+
+### Security Keys Generation
+1. **WireGuard:**
+   - Generate server private/public keypair
+   - Generate peer keys for each user
+   - Update config with real keys
+
+2. **OpenVPN PKI:**
+   - Generate Certificate Authority (CA)
+   - Generate server certificate and key
+   - Generate TLS auth key (ta.key)
+   - Generate DH parameters
+   - Create client certificates for each user
+
+### Site-Specific Configuration
+- Update WAN IP/interface for location
+- Adjust DNS servers if needed
+- Configure dynamic DNS (optional)
+- Set timezone and NTP servers
+
+### Testing
+- Verify all VLANs are accessible
+- Test both VPN connections
+- Confirm firewall rules are working
+- Check DNS resolution through AdGuard
 
 ## Integration with PrivateBox
 
