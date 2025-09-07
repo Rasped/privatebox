@@ -144,12 +144,12 @@ run_preflight_checks() {
     
     # Disable enterprise repositories
     if [[ -f /etc/apt/sources.list.d/pve-enterprise.list ]]; then
-        sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/pve-enterprise.list
+        sed -i 's/^/#/' /etc/apt/sources.list.d/pve-enterprise.list
         [[ "$VERBOSE" == true ]] && info_msg "  Disabled enterprise repository"
     fi
     
     if [[ -f /etc/apt/sources.list.d/ceph.list ]]; then
-        sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/ceph.list
+        sed -i 's/^/#/' /etc/apt/sources.list.d/ceph.list
         [[ "$VERBOSE" == true ]] && info_msg "  Disabled Ceph enterprise repository"
     fi
     
