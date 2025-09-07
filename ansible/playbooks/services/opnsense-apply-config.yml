@@ -9,6 +9,7 @@
   vars:
     config_source: "{{ config_file | default('../../templates/opnsense/config.xml') }}"
     backup_config: "{{ backup_existing | default(true) }}"
+    clean_audit_entries: "{{ clean_audit | default(true) }}"  # Remove <updated> audit log entries
     
   tasks:
     - name: Verify connectivity to OPNsense
@@ -56,6 +57,16 @@
         group: wheel
         mode: '0644'
       register: copy_result
+      
+    - name: Clean audit entries from config if requested
+      when: 
+        - copy_result.changed
+        - clean_audit_entries | default(true) | bool
+      ansible.builtin.shell: |
+        # Remove all <updated> audit log entries from the config
+        sed -i.bak '/<updated>/,/<\/updated>/d' /conf/config.xml
+        echo "Removed audit entries from configuration"
+      register: clean_result
       
     - name: Display copy status
       ansible.builtin.debug:
