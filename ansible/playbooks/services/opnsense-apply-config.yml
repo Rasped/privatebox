@@ -7,7 +7,7 @@
   hosts: opnsense
   gather_facts: no
   vars:
-    config_source: "{{ config_file | default('templates/opnsense/config.xml') }}"
+    config_source: "{{ config_file | default('ansible/templates/opnsense/config.xml') }}"
     backup_config: "{{ backup_existing | default(true) }}"
     
   tasks:
