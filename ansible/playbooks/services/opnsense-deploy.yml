@@ -48,7 +48,7 @@
     
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "ProxmoxAccess"
+      semaphore_environment: "ProxmoxAPI"
       semaphore_type: "deploy"
       semaphore_category: "infrastructure"
     
