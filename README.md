@@ -22,10 +22,10 @@ Run this command on your Proxmox host:
 # Review the script before running (recommended)
 curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
 less quickstart.sh  # Review the script
-sudo bash quickstart.sh
+bash quickstart.sh
 
 # Or run directly if you trust the source
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash
 ```
 
 That's it! The installer will:
