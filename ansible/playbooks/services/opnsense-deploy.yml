@@ -16,7 +16,7 @@
     vm_name: "{{ opnsense_vm_name | default('opnsense') }}"
     vm_storage: "{{ opnsense_vm_storage | default('local-lvm') }}"
     start_after_restore: "{{ opnsense_start_after_restore | default(true) }}"
-    apply_custom_config: "{{ opnsense_apply_custom_config | default(true) }}"
+    # Custom config now handled by separate playbook (opnsense-apply-config.yml)
     
     # Semaphore template metadata (for template sync)
     # These are parsed by tools/generate-templates.py
@@ -39,10 +39,7 @@
         type: boolean
         description: "Automatically start the VM after successful deployment"
         default: true
-      apply_custom_config:
-        type: boolean
-        description: "Apply OPNsense configuration from templates/opnsense/config.xml"
-        default: true
+      # apply_custom_config removed - use opnsense-apply-config.yml playbook instead
         
     # Service metadata
     service_name: "OPNsense Firewall"
@@ -96,7 +93,7 @@
           - "Storage: {{ vm_storage }}"
           - "VM Backup: {{ template_filename }} ({{ template_size_mb }}MB)"
           - "Auto-start: {{ start_after_restore }}"
-          - "Custom config: {{ apply_custom_config }}"
+          - "Custom config: Use opnsense-apply-config.yml after deployment"
           - "======================================"
           - "Starting deployment process..."
       tags: [always]
@@ -477,65 +474,11 @@
               - "SSH Access: {{ 'Available' if ssh_test.rc == 0 else 'Initializing' }}"
               
     # =================================================================
-    # Custom Configuration Application
+    # Custom Configuration 
     # =================================================================
-    - name: "{{ service_name }} - Custom configuration"
-      when:
-        - apply_custom_config | bool
-        - start_after_restore | bool
-      tags: [opnsense, configure, custom]
-      block:
-        - name: Display config status
-          debug:
-            msg: "Applying OPNsense configuration from ansible/templates/opnsense/config.xml"
-              
-        - name: Apply custom configuration
-          block:
-            - name: Backup current config
-              shell: |
-                sshpass -p '{{ opnsense_default_password }}' \
-                  ssh -o StrictHostKeyChecking=no \
-                  {{ opnsense_default_user }}@{{ opnsense_lan_ip }} \
-                  "cp /conf/config.xml /conf/config.xml.pre-custom"
-              register: backup_result
-              failed_when: false
-              
-            - name: Upload custom config
-              shell: |
-                sshpass -p '{{ opnsense_default_password }}' \
-                  scp -o StrictHostKeyChecking=no \
-                  "{{ playbook_dir }}/../../templates/opnsense/config.xml" \
-                  {{ opnsense_default_user }}@{{ opnsense_lan_ip }}:/conf/config.xml
-              delegate_to: localhost
-              
-            - name: Log configuration change
-              shell: |
-                echo "[$(date +%T)] Custom configuration applied" >> "{{ deployment_info_file }}"
-                echo "[$(date +%T)] Original config backed up to /conf/config.xml.pre-custom" >> "{{ deployment_info_file }}"
-                
-            - name: Reload OPNsense configuration
-              shell: |
-                sshpass -p '{{ opnsense_default_password }}' \
-                  ssh -o StrictHostKeyChecking=no \
-                  {{ opnsense_default_user }}@{{ opnsense_lan_ip }} \
-                  "configctl firmware restart"
-              register: reload_result
-              
-            - name: Wait for OPNsense to restart
-              pause:
-                seconds: 60
-                prompt: "Waiting for OPNsense to reload with custom config..."
-                
-            - name: Verify OPNsense is accessible after reload
-              wait_for:
-                host: "{{ opnsense_lan_ip }}"
-                port: 22
-                delay: 10
-                timeout: 180
-                
-            - name: Log custom config status
-              shell: |
-                echo "[$(date +%T)] OPNsense restarted with custom configuration" >> "{{ deployment_info_file }}"
+    # NOTE: Custom configuration has been moved to a separate playbook
+    # Use opnsense-apply-config.yml to apply custom configurations after deployment
+    # This separation ensures deployment always succeeds regardless of config availability
                 
     # =================================================================
     # Post-deployment Validation
@@ -577,7 +520,7 @@
             - Username: {{ opnsense_default_user }}
             - Password: {{ opnsense_default_password }}
             
-            Custom Config: {{ 'Applied' if (apply_custom_config and custom_config_file.stat.exists) else 'Not applied' }}
+            Custom Config: Use opnsense-apply-config.yml to apply
             
             Deployment completed: $(date -Iseconds)
             =====================================
