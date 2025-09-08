@@ -48,7 +48,7 @@
     
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "ProxmoxAPI"
+      # No environment needed - this playbook uses direct SSH to Proxmox, not API
       semaphore_type: "deploy"
       semaphore_category: "infrastructure"
     
