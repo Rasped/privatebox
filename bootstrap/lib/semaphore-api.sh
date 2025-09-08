@@ -125,7 +125,12 @@ create_semaphore_api_environment() {
     # Get VM IP dynamically
     local vm_ip=$(hostname -I | awk '{print $1}')
     if [[ -z "$vm_ip" ]]; then
-        vm_ip="${STATIC_IP:-192.168.1.20}"
+        # Use STATIC_IP from config, fail if not set
+        if [[ -z "$STATIC_IP" ]]; then
+            log_error "STATIC_IP not set and could not determine VM IP dynamically"
+            return 1
+        fi
+        vm_ip="$STATIC_IP"
     fi
     
     log_info "Creating SemaphoreAPI environment for project $project_id..."
@@ -733,7 +738,12 @@ create_default_inventory() {
     # Get the VM IP address dynamically
     local vm_ip=$(hostname -I | awk '{print $1}')
     if [[ -z "$vm_ip" ]]; then
-        vm_ip="${STATIC_IP:-192.168.1.20}"
+        # Use STATIC_IP from config, fail if not set
+        if [[ -z "$STATIC_IP" ]]; then
+            log_error "STATIC_IP not set and could not determine VM IP dynamically"
+            return 1
+        fi
+        vm_ip="$STATIC_IP"
     fi
     log_info "Using VM IP: $vm_ip"
     
