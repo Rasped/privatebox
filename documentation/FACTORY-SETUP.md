@@ -142,6 +142,16 @@ After each stage, verify:
 2. Stage 3: Management VM responds on 10.10.20.20
 3. Stage 4: Proxmox accessible on 10.10.20.10
 
+### Semaphore Inventory Updates
+**CRITICAL**: After Stage 4 network migration, Semaphore inventories must be updated:
+- All inventories created during bootstrap contain factory IPs (192.168.10X.X)
+- After migration to OPNsense LAN, actual IPs are 10.10.20.X
+- Must update via Semaphore API or UI:
+  - container-host: Change from factory IP to 10.10.20.20
+  - proxmox: Change from factory IP to 10.10.20.10
+  - Any service inventories: Update to new 10.10.20.X addresses
+- Without this update, Ansible playbooks will fail to connect
+
 ## Factory Process Flow
 
 ### Setup (Once per Batch)
