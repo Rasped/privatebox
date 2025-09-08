@@ -208,9 +208,42 @@ generate_config() {
         proxmox_token_secret=""  # Ensure it's empty on failure
     fi
     
-    # VM network settings (using hardcoded design)
-    local container_host_ip="${base_network}.20"
-    local caddy_host_ip="${base_network}.21"
+    # Find available IP addresses using probe-before-allocate
+    display "Finding available IP addresses..."
+    local container_host_ip=""
+    local start_ip=100  # Start at .100 (common DHCP range start)
+    
+    # Probe for available container host IP
+    for i in $(seq $start_ip 250); do
+        local test_ip="${base_network}.${i}"
+        if ! ping -c 1 -W 1 "$test_ip" >/dev/null 2>&1; then
+            container_host_ip="$test_ip"
+            log "Found available IP for container host: $container_host_ip"
+            break
+        fi
+    done
+    
+    if [[ -z "$container_host_ip" ]]; then
+        error_exit "Could not find available IP address in range ${base_network}.${start_ip}-250"
+    fi
+    
+    # Find next available IP for Caddy (skip the one we just allocated)
+    local caddy_host_ip=""
+    for i in $(seq $((start_ip + 1)) 250); do
+        local test_ip="${base_network}.${i}"
+        if [[ "$test_ip" != "$container_host_ip" ]] && ! ping -c 1 -W 1 "$test_ip" >/dev/null 2>&1; then
+            caddy_host_ip="$test_ip"
+            log "Found available IP for Caddy host: $caddy_host_ip"
+            break
+        fi
+    done
+    
+    if [[ -z "$caddy_host_ip" ]]; then
+        # Fallback: use container_host_ip + 1 if we can't find another
+        local last_octet="${container_host_ip##*.}"
+        caddy_host_ip="${base_network}.$((last_octet + 1))"
+        log "Using fallback IP for Caddy host: $caddy_host_ip"
+    fi
     
     # Write configuration file
     cat > "$CONFIG_FILE" <<EOF
@@ -260,7 +293,8 @@ EOF
     display "  Network: ${base_network}.0/24"
     display "  Gateway: $gateway"
     display "  Bridge: $bridge"
-    display "  VM IP: $container_host_ip"
+    display "  Management VM IP: $container_host_ip (probed as available)"
+    display "  Caddy VM IP: $caddy_host_ip (reserved for future use)"
 }
 
 # Generate SSH keys if they don't exist
