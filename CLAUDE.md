@@ -32,8 +32,8 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 
 ## Quickstart Command
 - Run from your workstation to bootstrap on a Proxmox host at `.10`:
-  - `ssh root@192.168.1.10 "curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash -s -- --yes"`
-  - Add `--dry-run` to generate config only; edit `/tmp/privatebox-config.conf` if you need a different VM IP.
+  - `ssh root@192.168.1.10 "curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash"`
+  - Script auto-detects network and configures everything. Check `/tmp/privatebox-config.conf` if you need different settings.
 
 ## Networking & TLS
 - Services on VLAN 20 (10.10.20.0/24): Proxmox, Management VM, AdGuard.
