@@ -335,26 +335,38 @@ setup_network_bridges() {
     local nic_count=$(ip link show | grep -E "^[0-9]+: (enp|eno|eth)" | grep -v "lo:" | wc -l)
     local second_nic=""
     
-    # Find the second NIC (not used by vmbr0)
+    # Find a NIC that's not assigned to any bridge
     for nic in $(ip link show | grep -E "^[0-9]+: (enp|eno|eth)" | cut -d: -f2 | tr -d ' '); do
-        if ! grep -q "$nic" /etc/network/interfaces; then
-            second_nic="$nic"
-            log "Found unused NIC: $nic"
-            break
+        # Check if this NIC is assigned to any bridge via bridge-ports
+        if ! grep -E "bridge-ports.*$nic" /etc/network/interfaces 2>/dev/null | grep -q "$nic"; then
+            # Also check it's not in any interfaces.d file
+            if ! grep -E "bridge-ports.*$nic" /etc/network/interfaces.d/* 2>/dev/null | grep -q "$nic"; then
+                second_nic="$nic"
+                log "Found unassigned NIC: $nic"
+                # Verify the NIC has link (cable connected)
+                ip link set "$nic" up 2>/dev/null
+                sleep 2
+                if ethtool "$nic" 2>/dev/null | grep -q "Link detected: yes"; then
+                    log "NIC $nic has link detected"
+                else
+                    log "Warning: NIC $nic has no link detected, but will use it anyway"
+                fi
+                break
+            fi
         fi
     done
     
     if [[ -z "$second_nic" ]]; then
-        local used_nic=$(grep bridge-ports /etc/network/interfaces | grep vmbr0 | awk '{print $2}')
+        local used_nics=$(grep -h bridge-ports /etc/network/interfaces /etc/network/interfaces.d/* 2>/dev/null | awk '{print $2}' | tr '\n' ' ')
         local found_nics=$(ip link show | grep -E '^[0-9]+: (enp|eno|eth)' | cut -d: -f2 | tr -d ' ' | tr '\n' ' ')
         error_exit "PrivateBox requires dual NICs for proper network isolation.
         
         Current configuration:
         - Found NICs: $found_nics
-        - vmbr0 is using: $used_nic
-        - No unused NIC available for vmbr1 (internal network)
+        - NICs assigned to bridges: $used_nics
+        - No unassigned NIC available for vmbr1 (internal network)
         
-        Please ensure your system has two network interfaces."
+        Please ensure your system has two network interfaces and one is not assigned to any bridge."
     fi
     
     # Check if vmbr1 already exists
