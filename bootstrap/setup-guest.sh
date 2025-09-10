@@ -36,6 +36,9 @@ log "Starting guest configuration..."
 log "Updating package lists..."
 apt-get update || error_exit "Failed to update package lists"
 
+log "Upgrading system packages to latest versions..."
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y || error_exit "Failed to upgrade system packages"
+
 log "Installing required packages..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   curl wget ca-certificates gnupg lsb-release jq git \
