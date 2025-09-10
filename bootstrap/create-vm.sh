@@ -225,6 +225,7 @@ create_vm() {
         --name privatebox-management \
         --memory $VM_MEMORY \
         --cores $VM_CORES \
+        --cpu host \
         --net0 virtio,bridge=$VM_NET_BRIDGE \
         --serial0 socket \
         --vga serial0 \
@@ -246,6 +247,9 @@ create_vm() {
     
     # Add cloud-init drive for network configuration
     qm set $VMID --ide2 ${VM_STORAGE}:cloudinit || error_exit "Failed to add cloud-init drive"
+    
+    # Enable auto-start on boot
+    qm set $VMID --onboot 1 || error_exit "Failed to enable auto-start"
     
     # Configure cloud-init with custom user-data snippet
     qm set $VMID \
