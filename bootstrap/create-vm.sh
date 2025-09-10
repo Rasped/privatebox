@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/tmp/privatebox-bootstrap.log"
 CONFIG_FILE="/tmp/privatebox-config.conf"
 WORK_DIR="/tmp/privatebox-vm-creation"
-DEBIAN_IMAGE_URL="https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-generic-amd64-daily.qcow2"
+DEBIAN_IMAGE_URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
 IMAGE_CACHE_DIR="/var/lib/vz/template/cache"
 
 # Source configuration
@@ -41,7 +41,7 @@ error_exit() {
 download_image() {
     display "Downloading Debian cloud image..."
     
-    local image_name="debian-13-generic-amd64-daily.qcow2"
+    local image_name="debian-13-genericcloud-amd64.qcow2"
     local image_path="${IMAGE_CACHE_DIR}/${image_name}"
     
     # Create cache directory if needed
