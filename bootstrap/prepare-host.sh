@@ -73,7 +73,7 @@ run_preflight_checks() {
         log "✓ VM $VMID does not exist"
     fi
     
-    # Check disk space (40GB required)
+    # Check disk space (15GB required)
     local available_space=$(pvesm status -storage $STORAGE 2>/dev/null | grep "^$STORAGE" | awk '{print $4}')
     if [[ -z "$available_space" ]]; then
         error_exit "Could not determine available space on storage $STORAGE"
@@ -81,8 +81,8 @@ run_preflight_checks() {
     
     # Convert to GB (pvesm shows in KB)
     local available_gb=$((available_space / 1024 / 1024))
-    if [[ $available_gb -lt 40 ]]; then
-        error_exit "Insufficient disk space. Need 40GB, have ${available_gb}GB"
+    if [[ $available_gb -lt 15 ]]; then
+        error_exit "Insufficient disk space. Need 15GB, have ${available_gb}GB"
     fi
     log "✓ Sufficient disk space: ${available_gb}GB available"
     
@@ -267,7 +267,7 @@ VMID="$VMID"
 VM_USERNAME="debian"
 VM_MEMORY="4096"
 VM_CORES="2"
-VM_DISK_SIZE="40G"
+VM_DISK_SIZE="15G"
 VM_STORAGE="$STORAGE"
 
 # Credentials
@@ -326,6 +326,111 @@ generate_ssh_keys() {
     fi
 }
 
+# Setup network bridges for PrivateBox
+setup_network_bridges() {
+    log "Configuring network bridges for PrivateBox..."
+    display "  Checking network bridge configuration..."
+    
+    # Check for dual NIC requirement
+    local nic_count=$(ip link show | grep -E "^[0-9]+: (enp|eno|eth)" | grep -v "lo:" | wc -l)
+    local second_nic=""
+    
+    # Find the second NIC (not used by vmbr0)
+    for nic in $(ip link show | grep -E "^[0-9]+: (enp|eno|eth)" | cut -d: -f2 | tr -d ' '); do
+        if ! grep -q "$nic" /etc/network/interfaces; then
+            second_nic="$nic"
+            log "Found unused NIC: $nic"
+            break
+        fi
+    done
+    
+    if [[ -z "$second_nic" ]]; then
+        local used_nic=$(grep bridge-ports /etc/network/interfaces | grep vmbr0 | awk '{print $2}')
+        local found_nics=$(ip link show | grep -E '^[0-9]+: (enp|eno|eth)' | cut -d: -f2 | tr -d ' ' | tr '\n' ' ')
+        error_exit "PrivateBox requires dual NICs for proper network isolation.
+        
+        Current configuration:
+        - Found NICs: $found_nics
+        - vmbr0 is using: $used_nic
+        - No unused NIC available for vmbr1 (internal network)
+        
+        Please ensure your system has two network interfaces."
+    fi
+    
+    # Check if vmbr1 already exists
+    if ip link show vmbr1 &>/dev/null 2>&1; then
+        log "vmbr1 already exists, checking configuration..."
+        
+        # Check if it's properly configured
+        if [[ -f /etc/network/interfaces.d/vmbr1 ]]; then
+            if grep -q "bridge-ports none" /etc/network/interfaces.d/vmbr1; then
+                display "  ⚠ vmbr1 exists but has no physical port, fixing..."
+                fix_vmbr1_config "$second_nic"
+            else
+                local current_nic=$(grep "bridge-ports" /etc/network/interfaces.d/vmbr1 | awk '{print $2}')
+                display "  ✓ vmbr1 already configured on $current_nic"
+                log "vmbr1 is already properly configured on $current_nic"
+            fi
+        else
+            # vmbr1 exists but not in interfaces.d, might be in main interfaces file
+            if grep -A5 "iface vmbr1" /etc/network/interfaces | grep -q "bridge-ports none"; then
+                display "  ⚠ vmbr1 exists but has no physical port, fixing..."
+                fix_vmbr1_config "$second_nic"
+            else
+                display "  ✓ vmbr1 already configured"
+                log "vmbr1 is already configured"
+            fi
+        fi
+    else
+        # Create vmbr1
+        create_vmbr1 "$second_nic"
+    fi
+}
+
+create_vmbr1() {
+    local nic="$1"
+    display "  Creating vmbr1 on $nic for internal network..."
+    log "Creating vmbr1 bridge on interface $nic"
+    
+    # Create the bridge configuration
+    cat > /etc/network/interfaces.d/vmbr1 <<EOF
+auto vmbr1
+iface vmbr1 inet manual
+	bridge-ports $nic
+	bridge-stp off
+	bridge-fd 0
+	bridge-vlan-aware yes
+	bridge-vids 2-4094
+	# PrivateBox internal network (LAN + VLANs)
+EOF
+    
+    # Bring up the bridge
+    if ifup vmbr1 2>/dev/null; then
+        display "  ✓ vmbr1 created successfully on $nic"
+        log "vmbr1 bridge created and brought up successfully"
+    else
+        error_exit "Failed to bring up vmbr1 bridge. Check network configuration."
+    fi
+}
+
+fix_vmbr1_config() {
+    local nic="$1"
+    display "  Updating vmbr1 to use $nic..."
+    log "Fixing vmbr1 configuration to use $nic"
+    
+    # Backup current config
+    if [[ -f /etc/network/interfaces.d/vmbr1 ]]; then
+        cp /etc/network/interfaces.d/vmbr1 /etc/network/interfaces.d/vmbr1.bak
+        log "Backed up existing vmbr1 config"
+    fi
+    
+    # Down the interface first
+    ifdown vmbr1 2>/dev/null || true
+    
+    # Rewrite the config
+    create_vmbr1 "$nic"
+}
+
 # Main execution
 main() {
     display "Starting host preparation..."
@@ -339,6 +444,9 @@ main() {
     
     # Detect network
     detect_network
+    
+    # Setup network bridges
+    setup_network_bridges
     
     # Generate configuration
     generate_config
