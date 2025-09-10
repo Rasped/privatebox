@@ -84,23 +84,23 @@
       ansible.builtin.debug:
         msg: "Configuration validation: {{ validate_result.stdout | default('OK') }}"
         
-    - name: Reload configuration
-      ansible.builtin.command:
-        cmd: "/usr/local/etc/rc.reload_all"
-      register: reload_result
+    - name: Reboot OPNsense to apply configuration
+      ansible.builtin.reboot:
+        msg: "Rebooting to apply new configuration"
+        reboot_timeout: 300
+        connect_timeout: 5
+        post_reboot_delay: 30
+        test_command: "/usr/local/sbin/opnsense-version"
       when: copy_result.changed
+      register: reboot_result
       
-    - name: Wait for services to stabilize
-      ansible.builtin.pause:
-        seconds: 10
-      when: copy_result.changed
-      
-    - name: Verify OPNsense is responsive after reload
+    - name: Wait for OPNsense to be fully operational
       ansible.builtin.wait_for:
         host: "{{ ansible_host }}"
-        port: 22
-        delay: 5
-        timeout: 60
+        port: 443  # Wait for web UI to be available
+        delay: 10
+        timeout: 120
+        state: started
       delegate_to: localhost
       when: copy_result.changed
       
@@ -112,4 +112,4 @@
           - "  - Target: {{ ansible_host }}"
           - "  - Backup: {{ 'Created' if backup_config else 'Skipped' }}"
           - "  - Applied: {{ 'Yes' if copy_result.changed else 'No changes needed' }}"
-          - "  - Reload: {{ 'Completed' if copy_result.changed else 'Not required' }}"
+          - "  - Reboot: {{ 'Completed' if copy_result.changed else 'Not required' }}"
