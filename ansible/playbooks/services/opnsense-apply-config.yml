@@ -84,25 +84,53 @@
       ansible.builtin.debug:
         msg: "Configuration validation: {{ validate_result.stdout | default('OK') }}"
         
-    - name: Reboot OPNsense to apply configuration
-      ansible.builtin.reboot:
-        msg: "Rebooting to apply new configuration"
-        reboot_timeout: 300
-        connect_timeout: 5
-        post_reboot_delay: 30
-        test_command: "/usr/local/sbin/opnsense-version"
+    - name: Initiate OPNsense reboot
+      ansible.builtin.shell:
+        cmd: "shutdown -r +1 'Rebooting to apply new configuration' && sleep 2"
       when: copy_result.changed
-      register: reboot_result
+      async: 10
+      poll: 0
+      ignore_errors: yes
       
-    - name: Wait for OPNsense to be fully operational
+    - name: Wait for OPNsense to go down
       ansible.builtin.wait_for:
         host: "{{ ansible_host }}"
-        port: 443  # Wait for web UI to be available
-        delay: 10
-        timeout: 120
-        state: started
+        port: 22
+        state: stopped
+        delay: 5
+        timeout: 60
       delegate_to: localhost
       when: copy_result.changed
+      ignore_errors: yes
+      
+    - name: Wait for OPNsense to come back up
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: started
+        delay: 30
+        timeout: 300
+      delegate_to: localhost
+      when: copy_result.changed
+      
+    - name: Wait for web UI to be available
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 443
+        state: started
+        delay: 5
+        timeout: 120
+      delegate_to: localhost
+      when: copy_result.changed
+      
+    - name: Verify OPNsense is operational
+      ansible.builtin.command:
+        cmd: "/usr/local/sbin/opnsense-version"
+      register: version_check
+      when: copy_result.changed
+      retries: 3
+      delay: 10
+      until: version_check.rc == 0
       
     - name: Configuration apply summary
       ansible.builtin.debug:
