@@ -411,25 +411,28 @@ def display_playbook_info(playbook_path, info):
     """Display parsed playbook information."""
     print(f"\n📄 {playbook_path.name}")
     print(f"   Name: {info['name']}")
-    print(f"   Variables with Semaphore metadata:")
     
-    for var in info['vars']:
-        var_name = var.get('name', 'unnamed')
-        var_type = var.get('semaphore_type', 'text')
-        description = var.get('semaphore_description', var.get('prompt', ''))
-        required = var.get('semaphore_required', not var.get('private', True))
-        
-        print(f"\n   - Variable: {var_name}")
-        print(f"     Type: {var_type}")
-        print(f"     Description: {description}")
-        print(f"     Required: {required}")
-        
-        # Show additional fields for specific types
-        if var_type == 'integer':
-            if 'semaphore_min' in var:
-                print(f"     Min: {var['semaphore_min']}")
-            if 'semaphore_max' in var:
-                print(f"     Max: {var['semaphore_max']}")
+    if info['vars']:
+        print(f"   Variables with Semaphore metadata:")
+        for var in info['vars']:
+            var_name = var.get('name', 'unnamed')
+            var_type = var.get('semaphore_type', 'text')
+            description = var.get('semaphore_description', var.get('prompt', ''))
+            required = var.get('semaphore_required', not var.get('private', True))
+            
+            print(f"\n   - Variable: {var_name}")
+            print(f"     Type: {var_type}")
+            print(f"     Description: {description}")
+            print(f"     Required: {required}")
+            
+            # Show additional fields for specific types
+            if var_type == 'integer':
+                if 'semaphore_min' in var:
+                    print(f"     Min: {var['semaphore_min']}")
+                if 'semaphore_max' in var:
+                    print(f"     Max: {var['semaphore_max']}")
+    else:
+        print(f"   No variables to prompt (will use defaults from playbook)")
 
 
 def main():
@@ -511,11 +514,10 @@ def main():
             display_playbook_info(playbook, info)
     
     if not playbooks_with_metadata:
-        print("\n⚠️  No playbooks with semaphore_* metadata found.")
-        print("To enable template generation, add semaphore_* fields to vars_prompt in your playbooks.")
+        print("\n⚠️  No playbooks found (all were excluded with semaphore_exclude: true).")
         return
     
-    print(f"\n✓ Found {len(playbooks_with_metadata)} playbook(s) with Semaphore metadata")
+    print(f"\n✓ Found {len(playbooks_with_metadata)} playbook(s) to process as templates")
     
     # Phase 5: Create/Update templates
     print("\n=== Phase 5: Creating/Updating Templates ===")

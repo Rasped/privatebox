@@ -259,6 +259,46 @@
         dest: "{{ registration_file }}"
         mode: '0644'
 
+    - name: Trigger template regeneration to include OPNsense config playbooks
+      block:
+        - name: Run Generate Templates task
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+              Content-Type: "application/json"
+            body:
+              template_id: 1  # Generate Templates always has ID 1
+              debug: false
+              dry_run: false
+            body_format: json
+            status_code: [201]
+          register: template_task
+          
+        - name: Display template generation status
+          debug:
+            msg: "Template regeneration triggered (Task ID: {{ template_task.json.id }})"
+            
+        - name: Wait for template generation to complete
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks/{{ template_task.json.id }}"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+          register: task_status
+          until: task_status.json.status in ['success', 'error', 'failed']
+          retries: 30
+          delay: 2
+          
+        - name: Report template generation result
+          debug:
+            msg: "{{ 'Templates regenerated successfully!' if task_status.json.status == 'success' else 'Template generation failed - check Semaphore logs' }}"
+      rescue:
+        - name: Template generation failed (non-critical)
+          debug:
+            msg: "Warning: Could not trigger template regeneration. Run 'Generate Templates' manually in Semaphore."
+
     - name: Display completion summary
       debug:
         msg:
