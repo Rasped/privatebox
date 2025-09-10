@@ -373,25 +373,21 @@ setup_network_bridges() {
     if ip link show vmbr1 &>/dev/null 2>&1; then
         log "vmbr1 already exists, checking configuration..."
         
-        # Check if it's properly configured
+        # Check configuration in both possible locations
+        local bridge_ports=""
         if [[ -f /etc/network/interfaces.d/vmbr1 ]]; then
-            if grep -q "bridge-ports none" /etc/network/interfaces.d/vmbr1; then
-                display "  ⚠ vmbr1 exists but has no physical port, fixing..."
-                fix_vmbr1_config "$second_nic"
-            else
-                local current_nic=$(grep "bridge-ports" /etc/network/interfaces.d/vmbr1 | awk '{print $2}')
-                display "  ✓ vmbr1 already configured on $current_nic"
-                log "vmbr1 is already properly configured on $current_nic"
-            fi
+            bridge_ports=$(grep "bridge-ports" /etc/network/interfaces.d/vmbr1 2>/dev/null | awk '{print $2}')
+        fi
+        if [[ -z "$bridge_ports" ]]; then
+            bridge_ports=$(grep -A5 "iface vmbr1" /etc/network/interfaces 2>/dev/null | grep "bridge-ports" | awk '{print $2}')
+        fi
+        
+        if [[ "$bridge_ports" == "none" ]] || [[ -z "$bridge_ports" ]]; then
+            display "  ⚠ vmbr1 exists but has no physical port, fixing..."
+            fix_vmbr1_config "$second_nic"
         else
-            # vmbr1 exists but not in interfaces.d, might be in main interfaces file
-            if grep -A5 "iface vmbr1" /etc/network/interfaces | grep -q "bridge-ports none"; then
-                display "  ⚠ vmbr1 exists but has no physical port, fixing..."
-                fix_vmbr1_config "$second_nic"
-            else
-                display "  ✓ vmbr1 already configured"
-                log "vmbr1 is already configured"
-            fi
+            display "  ✓ vmbr1 already configured on $bridge_ports"
+            log "vmbr1 is already properly configured on $bridge_ports"
         fi
     else
         # Create vmbr1
@@ -404,8 +400,9 @@ create_vmbr1() {
     display "  Creating vmbr1 on $nic for internal network..."
     log "Creating vmbr1 bridge on interface $nic"
     
-    # Create the bridge configuration
-    cat > /etc/network/interfaces.d/vmbr1 <<EOF
+    # Add the bridge configuration to main interfaces file (for Proxmox UI visibility)
+    cat >> /etc/network/interfaces <<EOF
+
 auto vmbr1
 iface vmbr1 inet manual
 	bridge-ports $nic
@@ -433,7 +430,15 @@ fix_vmbr1_config() {
     # Backup current config
     if [[ -f /etc/network/interfaces.d/vmbr1 ]]; then
         cp /etc/network/interfaces.d/vmbr1 /etc/network/interfaces.d/vmbr1.bak
-        log "Backed up existing vmbr1 config"
+        rm /etc/network/interfaces.d/vmbr1
+        log "Backed up and removed vmbr1 from interfaces.d"
+    fi
+    
+    # Remove vmbr1 from main interfaces file if it exists
+    if grep -q "^auto vmbr1" /etc/network/interfaces; then
+        cp /etc/network/interfaces /etc/network/interfaces.bak
+        sed -i '/^auto vmbr1/,/^$/d' /etc/network/interfaces
+        log "Removed old vmbr1 config from main interfaces file"
     fi
     
     # Down the interface first
