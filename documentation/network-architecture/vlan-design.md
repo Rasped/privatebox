@@ -62,15 +62,17 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 **Purpose**: All PrivateBox services and infrastructure
 
 **IP Assignments**:
-- 10.10.20.1 - OPNsense (VLAN gateway)
-- 10.10.20.10 - AdGuard Home (port 53 DNS, port 8080 web)
-- 10.10.20.20 - Management VM (Portainer 9000, Semaphore 3000)
-- 10.10.20.30-39 - Proxmox hosts (SSH port 22, Web UI port 8006)
-- 10.10.20.40-49 - Reserved for additional services
+- 10.10.20.1 - OPNsense (VLAN gateway, firewall management)
+- 10.10.20.10 - Management VM (Debian 13 running all containerized services)
+  - AdGuard Home: Port 53 (DNS), Port 3080 (Web UI)
+  - Portainer: Port 9000 (Web UI)
+  - Semaphore: Port 3000 (Web UI)
+- 10.10.20.20 - Proxmox (Hypervisor - SSH port 22, Web UI port 8006)
+- 10.10.20.30-99 - Reserved for future services
 
 **Configuration**:
-- DHCP: Disabled (static IPs only)
-- All services and infrastructure share this VLAN
+- DHCP: Disabled (all static IPs for stability)
+- No DHCP server - critical services require predictable addresses
 
 **Access Policy**:
 - DNS (port 53) accessible from all VLANs
@@ -78,10 +80,11 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - No access from Guest or IoT to management ports
 
 **Rationale**: 
-- Combining services and infrastructure simplifies management
-- Semaphore can directly manage Proxmox without cross-VLAN rules
-- VLAN 20 maintains perfect tag-to-subnet alignment
-- Static IPs ensure predictable service locations
+- Static IPs ensure services are always at known addresses
+- No DHCP prevents IP hijacking or conflicts
+- All services on Management VM simplifies backup/restore
+- OPNsense management accessible at .1 on this VLAN
+- Proxmox at .20 for management access via Services VLAN
 
 ### VLAN 30 - Guest Network (10.10.30.0/24)
 
@@ -252,7 +255,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 ## Firewall Rules Summary
 
 ### Trusted LAN (Default) → Other VLANs
-- ✅ Services: Allow all ports (SSH, Proxmox 8006, DNS 53, HTTP 80/443, Semaphore 3000, AdGuard 8080, Portainer 9000)
+- ✅ Services: Allow all ports (SSH, Proxmox 8006, DNS 53, HTTP 80/443, Semaphore 3000, AdGuard 3080, Portainer 9000)
 - ✅ IoT Cloud/Local: Allow all (to control devices)
 - ✅ Cameras Cloud/Local: Allow all (to view streams and configure)
 - ❌ Guest: Deny all
@@ -309,9 +312,10 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
      - NIC2: vmbr1 (LAN trunk with all VLANs)
 
 3. **DNS Configuration**:
-   - All DHCP servers point to 10.10.20.10
-   - AdGuard Home forwards to upstream DNS or Unbound
+   - All DHCP servers point to 10.10.20.10 (Management VM)
+   - AdGuard Home running on Management VM handles all DNS
    - Local DNS resolution for *.privatebox.local
+   - Upstream DNS to Cloudflare or other providers
 
 4. **Future Considerations**:
    - Consumer Dashboard will run on Management VM

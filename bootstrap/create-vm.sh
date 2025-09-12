@@ -226,7 +226,7 @@ create_vm() {
         --memory $VM_MEMORY \
         --cores $VM_CORES \
         --cpu host \
-        --net0 virtio,bridge=$VM_NET_BRIDGE \
+        --net0 virtio,bridge=vmbr1,tag=20 \
         --serial0 socket \
         --vga serial0 \
         --agent enabled=1 \
@@ -253,8 +253,8 @@ create_vm() {
     
     # Configure cloud-init with custom user-data snippet
     qm set $VMID \
-        --ipconfig0 ip=${STATIC_IP}/${NETMASK},gw=${GATEWAY} \
-        --nameserver ${GATEWAY} \
+        --ipconfig0 ip=${STATIC_IP}/${SERVICES_NETMASK},gw=${SERVICES_GATEWAY} \
+        --nameserver ${SERVICES_GATEWAY} \
         --cicustom "user=local:snippets/privatebox-${VMID}.yml" \
         || error_exit "Failed to configure cloud-init"
     
