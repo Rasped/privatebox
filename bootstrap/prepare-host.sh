@@ -31,6 +31,46 @@ error_exit() {
     exit 1
 }
 
+# Check and install required dependencies
+check_dependencies() {
+    display "  Checking required dependencies..."
+    local missing_deps=()
+    local deps_to_install=()
+    
+    # Check for required commands
+    local required_commands=("ethtool" "sshpass" "zstd" "curl" "wget")
+    local required_packages=("ethtool" "sshpass" "zstd" "curl" "wget")
+    
+    for i in "${!required_commands[@]}"; do
+        if ! command -v "${required_commands[$i]}" &> /dev/null; then
+            missing_deps+=("${required_commands[$i]}")
+            deps_to_install+=("${required_packages[$i]}")
+            log "Missing dependency: ${required_commands[$i]}"
+        else
+            log "✓ ${required_commands[$i]} is available"
+        fi
+    done
+    
+    # Install missing dependencies
+    if [[ ${#deps_to_install[@]} -gt 0 ]]; then
+        display "  Installing missing dependencies: ${deps_to_install[*]}"
+        log "Installing packages: ${deps_to_install[*]}"
+        
+        # Update package list
+        apt-get update >/dev/null 2>&1 || error_exit "Failed to update package list"
+        
+        # Install missing packages
+        if DEBIAN_FRONTEND=noninteractive apt-get install -y "${deps_to_install[@]}" >/dev/null 2>&1; then
+            display "  ✓ Dependencies installed successfully"
+            log "Dependencies installed: ${deps_to_install[*]}"
+        else
+            error_exit "Failed to install required dependencies: ${deps_to_install[*]}"
+        fi
+    else
+        log "✓ All required dependencies are installed"
+    fi
+}
+
 # Pre-flight checks
 run_preflight_checks() {
     display "Running pre-flight checks..."
@@ -52,6 +92,9 @@ run_preflight_checks() {
         error_exit "qm command not found"
     fi
     log "✓ qm command available"
+    
+    # Check and install dependencies
+    check_dependencies
     
     # Check existing VM
     if qm status $VMID &>/dev/null; then
@@ -89,63 +132,40 @@ run_preflight_checks() {
     display "  ✓ All pre-flight checks passed"
 }
 
-# Network detection
-detect_network() {
-    display "Detecting network configuration..."
+# Detect WAN bridge (for OPNsense external interface)
+detect_wan_bridge() {
+    display "Detecting WAN bridge..."
     
-    local gateway=""
-    local bridge=""
-    local base_network=""
-    local host_ip=""
+    # Find bridge with default route (typically vmbr0)
+    local wan_bridge=""
+    local default_route=$(ip route | grep "^default" | head -1)
     
-    # Find all vmbr interfaces
-    local bridges=$(ip link show | grep -o 'vmbr[0-9]*' | sort -u)
-    if [[ -z "$bridges" ]]; then
-        error_exit "No Proxmox bridge interfaces found"
+    if [[ -n "$default_route" ]]; then
+        # Extract bridge name from default route
+        wan_bridge=$(echo "$default_route" | grep -o 'vmbr[0-9]*' || true)
     fi
     
-    log "Found bridges: $(echo $bridges | tr '\n' ' ')"
-    
-    # Check each bridge for connectivity
-    for br in $bridges; do
-        # Get IP address of bridge
-        local br_ip=$(ip addr show $br 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1 | head -1)
-        if [[ -n "$br_ip" ]]; then
-            # Get gateway for this bridge
-            local br_gw=$(ip route | grep "default.*$br" | awk '{print $3}' | head -1)
-            if [[ -n "$br_gw" ]]; then
-                # Test gateway connectivity
-                if ping -c 1 -W 2 "$br_gw" &>/dev/null; then
-                    bridge="$br"
-                    host_ip="$br_ip"
-                    gateway="$br_gw"
-                    base_network=$(echo "$br_ip" | cut -d. -f1-3)
-                    log "Selected bridge $br with IP $br_ip, gateway $br_gw"
-                    break
-                fi
-            fi
-        fi
-    done
-    
-    # Validate network detection
-    if [[ -z "$gateway" ]] || [[ -z "$bridge" ]]; then
-        error_exit "Could not detect network configuration"
+    # If not found via route, look for vmbr0 as fallback
+    if [[ -z "$wan_bridge" ]] && ip link show vmbr0 &>/dev/null; then
+        wan_bridge="vmbr0"
+        log "Using vmbr0 as WAN bridge (fallback)"
     fi
     
-    # Test gateway connectivity
-    display "  Testing gateway connectivity..."
-    if ! ping -c 2 -W 2 "$gateway" &>/dev/null; then
-        error_exit "Cannot reach gateway $gateway"
+    if [[ -z "$wan_bridge" ]]; then
+        error_exit "Could not detect WAN bridge. Ensure vmbr0 exists with internet connectivity."
     fi
-    log "✓ Gateway $gateway is reachable"
     
-    display "  ✓ Network detected: $bridge ($base_network.0/24)"
+    # Get Proxmox's IP on this bridge (for reference)
+    local proxmox_ip=$(ip addr show $wan_bridge 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1 | head -1)
     
-    # Return values via global variables
-    GATEWAY="$gateway"
-    VM_NET_BRIDGE="$bridge"
-    BASE_NETWORK="$base_network"
-    PROXMOX_HOST="$host_ip"
+    log "WAN bridge: $wan_bridge"
+    log "Proxmox IP: ${proxmox_ip:-not configured}"
+    
+    display "  ✓ WAN bridge detected: $wan_bridge"
+    
+    # Set global variables
+    WAN_BRIDGE="$wan_bridge"
+    PROXMOX_IP="${proxmox_ip:-unknown}"
 }
 
 # Source password generator library for phonetic passwords
@@ -155,11 +175,9 @@ source "${SCRIPT_DIR}/lib/password-generator.sh"
 generate_config() {
     display "Generating configuration..."
     
-    # Network settings (from detection)
-    local gateway="$GATEWAY"
-    local bridge="$VM_NET_BRIDGE"
-    local base_network="$BASE_NETWORK"
-    local proxmox_host="$PROXMOX_HOST"
+    # WAN bridge for OPNsense
+    local wan_bridge="$WAN_BRIDGE"
+    local proxmox_ip="$PROXMOX_IP"
     
     # Detect Proxmox node name - use hostname as it's more reliable
     local proxmox_node=$(hostname -s 2>/dev/null || echo "proxmox")
@@ -172,7 +190,7 @@ generate_config() {
     display "Creating Proxmox API token for automation..."
     local proxmox_token_secret=""
     local proxmox_token_id="automation@pve!ansible"
-    local proxmox_host_ip="$proxmox_host"
+    local proxmox_api_host="${proxmox_ip}"
     
     # Clean up any old token files
     rm -f /root/.proxmox-api-token 2>/dev/null || true
@@ -208,59 +226,38 @@ generate_config() {
         proxmox_token_secret=""  # Ensure it's empty on failure
     fi
     
-    # Find available IP addresses using probe-before-allocate
-    display "Finding available IP addresses..."
-    local container_host_ip=""
-    local start_ip=100  # Start at .100 (common DHCP range start)
+    # Fixed IP addresses for Services VLAN (10.10.20.0/24)
+    # According to network design:
+    # - 10.10.20.1: OPNsense (VLAN gateway)
+    # - 10.10.20.10: Management VM (Debian with all services)
+    # - 10.10.20.20: Proxmox host (for management access)
+    display "Configuring Services VLAN IP addresses..."
     
-    # Probe for available container host IP
-    for i in $(seq $start_ip 250); do
-        local test_ip="${base_network}.${i}"
-        if ! ping -c 1 -W 1 "$test_ip" >/dev/null 2>&1; then
-            container_host_ip="$test_ip"
-            log "Found available IP for container host: $container_host_ip"
-            break
-        fi
-    done
+    local mgmt_vm_ip="10.10.20.10"
+    local services_gateway="10.10.20.1"
+    local services_network="10.10.20"
+    local proxmox_services_ip="10.10.20.20"
     
-    if [[ -z "$container_host_ip" ]]; then
-        error_exit "Could not find available IP address in range ${base_network}.${start_ip}-250"
-    fi
-    
-    # Find next available IP for Caddy (skip the one we just allocated)
-    local caddy_host_ip=""
-    for i in $(seq $((start_ip + 1)) 250); do
-        local test_ip="${base_network}.${i}"
-        if [[ "$test_ip" != "$container_host_ip" ]] && ! ping -c 1 -W 1 "$test_ip" >/dev/null 2>&1; then
-            caddy_host_ip="$test_ip"
-            log "Found available IP for Caddy host: $caddy_host_ip"
-            break
-        fi
-    done
-    
-    if [[ -z "$caddy_host_ip" ]]; then
-        # Fallback: use container_host_ip + 1 if we can't find another
-        local last_octet="${container_host_ip##*.}"
-        caddy_host_ip="${base_network}.$((last_octet + 1))"
-        log "Using fallback IP for Caddy host: $caddy_host_ip"
-    fi
+    log "Management VM IP: $mgmt_vm_ip"
+    log "Services gateway (OPNsense): $services_gateway"
+    log "Proxmox Services IP: $proxmox_services_ip"
+    log "Services network: ${services_network}.0/24"
     
     # Write configuration file
     cat > "$CONFIG_FILE" <<EOF
 # PrivateBox Configuration
 # Generated: $(date '+%Y-%m-%d %H:%M:%S')
 
-# Network Configuration
-GATEWAY="$gateway"
-VM_NET_BRIDGE="$bridge"
-BASE_NETWORK="$base_network"
-PROXMOX_HOST="$proxmox_host"
-NETMASK="24"
+# WAN Network (Internet access)
+WAN_BRIDGE="$wan_bridge"
+PROXMOX_IP="$proxmox_ip"
 
-# VM Network IPs (by design)
-STATIC_IP="$container_host_ip"
-CONTAINER_HOST_IP="$container_host_ip"
-CADDY_HOST_IP="$caddy_host_ip"
+# Services VLAN Configuration (10.10.20.0/24)
+SERVICES_NETWORK="$services_network"
+SERVICES_GATEWAY="$services_gateway"
+SERVICES_NETMASK="24"
+MGMT_VM_IP="$mgmt_vm_ip"
+PROXMOX_SERVICES_IP="$proxmox_services_ip"
 
 # VM Configuration
 VMID="$VMID"
@@ -277,11 +274,15 @@ SERVICES_PASSWORD="$services_password"
 # Proxmox API Token
 PROXMOX_TOKEN_ID="$proxmox_token_id"
 PROXMOX_TOKEN_SECRET="$proxmox_token_secret"
-PROXMOX_API_HOST="$proxmox_host_ip"
+PROXMOX_API_HOST="$proxmox_api_host"
 PROXMOX_NODE="$proxmox_node"
 
-# Legacy compatibility
-STORAGE="$STORAGE"
+# Legacy compatibility (for create-vm.sh)
+STATIC_IP="$mgmt_vm_ip"
+GATEWAY="$services_gateway"
+NETMASK="24"
+CONTAINER_HOST_IP="$mgmt_vm_ip"
+PROXMOX_HOST="$proxmox_ip"
 EOF
 
     log "Configuration generated successfully"
@@ -290,11 +291,14 @@ EOF
     # Display summary
     display ""
     display "Configuration Summary:"
-    display "  Network: ${base_network}.0/24"
-    display "  Gateway: $gateway"
-    display "  Bridge: $bridge"
-    display "  Management VM IP: $container_host_ip (probed as available)"
-    display "  Caddy VM IP: $caddy_host_ip (reserved for future use)"
+    display "  WAN Bridge: $wan_bridge"
+    display "  Proxmox IP: $proxmox_ip"
+    display ""
+    display "  Services VLAN (VLAN 20):"
+    display "    Network: ${services_network}.0/24"
+    display "    Gateway: $services_gateway (OPNsense)"
+    display "    Management VM: $mgmt_vm_ip"
+    display "    Proxmox: $proxmox_services_ip"
 }
 
 # Generate SSH keys if they don't exist
@@ -448,6 +452,73 @@ fix_vmbr1_config() {
     create_vmbr1 "$nic"
 }
 
+# Configure Services Network
+configure_services_network() {
+    display "Configuring Services network (VLAN 20)..."
+    
+    # Check if VLAN 20 is already configured in interfaces file
+    if grep -q "^auto vmbr1.20" /etc/network/interfaces; then
+        log "VLAN 20 interface already configured in /etc/network/interfaces"
+        display "  ✓ Services network already configured on VLAN 20"
+        
+        # Ensure interface is up
+        if ! ip link show vmbr1.20 &>/dev/null 2>&1; then
+            log "VLAN 20 interface not active, bringing it up..."
+            ifup vmbr1.20 2>/dev/null || true
+        fi
+    else
+        # Add persistent VLAN 20 configuration
+        log "Adding persistent VLAN 20 configuration to /etc/network/interfaces"
+        cat >> /etc/network/interfaces <<EOF
+
+auto vmbr1.20
+iface vmbr1.20 inet static
+	address 10.10.20.20/24
+	# PrivateBox Services network (VLAN 20)
+EOF
+        
+        display "  ✓ Added persistent VLAN 20 configuration"
+        
+        # Bring up the VLAN interface using ifup for immediate activation
+        log "Bringing up VLAN 20 interface..."
+        if ifup vmbr1.20 2>/dev/null; then
+            display "  ✓ VLAN 20 interface (10.10.20.20/24) is active"
+            log "VLAN 20 interface brought up successfully"
+        else
+            # Fallback to manual activation if ifup fails
+            log "ifup failed, trying manual activation..."
+            ip link add link vmbr1 name vmbr1.20 type vlan id 20 2>/dev/null || true
+            ip link set vmbr1.20 up
+            ip addr add 10.10.20.20/24 dev vmbr1.20 2>/dev/null || true
+            display "  ✓ VLAN 20 interface (10.10.20.20/24) is active (manual)"
+        fi
+    fi
+    
+    # Ensure no conflicting IP on untagged interface
+    if ip addr show vmbr1 | grep -q "10.10.20.20/24"; then
+        log "WARNING: Found 10.10.20.20/24 on untagged vmbr1, removing..."
+        ip addr del 10.10.20.20/24 dev vmbr1 2>/dev/null || true
+        display "  ⚠ Removed conflicting untagged IP from vmbr1"
+    fi
+    
+    # Verify VLAN 20 is active and has correct IP
+    if ip addr show vmbr1.20 2>/dev/null | grep -q "10.10.20.20/24"; then
+        log "Verified: VLAN 20 interface has correct IP"
+    else
+        log "WARNING: VLAN 20 interface missing expected IP, attempting to add..."
+        ip addr add 10.10.20.20/24 dev vmbr1.20 2>/dev/null || true
+    fi
+    
+    # Test connectivity to OPNsense (if deployed)
+    if ping -I vmbr1.20 -c 1 -W 2 10.10.20.1 &>/dev/null; then
+        log "OPNsense is reachable at 10.10.20.1 via VLAN 20"
+        display "  ✓ OPNsense detected at 10.10.20.1 on VLAN 20"
+    else
+        log "OPNsense not yet deployed or VLAN 20 not configured on OPNsense"
+        display "  ℹ OPNsense will be at 10.10.20.1 on VLAN 20"
+    fi
+}
+
 # Main execution
 main() {
     display "Starting host preparation..."
@@ -459,11 +530,14 @@ main() {
     # Generate SSH keys if needed
     generate_ssh_keys
     
-    # Detect network
-    detect_network
+    # Detect WAN bridge for OPNsense
+    detect_wan_bridge
     
     # Setup network bridges
     setup_network_bridges
+    
+    # Configure Services network
+    configure_services_network
     
     # Generate configuration
     generate_config
