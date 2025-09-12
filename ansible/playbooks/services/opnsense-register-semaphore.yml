@@ -4,8 +4,9 @@
   gather_facts: yes
   vars:
     # Template configuration for Semaphore
-    semaphore_environment: "SemaphoreAPI"
-    semaphore_category: "infrastructure"
+    template_config:
+      semaphore_environment: "SemaphoreAPI"
+      semaphore_category: "infrastructure"
     
     # Fixed internal IPs
     opnsense_ip: "10.10.20.1"
