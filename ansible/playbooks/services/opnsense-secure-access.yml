@@ -14,7 +14,7 @@
     
     # Passwords
     opnsense_default_password: "opnsense"
-    admin_password: "{{ SERVICES_PASSWORD | default('') }}"  # TEST: Using SERVICES_PASSWORD instead
+    admin_password: "{{ ADMIN_PASSWORD | default('') }}"
     
     # SSH configuration
     credentials_dir: "/root/.credentials/opnsense"
@@ -213,8 +213,7 @@
       set_fact:
         password_sync_needed: >-
           {{ admin_password | length > 0 and 
-             admin_password != opnsense_default_password and
-             (working_password == opnsense_default_password or current_password_is_default | default(false)) }}
+             admin_password != opnsense_default_password }}
 
     - name: Sync OPNsense password with Semaphore
       block:
