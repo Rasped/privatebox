@@ -43,7 +43,7 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
     <timezone>Etc/UTC</timezone>
     <timeservers>0.opnsense.pool.ntp.org 1.opnsense.pool.ntp.org 2.opnsense.pool.ntp.org 3.opnsense.pool.ntp.org</timeservers>
     <webgui>
-      <protocol>http</protocol>
+      <protocol>https</protocol>
       <ssl-certref>689e032db0ad5</ssl-certref>
       <port/>
       <ssl-ciphers/>
