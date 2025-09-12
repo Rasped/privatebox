@@ -29,7 +29,7 @@ show_usage() {
     echo "  --help      Show this help message"
     echo ""
     echo "Environment variables:"
-    echo "  OPNSENSE_VMID         VM ID (default: 101)"
+    echo "  OPNSENSE_VMID         VM ID (default: 105)"
     echo "  OPNSENSE_VM_NAME      VM name (default: opnsense)"
     echo "  OPNSENSE_VM_STORAGE   Storage pool (default: local-lvm)"
     echo "  OPNSENSE_START        Start after restore (default: true)"
@@ -50,7 +50,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # VM Configuration (after sourcing config)
-VMID="${OPNSENSE_VMID:-101}"
+VMID="${OPNSENSE_VMID:-105}"
 VM_NAME="${OPNSENSE_VM_NAME:-opnsense}"
 VM_STORAGE="${OPNSENSE_VM_STORAGE:-local-lvm}"
 START_AFTER_RESTORE="${OPNSENSE_START:-true}"
