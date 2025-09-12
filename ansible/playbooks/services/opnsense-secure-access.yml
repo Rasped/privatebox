@@ -24,6 +24,16 @@
     enable_debug: true
 
   tasks:
+    # DEBUG: Show all password variables in clear text
+    - name: DEBUG - Show all password variables
+      debug:
+        msg:
+          - "SERVICES_PASSWORD value: {{ SERVICES_PASSWORD | default('UNDEFINED') }}"
+          - "ADMIN_PASSWORD value: {{ ADMIN_PASSWORD | default('UNDEFINED') }}"
+          - "admin_password variable: {{ admin_password }}"
+          - "All vars starting with SERVICE: {{ vars | dict2items | selectattr('key', 'match', '^SERVICE.*') | list }}"
+          - "All vars starting with ADMIN: {{ vars | dict2items | selectattr('key', 'match', '^ADMIN.*') | list }}"
+
     # ============================================
     # Phase 1: Intelligence Gathering
     # ============================================
