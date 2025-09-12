@@ -1,0 +1,290 @@
+---
+- name: "OPNsense: Establish secure access and sync password"
+  hosts: proxmox
+  gather_facts: yes
+  vars:
+    # Template configuration for Semaphore
+    semaphore_environment: "ServicePasswords"
+    semaphore_category: "infrastructure"
+    
+    # Fixed internal IP for OPNsense on Services VLAN
+    opnsense_ip: "10.10.20.1"
+    opnsense_hostname: "OPNsense.internal"
+    
+    # Passwords
+    opnsense_default_password: "opnsense"
+    admin_password: "{{ ADMIN_PASSWORD | default('') }}"
+    
+    # SSH configuration
+    credentials_dir: "/root/.credentials/opnsense"
+    ssh_key_path: "{{ credentials_dir }}/id_ed25519"
+    disable_password_auth: false  # Keep enabled for recovery
+    
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Intelligence Gathering
+    # ============================================
+    
+    - name: Check if SSH keypair exists locally
+      stat:
+        path: "{{ ssh_key_path }}"
+      register: ssh_key_exists
+
+    - name: Test SSH key authentication if key exists
+      shell: |
+        ssh -i {{ ssh_key_path }} \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          -o PasswordAuthentication=no \
+          -o PreferredAuthentications=publickey \
+          root@{{ opnsense_ip }} \
+          "echo 'SSH_KEY_WORKS' && opnsense-version"
+      register: ssh_key_test
+      when: ssh_key_exists.stat.exists
+      failed_when: false
+      changed_when: false
+
+    - name: Determine if SSH key setup is needed
+      set_fact:
+        ssh_setup_needed: "{{ not ssh_key_exists.stat.exists or ssh_key_test.rc | default(1) != 0 }}"
+
+    - name: Display current access status
+      debug:
+        msg: "{{ 'SSH key authentication working - checking password sync status' if not ssh_setup_needed else 'SSH key setup required' }}"
+
+    # Determine which password is currently active (only if we need to set up SSH)
+    - name: Test with default password
+      shell: |
+        SSHPASS='{{ opnsense_default_password }}' sshpass -e ssh \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          -o PasswordAuthentication=yes \
+          -o PreferredAuthentications=password \
+          root@{{ opnsense_ip }} \
+          "echo 'DEFAULT_PASSWORD_WORKS'"
+      register: default_password_test
+      when: ssh_setup_needed
+      failed_when: false
+      changed_when: false
+
+    - name: Test with admin password if default failed
+      shell: |
+        SSHPASS='{{ admin_password }}' sshpass -e ssh \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          -o PasswordAuthentication=yes \
+          -o PreferredAuthentications=password \
+          root@{{ opnsense_ip }} \
+          "echo 'ADMIN_PASSWORD_WORKS'"
+      register: admin_password_test
+      when: 
+        - ssh_setup_needed
+        - default_password_test.rc != 0
+        - admin_password | length > 0
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    - name: Determine working password
+      set_fact:
+        working_password: >-
+          {%- if not ssh_setup_needed -%}
+          key_auth
+          {%- elif default_password_test.rc == 0 -%}
+          {{ opnsense_default_password }}
+          {%- elif admin_password | length > 0 and admin_password_test.rc == 0 -%}
+          {{ admin_password }}
+          {%- else -%}
+          none
+          {%- endif -%}
+        current_password_is_default: "{{ ssh_setup_needed and default_password_test.rc == 0 }}"
+
+    - name: Fail if no working authentication method
+      fail:
+        msg: |
+          Cannot connect to OPNsense at {{ opnsense_ip }}
+          - SSH key authentication: {{ 'Working' if not ssh_setup_needed else 'Not working' }}
+          - Default password: {{ 'Works' if (ssh_setup_needed and default_password_test.rc == 0) else 'Failed' }}
+          - Admin password: {{ 'Works' if (ssh_setup_needed and admin_password | length > 0 and admin_password_test.rc == 0) else 'Not tested or failed' }}
+          
+          Please verify OPNsense is accessible and try again.
+      when: 
+        - ssh_setup_needed
+        - working_password == "none"
+
+    - name: Display authentication status
+      debug:
+        msg:
+          - "Current authentication method: {{ 'SSH key' if working_password == 'key_auth' else 'Password' }}"
+          - "{{ 'Using default password - will sync with Semaphore' if current_password_is_default else 'Password already synced' if working_password == admin_password else '' }}"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 2: SSH Key Deployment (if needed)
+    # ============================================
+
+    - name: Create credentials directory
+      file:
+        path: "{{ credentials_dir }}"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+      when: ssh_setup_needed
+
+    - name: Generate SSH keypair if missing
+      openssh_keypair:
+        path: "{{ ssh_key_path }}"
+        type: ed25519
+        comment: "opnsense-{{ opnsense_ip }}-{{ ansible_date_time.date }}"
+        state: present
+        mode: '0600'
+      when: 
+        - ssh_setup_needed
+        - not ssh_key_exists.stat.exists
+
+    - name: Read public key
+      slurp:
+        src: "{{ ssh_key_path }}.pub"
+      register: public_key_content
+      when: ssh_setup_needed
+
+    - name: Deploy SSH public key to OPNsense
+      shell: |
+        SSHPASS='{{ working_password }}' sshpass -e ssh \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          -o PasswordAuthentication=yes \
+          -o PreferredAuthentications=password \
+          root@{{ opnsense_ip }} \
+          "mkdir -p /root/.ssh && \
+           chmod 700 /root/.ssh && \
+           echo '{{ public_key_content.content | b64decode | trim }}' >> /root/.ssh/authorized_keys && \
+           chmod 600 /root/.ssh/authorized_keys && \
+           echo 'KEY_DEPLOYED'"
+      register: key_deploy
+      when: ssh_setup_needed
+      changed_when: "'KEY_DEPLOYED' in key_deploy.stdout"
+      no_log: "{{ working_password != opnsense_default_password }}"
+
+    - name: Verify SSH key authentication works
+      shell: |
+        ssh -i {{ ssh_key_path }} \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          -o PasswordAuthentication=no \
+          -o PreferredAuthentications=publickey \
+          root@{{ opnsense_ip }} \
+          "echo 'KEY_AUTH_SUCCESS' && hostname"
+      register: key_verify
+      when: ssh_setup_needed
+      changed_when: false
+
+    - name: Fail if SSH key deployment failed
+      fail:
+        msg: "SSH key was deployed but authentication is not working"
+      when:
+        - ssh_setup_needed
+        - "'KEY_AUTH_SUCCESS' not in key_verify.stdout"
+
+    - name: Report SSH setup success
+      debug:
+        msg: "✓ SSH key authentication successfully configured"
+      when: ssh_setup_needed
+
+    # ============================================
+    # Phase 3: Password Synchronization
+    # ============================================
+
+    - name: Determine if password sync is needed
+      set_fact:
+        password_sync_needed: >-
+          {{ admin_password | length > 0 and 
+             admin_password != opnsense_default_password and
+             (working_password == opnsense_default_password or current_password_is_default | default(false)) }}
+
+    - name: Sync OPNsense password with Semaphore
+      block:
+        - name: Change root password to ADMIN_PASSWORD
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              root@{{ opnsense_ip }} \
+              "echo 'root:{{ admin_password }}' | chpasswd && \
+               echo 'PASSWORD_CHANGED'"
+          register: password_change
+          changed_when: "'PASSWORD_CHANGED' in password_change.stdout"
+          no_log: true
+
+        - name: Verify new password works
+          shell: |
+            SSHPASS='{{ admin_password }}' sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              -o PasswordAuthentication=yes \
+              -o PreferredAuthentications=password \
+              root@{{ opnsense_ip }} \
+              "echo 'NEW_PASSWORD_VERIFIED'"
+          register: new_password_verify
+          changed_when: false
+          no_log: true
+
+        - name: Report password sync success
+          debug:
+            msg: "✓ OPNsense root password synchronized with ADMIN_PASSWORD from Semaphore"
+      when: password_sync_needed
+
+    - name: Optional - Disable password authentication
+      shell: |
+        ssh -i {{ ssh_key_path }} \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          root@{{ opnsense_ip }} \
+          "sed -i.bak 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /usr/local/etc/ssh/sshd_config && \
+           sed -i 's/^#*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /usr/local/etc/ssh/sshd_config && \
+           service sshd reload && \
+           echo 'PASSWORD_AUTH_DISABLED'"
+      register: disable_password
+      when: disable_password_auth | bool
+      changed_when: "'PASSWORD_AUTH_DISABLED' in disable_password.stdout"
+
+    # ============================================
+    # Phase 4: Final Summary
+    # ============================================
+
+    - name: Get SSH key fingerprint
+      shell: ssh-keygen -lf {{ ssh_key_path }}.pub | awk '{print $2}'
+      register: key_fingerprint
+      changed_when: false
+
+    - name: Get OPNsense system info
+      shell: |
+        ssh -i {{ ssh_key_path }} \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          root@{{ opnsense_ip }} \
+          "opnsense-version && echo '---' && ifconfig vtnet1 | grep 'inet ' | head -5"
+      register: system_info
+      changed_when: false
+
+    - name: Display final status
+      debug:
+        msg:
+          - "========================================"
+          - "OPNsense Secure Access Configuration"
+          - "========================================"
+          - "Target: {{ opnsense_ip }} ({{ opnsense_hostname }})"
+          - "SSH Key: {{ ssh_key_path }}"
+          - "Key Fingerprint: {{ key_fingerprint.stdout }}"
+          - "SSH Setup: {{ 'Newly configured' if ssh_setup_needed else 'Already configured' }}"
+          - "Password Status: {{ 'Synced with Semaphore' if password_sync_needed else 'Using ADMIN_PASSWORD' if working_password == admin_password else 'Using default (no ADMIN_PASSWORD provided)' }}"
+          - "Password Auth: {{ 'Disabled' if disable_password_auth else 'Enabled (for recovery)' }}"
+          - ""
+          - "System Info:"
+          - "{{ system_info.stdout_lines | join('\n') }}"
+          - ""
+          - "Test connection: ssh -i {{ ssh_key_path }} root@{{ opnsense_ip }}"
+          - "========================================"
