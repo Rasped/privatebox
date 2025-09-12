@@ -24,16 +24,6 @@
     enable_debug: true
 
   tasks:
-    # DEBUG: Show all password variables in clear text
-    - name: DEBUG - Show all password variables
-      debug:
-        msg:
-          - "SERVICES_PASSWORD value: {{ SERVICES_PASSWORD | default('UNDEFINED') }}"
-          - "ADMIN_PASSWORD value: {{ ADMIN_PASSWORD | default('UNDEFINED') }}"
-          - "admin_password variable: {{ admin_password }}"
-          - "All vars starting with SERVICE: {{ vars | dict2items | selectattr('key', 'match', '^SERVICE.*') | list }}"
-          - "All vars starting with ADMIN: {{ vars | dict2items | selectattr('key', 'match', '^ADMIN.*') | list }}"
-
     # ============================================
     # Phase 1: Intelligence Gathering
     # ============================================
@@ -243,16 +233,6 @@
 
     - name: Sync OPNsense password with Semaphore
       block:
-        - name: Debug password variables
-          debug:
-            msg: 
-              - "admin_password (from SERVICES_PASSWORD) is {{ 'set' if admin_password else 'empty' }}"
-              - "Password length: {{ admin_password | length }}"
-              - "First char: {{ admin_password[0] | default('N/A') }}"
-              - "SERVICES_PASSWORD direct: {{ SERVICES_PASSWORD | default('NOT SET') | length }} chars"
-              - "ADMIN_PASSWORD direct: {{ ADMIN_PASSWORD | default('NOT SET') | length }} chars"
-          when: password_sync_needed
-
         - name: Change root password to ADMIN_PASSWORD
           shell: |
             ssh -i {{ ssh_key_path }} \
