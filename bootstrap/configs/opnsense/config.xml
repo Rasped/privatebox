@@ -235,6 +235,7 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
     <dnssec>0</dnssec>
     <regdhcpdomain/>
     <interface>lan</interface>
+    <interface>opt1</interface>
     <port>0</port>
     <dns_forward_max/>
     <cache_size/>
