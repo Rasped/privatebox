@@ -705,12 +705,6 @@ validate_deployment() {
         display "    This is expected if VLAN 20 isn't trunked to Proxmox"
     fi
     
-    # Check web interface via Services VLAN
-    if nc -zv $OPNSENSE_SERVICES_IP 443 &>/dev/null; then
-        display "  ✓ Web interface available on port 443 via Services VLAN"
-    else
-        display "  ⚠ Web interface not yet available"
-    fi
     
     if [[ "$all_good" == "true" ]]; then
         display_always "  ✓ All validations passed"
