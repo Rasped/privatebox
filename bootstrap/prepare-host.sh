@@ -335,7 +335,42 @@ setup_network_bridges() {
     log "Configuring network bridges for PrivateBox..."
     display "  Checking network bridge configuration..."
     
-    # Check for dual NIC requirement
+    # First check if vmbr1 already exists and is properly configured
+    if ip link show vmbr1 &>/dev/null 2>&1; then
+        log "vmbr1 already exists, checking configuration..."
+        
+        # Check configuration in both possible locations
+        local bridge_ports=""
+        if [[ -f /etc/network/interfaces.d/vmbr1 ]]; then
+            bridge_ports=$(grep "bridge-ports" /etc/network/interfaces.d/vmbr1 2>/dev/null | awk '{print $2}')
+        fi
+        if [[ -z "$bridge_ports" ]]; then
+            bridge_ports=$(grep -A5 "iface vmbr1" /etc/network/interfaces 2>/dev/null | grep "bridge-ports" | awk '{print $2}')
+        fi
+        
+        # Check if it's configured with a physical NIC (not "none" or empty)
+        if [[ -n "$bridge_ports" ]] && [[ "$bridge_ports" != "none" ]]; then
+            # vmbr1 is properly configured, check if it's VLAN-aware
+            local vlan_aware=$(grep -A10 "iface vmbr1" /etc/network/interfaces 2>/dev/null | grep "bridge-vlan-aware yes" || true)
+            if [[ -n "$vlan_aware" ]]; then
+                display "  ✓ vmbr1 already properly configured on $bridge_ports with VLAN support"
+                log "vmbr1 is already properly configured on $bridge_ports with VLAN support"
+                return 0  # All good, nothing to do
+            else
+                display "  ⚠ vmbr1 exists on $bridge_ports but missing VLAN support, updating..."
+                # Add VLAN support to existing bridge
+                sed -i '/iface vmbr1/,/^$/s/bridge-fd 0/bridge-fd 0\n\tbridge-vlan-aware yes\n\tbridge-vids 2-4094/' /etc/network/interfaces
+                ifdown vmbr1 2>/dev/null || true
+                ifup vmbr1 2>/dev/null || true
+                display "  ✓ vmbr1 updated with VLAN support"
+                return 0
+            fi
+        fi
+        # If we get here, vmbr1 exists but has no physical port
+        display "  ⚠ vmbr1 exists but has no physical port"
+    fi
+    
+    # Need to find a NIC for vmbr1
     local nic_count=$(ip link show | grep -E "^[0-9]+: (enp|eno|eth)" | grep -v "lo:" | wc -l)
     local second_nic=""
     
@@ -373,26 +408,9 @@ setup_network_bridges() {
         Please ensure your system has two network interfaces and one is not assigned to any bridge."
     fi
     
-    # Check if vmbr1 already exists
+    # If vmbr1 exists but needs fixing, fix it
     if ip link show vmbr1 &>/dev/null 2>&1; then
-        log "vmbr1 already exists, checking configuration..."
-        
-        # Check configuration in both possible locations
-        local bridge_ports=""
-        if [[ -f /etc/network/interfaces.d/vmbr1 ]]; then
-            bridge_ports=$(grep "bridge-ports" /etc/network/interfaces.d/vmbr1 2>/dev/null | awk '{print $2}')
-        fi
-        if [[ -z "$bridge_ports" ]]; then
-            bridge_ports=$(grep -A5 "iface vmbr1" /etc/network/interfaces 2>/dev/null | grep "bridge-ports" | awk '{print $2}')
-        fi
-        
-        if [[ "$bridge_ports" == "none" ]] || [[ -z "$bridge_ports" ]]; then
-            display "  ⚠ vmbr1 exists but has no physical port, fixing..."
-            fix_vmbr1_config "$second_nic"
-        else
-            display "  ✓ vmbr1 already configured on $bridge_ports"
-            log "vmbr1 is already properly configured on $bridge_ports"
-        fi
+        fix_vmbr1_config "$second_nic"
     else
         # Create vmbr1
         create_vmbr1 "$second_nic"
@@ -456,16 +474,31 @@ fix_vmbr1_config() {
 configure_services_network() {
     display "Configuring Services network (VLAN 20)..."
     
-    # Check if VLAN 20 is already configured in interfaces file
-    if grep -q "^auto vmbr1.20" /etc/network/interfaces; then
-        log "VLAN 20 interface already configured in /etc/network/interfaces"
+    # Check if VLAN 20 interface exists and has correct IP
+    if ip addr show vmbr1.20 2>/dev/null | grep -q "10.10.20.20/24"; then
+        log "VLAN 20 interface already has correct IP 10.10.20.20/24"
         display "  ✓ Services network already configured on VLAN 20"
         
-        # Ensure interface is up
-        if ! ip link show vmbr1.20 &>/dev/null 2>&1; then
-            log "VLAN 20 interface not active, bringing it up..."
-            ifup vmbr1.20 2>/dev/null || true
+        # Verify it's in the config file for persistence
+        if ! grep -q "^auto vmbr1.20" /etc/network/interfaces; then
+            log "Adding VLAN 20 to interfaces file for persistence"
+            cat >> /etc/network/interfaces <<EOF
+
+auto vmbr1.20
+iface vmbr1.20 inet static
+	address 10.10.20.20/24
+	# PrivateBox Services network (VLAN 20)
+EOF
+            display "  ✓ Added persistent configuration for VLAN 20"
         fi
+        return 0
+    fi
+    
+    # Check if VLAN 20 is configured in interfaces file but not active
+    if grep -q "^auto vmbr1.20" /etc/network/interfaces; then
+        log "VLAN 20 interface configured but not active, bringing it up..."
+        display "  Activating VLAN 20 interface..."
+        ifup vmbr1.20 2>/dev/null || true
     else
         # Add persistent VLAN 20 configuration
         log "Adding persistent VLAN 20 configuration to /etc/network/interfaces"
