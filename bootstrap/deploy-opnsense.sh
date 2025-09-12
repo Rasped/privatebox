@@ -592,6 +592,38 @@ apply_custom_config() {
     # Give services time to fully start
     display "  Waiting 30 seconds for services to stabilize..."
     sleep 30
+    
+    # Wait for VLAN interfaces to come up
+    display_always "  Checking for VLAN interfaces..."
+    local vlan_wait=0
+    local vlan_max_wait=180
+    local vlans_found=false
+    
+    while [[ $vlan_wait -lt $vlan_max_wait ]]; do
+        local vlan_output=$(sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
+            ssh -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout=5 \
+                ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
+                "ifconfig | grep -E 'vlan (20|30|40|50|60|70)'" 2>/dev/null || true)
+        
+        if [[ -n "$vlan_output" ]]; then
+            display_always "  ✓ [$(date +%T)] VLAN interfaces are configured"
+            vlans_found=true
+            echo "[$(date +%T)] VLAN interfaces confirmed active" >> "$DEPLOYMENT_INFO_FILE"
+            break
+        else
+            display "  [$(date +%T)] Waiting for VLAN interfaces to come up (${vlan_wait}s)..."
+        fi
+        
+        sleep 5
+        ((vlan_wait+=5))
+    done
+    
+    if [[ "$vlans_found" == "false" ]]; then
+        display_always "  ⚠ VLAN interfaces did not come up after ${vlan_max_wait}s"
+        display_always "    Configuration may need manual verification"
+    fi
 }
 
 # Validate final setup
