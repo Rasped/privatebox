@@ -605,7 +605,7 @@ apply_custom_config() {
                 -o UserKnownHostsFile=/dev/null \
                 -o ConnectTimeout=5 \
                 ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
-                "ifconfig | grep -E 'vlan (20|30|40|50|60|70)'" 2>/dev/null || true)
+                "ifconfig | grep -E 'vlan: (20|30|40|50|60|70)'" 2>/dev/null || true)
         
         if [[ -n "$vlan_output" ]]; then
             display_always "  ✓ [$(date +%T)] VLAN interfaces are configured"
@@ -675,7 +675,7 @@ validate_deployment() {
                 -o UserKnownHostsFile=/dev/null \
                 -o ConnectTimeout=5 \
                 ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
-                "ifconfig | grep -E 'vlan (20|30|40|50|60|70)'" 2>/dev/null || true)
+                "ifconfig | grep -E 'vlan: (20|30|40|50|60|70)'" 2>/dev/null || true)
         
         if [[ -n "$vlan_output" ]]; then
             display "  ✓ VLAN interfaces are configured"
