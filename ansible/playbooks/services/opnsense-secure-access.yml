@@ -214,7 +214,7 @@
               -o StrictHostKeyChecking=no \
               -o ConnectTimeout=5 \
               root@{{ opnsense_ip }} \
-              "echo '{{ admin_password }}' | pw usermod root -h 0 && \
+              "echo {{ admin_password | quote }} | pw usermod root -h 0 && \
                echo 'PASSWORD_CHANGED'"
           register: password_change
           changed_when: "'PASSWORD_CHANGED' in password_change.stdout"
