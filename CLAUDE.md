@@ -20,7 +20,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Proxmox: latest only. Hardware: Intel N100 target.
 - VM OS: Debian 13 cloud image.
 - Bridges: `vmbr0` = WAN, `vmbr1` = LAN (VLAN-aware).
-- Network: Default LAN (untagged) = Trusted (10.10.10.0/24), VLAN 20 = Services (10.10.20.0/24).
+- Network design: See `documentation/vlan-design.md` for complete architecture.
 - OPNsense: use VM template approach (manual config → convert to template → store on GitHub).
 
 ## Flow Summary
@@ -35,13 +35,11 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - `ssh root@192.168.1.10 "curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash"`
   - Script auto-detects network and configures everything. Check `/tmp/privatebox-config.conf` if you need different settings.
 
-## Networking & TLS
-- Services on VLAN 20 (10.10.20.0/24): Proxmox, Management VM, AdGuard.
-- Trusted devices on default LAN (10.10.10.0/24, untagged) for consumer router compatibility.
-- Bind all services to the management VM IP (10.10.20.20).
+## TLS & DNS
 - Use dedicated subdomain (e.g., `pb.example.com`) → wildcard `*.pb.example.com` via DNS‑01.
 - Split‑horizon DNS: internal A records only (AdGuard); no public exposure.
 - Store DNS API creds in Semaphore environments for Caddy.
+- All services bind to management VM IP (see `documentation/vlan-design.md`).
 
 ## Secrets
 - Ansible Vault for static/encrypted repo data.
@@ -78,7 +76,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - `curl -sS --cookie /tmp/sem.cookies http://<HOST>:3000/api/project/<PID>/tasks`
 
 Notes
-- Use `<HOST>=192.168.1.20:3000` from outside, or `localhost:3000` inside the VM.
+- Use `<HOST>=<VM-IP>:3000` from outside, or `localhost:3000` inside the VM.
 - Inside VM you can `source /etc/privatebox/config.env` and use `$SERVICES_PASSWORD`.
 
 ## Coding Checklist

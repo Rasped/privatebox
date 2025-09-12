@@ -57,8 +57,8 @@ START_AFTER_RESTORE="${OPNSENSE_START:-true}"
 WAN_BRIDGE="${WAN_BRIDGE:-vmbr0}"  # From prepare-host.sh config
 
 # Template Configuration
-TEMPLATE_URL="https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/opnsense.vma.zst"
-TEMPLATE_FILENAME="opnsense.vma.zst"
+TEMPLATE_URL="https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/vzdump-qemu-105-opnsense.vma.zst"
+TEMPLATE_FILENAME="vzdump-qemu-105-opnsense.vma.zst"
 TEMPLATE_MD5="c6d251e1c62f065fd28d720572f8f943"
 TEMPLATE_SIZE_MB=767
 CACHE_DIR="/var/tmp/opnsense-template"
