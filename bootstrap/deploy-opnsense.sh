@@ -385,6 +385,10 @@ EOF
     # Set VM name
     qm set $VMID --name "$VM_NAME" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
     
+    # IMPORTANT: Convert from template to regular VM (restored VMs may be marked as templates)
+    display "  Converting from template to regular VM..."
+    qm set $VMID --template 0 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
+    
     # Set correct network bridges (in case template had different ones)
     qm set $VMID --net0 "virtio,bridge=${WAN_BRIDGE}" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
     qm set $VMID --net1 "virtio,bridge=vmbr1" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
