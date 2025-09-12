@@ -95,7 +95,9 @@
       "Bash(ssh -i /tmp/opnsense-key:*)",
       "Bash(SSHPASS='opnsense' sshpass:*)",
       "Bash(python3:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(gh release delete:*)",
+      "Bash(gh release upload:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
