@@ -341,6 +341,7 @@ restore_vm() {
     
     local template_path="${CACHE_DIR}/${TEMPLATE_FILENAME}"
     local restore_file="$template_path"
+    local temp_template_id=9999  # Temporary ID for the restored template
     
     # Check if qmrestore supports zst directly
     if ! qmrestore --help 2>&1 | grep -q "\.zst"; then
@@ -366,28 +367,45 @@ Template: $TEMPLATE_FILENAME
 ======================================
 EOF
     
-    # Restore VM
-    display "  Running qmrestore..."
-    echo "[$(date +%T)] Starting VM restoration..." >> "$DEPLOYMENT_INFO_FILE"
+    # Restore as template first (using temporary ID)
+    display "  Restoring template with temporary ID $temp_template_id..."
+    echo "[$(date +%T)] Starting template restoration..." >> "$DEPLOYMENT_INFO_FILE"
     
-    if qmrestore "$restore_file" $VMID \
+    if qmrestore "$restore_file" $temp_template_id \
                  --storage $VM_STORAGE \
                  --unique 1 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
-        echo "[$(date +%T)] VM restoration completed" >> "$DEPLOYMENT_INFO_FILE"
-        display_always "  ✓ VM restored successfully"
+        echo "[$(date +%T)] Template restoration completed" >> "$DEPLOYMENT_INFO_FILE"
+        display_always "  ✓ Template restored successfully"
     else
-        error_exit "Failed to restore VM from template"
+        error_exit "Failed to restore template"
+    fi
+    
+    # Clone template to final VM
+    display "  Cloning template to VM $VMID..."
+    echo "[$(date +%T)] Cloning template to VM $VMID..." >> "$DEPLOYMENT_INFO_FILE"
+    
+    if qm clone $temp_template_id $VMID \
+                --name "$VM_NAME" \
+                --full 1 \
+                --storage $VM_STORAGE 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
+        echo "[$(date +%T)] VM cloning completed" >> "$DEPLOYMENT_INFO_FILE"
+        display_always "  ✓ VM cloned successfully"
+    else
+        # Clean up template on failure
+        qm destroy $temp_template_id --purge 2>/dev/null || true
+        error_exit "Failed to clone template to VM"
+    fi
+    
+    # Delete the temporary template
+    display "  Cleaning up temporary template..."
+    if qm destroy $temp_template_id --purge 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
+        display_always "  ✓ Temporary template removed"
+    else
+        display "  ⚠ Warning: Could not remove temporary template $temp_template_id"
     fi
     
     # Configure VM settings
     display "  Configuring VM settings..."
-    
-    # Set VM name
-    qm set $VMID --name "$VM_NAME" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
-    
-    # IMPORTANT: Convert from template to regular VM (restored VMs may be marked as templates)
-    display "  Converting from template to regular VM..."
-    qm set $VMID --template 0 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
     
     # Set correct network bridges (in case template had different ones)
     qm set $VMID --net0 "virtio,bridge=${WAN_BRIDGE}" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
