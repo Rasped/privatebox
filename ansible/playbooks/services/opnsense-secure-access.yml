@@ -209,11 +209,37 @@
     # Phase 3: Password Synchronization
     # ============================================
 
+    - name: Test if default password still works
+      shell: |
+        SSHPASS='{{ opnsense_default_password }}' sshpass -e ssh \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          -o PasswordAuthentication=yes \
+          -o PreferredAuthentications=password \
+          -o PubkeyAuthentication=no \
+          root@{{ opnsense_ip }} \
+          "echo 'DEFAULT_PASSWORD_WORKS'"
+      register: default_password_test
+      changed_when: false
+      failed_when: false
+      no_log: true
+
     - name: Determine if password sync is needed
       set_fact:
         password_sync_needed: >-
           {{ admin_password | length > 0 and 
-             admin_password != opnsense_default_password }}
+             admin_password != opnsense_default_password and
+             default_password_test.rc == 0 }}
+
+    - name: Report password status
+      debug:
+        msg: >-
+          {% if default_password_test.rc == 0 %}
+          Default password is active - will sync with ADMIN_PASSWORD
+          {% else %}
+          Password already changed from default - skipping sync
+          {% endif %}
+      when: admin_password | length > 0
 
     - name: Sync OPNsense password with Semaphore
       block:
