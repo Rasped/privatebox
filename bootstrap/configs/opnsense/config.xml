@@ -370,6 +370,24 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
         <port>80</port>
       </destination>
     </rule>
+    <rule uuid="ssh-lan-access-001">
+      <type>pass</type>
+      <interface>lan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <statetype>keep state</statetype>
+      <descr>Allow SSH from LAN to Firewall</descr>
+      <direction>in</direction>
+      <log>0</log>
+      <quick>1</quick>
+      <protocol>tcp</protocol>
+      <source>
+        <network>lan</network>
+      </source>
+      <destination>
+        <network>(self)</network>
+        <port>22</port>
+      </destination>
+    </rule>
     <rule uuid="ee2ab193-a77c-468c-843e-dd4bae24b389">
       <type>pass</type>
       <interface>lan</interface>

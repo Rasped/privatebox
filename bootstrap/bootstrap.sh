@@ -165,6 +165,29 @@ main() {
         exit 0
     fi
     
+    # Phase 1.5: OPNsense Deployment
+    display "Phase 1.5: OPNsense Firewall Deployment"
+    display "----------------------------------------"
+    log "Starting Phase 1.5: OPNsense deployment"
+    
+    if [[ ! -f "${SCRIPT_DIR}/deploy-opnsense.sh" ]]; then
+        display "⚠️  OPNsense deployment script not found"
+        display "   Skipping firewall deployment"
+        display "   Note: Management VM will need a gateway configured"
+        log "WARNING: deploy-opnsense.sh not found, skipping"
+    else
+        if ! bash "${SCRIPT_DIR}/deploy-opnsense.sh"; then
+            display "⚠️  OPNsense deployment failed"
+            display "   Continuing with VM deployment"
+            display "   Note: Management VM may have limited connectivity"
+            log "WARNING: OPNsense deployment failed, continuing"
+        else
+            display "✅ OPNsense firewall deployed"
+            log "OPNsense deployed successfully"
+        fi
+    fi
+    display ""
+    
     # Phase 2: VM Provisioning
     display "Phase 2: VM Provisioning"
     display "------------------------"

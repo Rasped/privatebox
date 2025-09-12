@@ -10,10 +10,12 @@ echo ""
 REQUIRED_FILES=(
     "bootstrap.sh"
     "prepare-host.sh"
+    "deploy-opnsense.sh"
     "create-vm.sh"
     "setup-guest.sh"
     "verify-install.sh"
     "lib/semaphore-api.sh"
+    "configs/opnsense/config.xml"
 )
 
 MISSING=0
