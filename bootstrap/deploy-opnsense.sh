@@ -548,9 +548,6 @@ apply_custom_config() {
             ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
             "/usr/local/etc/rc.reload_all; sleep 2; /sbin/reboot" &>/dev/null || true
     
-    # Give the reboot command a moment to be processed
-    sleep 3
-    
     # Wait for OPNsense to complete full reboot cycle (UP -> DOWN -> UP)
     display_always "  Waiting for OPNsense to complete reboot cycle..."
     local max_wait=180
