@@ -208,6 +208,14 @@
 
     - name: Sync OPNsense password with Semaphore
       block:
+        - name: Debug password variables
+          debug:
+            msg: 
+              - "ADMIN_PASSWORD is {{ 'set' if admin_password else 'empty' }}"
+              - "Password length: {{ admin_password | length }}"
+              - "First char: {{ admin_password[0] | default('N/A') }}"
+          when: password_sync_needed
+
         - name: Change root password to ADMIN_PASSWORD
           shell: |
             ssh -i {{ ssh_key_path }} \
@@ -227,17 +235,28 @@
               -o ConnectTimeout=5 \
               -o PasswordAuthentication=yes \
               -o PreferredAuthentications=password \
+              -o PubkeyAuthentication=no \
               root@{{ opnsense_ip }} \
               "echo 'NEW_PASSWORD_VERIFIED'"
           register: new_password_verify
           changed_when: false
           no_log: true
+          failed_when: false  # We'll check this manually
           when: password_change.rc == 0
+
+        - name: Check password change result
+          fail:
+            msg: "Password change command succeeded but new password does not work. Password may not have been changed."
+          when: 
+            - password_change.rc == 0
+            - new_password_verify.rc != 0
 
         - name: Report password sync success
           debug:
             msg: "✓ OPNsense root password synchronized with ADMIN_PASSWORD from Semaphore"
-          when: new_password_verify.rc | default(1) == 0
+          when: 
+            - password_change.rc == 0
+            - new_password_verify.rc == 0
 
       rescue:
         - name: Report password sync failure
