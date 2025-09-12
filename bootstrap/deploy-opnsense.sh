@@ -556,13 +556,20 @@ apply_custom_config() {
     local max_wait=30
     local waited=0
     while [[ $waited -lt $max_wait ]]; do
-        if ! ping -c 1 -W 1 $OPNSENSE_SERVICES_IP &>/dev/null; then
-            display "  OPNsense is rebooting..."
+        if ping -c 1 -W 1 $OPNSENSE_SERVICES_IP &>/dev/null; then
+            display "  [$(date +%T)] Still responding to ping (waited ${waited}s)..."
+        else
+            display_always "  [$(date +%T)] OPNsense stopped responding - rebooting..."
             break
         fi
         sleep 2
         ((waited+=2))
     done
+    
+    if [[ $waited -ge $max_wait ]]; then
+        display_always "  ⚠ OPNsense did not stop responding after ${max_wait}s"
+        display_always "    Assuming fast reboot or reboot command failed"
+    fi
     
     # Wait for it to come back
     display_always "  Waiting 60 seconds for OPNsense to reboot..."
@@ -574,8 +581,9 @@ apply_custom_config() {
     max_wait=120
     
     while [[ $waited -lt $max_wait ]]; do
+        display "  [$(date +%T)] Checking SSH on $OPNSENSE_SERVICES_IP:22 (waited ${waited}s)..."
         if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
-            display_always "  ✓ OPNsense is back online"
+            display_always "  ✓ [$(date +%T)] OPNsense is back online"
             echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
             break
         fi
@@ -584,8 +592,8 @@ apply_custom_config() {
     done
     
     if [[ $waited -ge $max_wait ]]; then
-        display "  ⚠ OPNsense did not come back after reboot"
-        display "    You may need to check the console"
+        display_always "  ⚠ OPNsense did not come back after reboot (waited ${max_wait}s)"
+        display_always "    You may need to check the console"
     fi
     
     # Give services time to fully start
