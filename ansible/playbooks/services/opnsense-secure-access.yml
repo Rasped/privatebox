@@ -14,7 +14,7 @@
     
     # Passwords
     opnsense_default_password: "opnsense"
-    admin_password: "{{ ADMIN_PASSWORD | default('') }}"
+    admin_password: "{{ SERVICES_PASSWORD | default('') }}"  # TEST: Using SERVICES_PASSWORD instead
     
     # SSH configuration
     credentials_dir: "/root/.credentials/opnsense"
@@ -211,9 +211,11 @@
         - name: Debug password variables
           debug:
             msg: 
-              - "ADMIN_PASSWORD is {{ 'set' if admin_password else 'empty' }}"
+              - "admin_password (from SERVICES_PASSWORD) is {{ 'set' if admin_password else 'empty' }}"
               - "Password length: {{ admin_password | length }}"
               - "First char: {{ admin_password[0] | default('N/A') }}"
+              - "SERVICES_PASSWORD direct: {{ SERVICES_PASSWORD | default('NOT SET') | length }} chars"
+              - "ADMIN_PASSWORD direct: {{ ADMIN_PASSWORD | default('NOT SET') | length }} chars"
           when: password_sync_needed
 
         - name: Change root password to ADMIN_PASSWORD
