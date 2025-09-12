@@ -1,0 +1,323 @@
+---
+- name: "OPNsense: Register in Semaphore for management"
+  hosts: proxmox
+  gather_facts: yes
+  vars:
+    # Template configuration for Semaphore
+    semaphore_environment: "SemaphoreAPI"
+    semaphore_category: "infrastructure"
+    
+    # Fixed internal IPs
+    opnsense_ip: "10.10.20.1"
+    semaphore_ip: "10.10.20.10"
+    semaphore_url: "http://{{ semaphore_ip }}:3000"
+    
+    # Get API token from SemaphoreAPI environment
+    semaphore_token: "{{ SEMAPHORE_API_TOKEN | default('') }}"
+    
+    # Project configuration
+    project_id: 1
+    
+    # SSH configuration
+    credentials_dir: "/root/.credentials/opnsense"
+    ssh_key_path: "{{ credentials_dir }}/id_ed25519"
+    
+    # Resource names in Semaphore
+    key_name: "opnsense-internal"
+    inventory_name: "opnsense-internal"
+    
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Prerequisites Check
+    # ============================================
+    
+    - name: Verify SSH key exists
+      stat:
+        path: "{{ ssh_key_path }}"
+      register: ssh_key_check
+
+    - name: Fail if SSH key not found
+      fail:
+        msg: |
+          SSH key not found at {{ ssh_key_path }}
+          Please run opnsense-secure-access.yml first to establish SSH access.
+      when: not ssh_key_check.stat.exists
+
+    - name: Verify SSH access to OPNsense
+      shell: |
+        ssh -i {{ ssh_key_path }} \
+          -o StrictHostKeyChecking=no \
+          -o ConnectTimeout=5 \
+          -o PasswordAuthentication=no \
+          root@{{ opnsense_ip }} \
+          "echo 'SSH_ACCESS_OK' && hostname"
+      register: ssh_test
+      changed_when: false
+      failed_when: ssh_test.rc != 0
+
+    - name: Verify Semaphore API token is available
+      fail:
+        msg: |
+          SEMAPHORE_API_TOKEN not found in environment.
+          This playbook must be run from Semaphore with the SemaphoreAPI environment selected.
+      when: semaphore_token | length == 0
+
+    - name: Test Semaphore API connectivity
+      uri:
+        url: "{{ semaphore_url }}/api/user"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: api_test
+
+    - name: Display API connection info
+      debug:
+        msg: "Connected to Semaphore as: {{ api_test.json.username }} (admin: {{ api_test.json.admin }})"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 2: SSH Key Registration
+    # ============================================
+
+    - name: Read SSH private key
+      slurp:
+        src: "{{ ssh_key_path }}"
+      register: ssh_private_key_content
+
+    - name: Check existing SSH keys in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: existing_keys
+
+    - name: Find existing OPNsense key
+      set_fact:
+        existing_key: "{{ existing_keys.json | selectattr('name', 'equalto', key_name) | list | first | default(None) }}"
+
+    - name: Create SSH key in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id }}"
+          ssh:
+            private_key: "{{ ssh_private_key_content.content | b64decode }}"
+        status_code: [201, 204]
+      register: create_key_result
+      when: existing_key is none
+
+    - name: Update existing SSH key in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys/{{ existing_key.id }}"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id }}"
+          ssh:
+            private_key: "{{ ssh_private_key_content.content | b64decode }}"
+        status_code: [200, 204]
+      register: update_key_result
+      when: existing_key is not none
+
+    - name: Get final SSH key ID
+      set_fact:
+        ssh_key_id: "{{ create_key_result.json.id if existing_key is none else existing_key.id }}"
+
+    - name: Report SSH key status
+      debug:
+        msg: "{{ 'Created new' if existing_key is none else 'Updated existing' }} SSH key '{{ key_name }}' with ID: {{ ssh_key_id }}"
+
+    # ============================================
+    # Phase 3: Inventory Registration
+    # ============================================
+
+    - name: Build inventory YAML
+      set_fact:
+        inventory_yaml: |
+          all:
+            hosts:
+              opnsense:
+                ansible_host: {{ opnsense_ip }}
+                ansible_user: root
+                ansible_python_interpreter: /usr/local/bin/python3
+                opnsense_hostname: OPNsense.internal
+                opnsense_vlan: services
+                opnsense_role: firewall
+
+    - name: Check existing inventories in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: existing_inventories
+
+    - name: Find existing OPNsense inventory
+      set_fact:
+        existing_inventory: "{{ existing_inventories.json | selectattr('name', 'equalto', inventory_name) | list | first | default(None) }}"
+
+    - name: Create inventory in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ inventory_name }}"
+          type: "static"
+          project_id: "{{ project_id }}"
+          inventory: "{{ inventory_yaml }}"
+          ssh_key_id: "{{ ssh_key_id }}"
+        status_code: [201, 204]
+      register: create_inventory_result
+      when: existing_inventory is none
+
+    - name: Update existing inventory in Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory/{{ existing_inventory.id }}"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ inventory_name }}"
+          type: "static"
+          project_id: "{{ project_id }}"
+          inventory: "{{ inventory_yaml }}"
+          ssh_key_id: "{{ ssh_key_id }}"
+        status_code: [200, 204]
+      register: update_inventory_result
+      when: existing_inventory is not none
+
+    - name: Get final inventory ID
+      set_fact:
+        inventory_id: "{{ create_inventory_result.json.id if existing_inventory is none else existing_inventory.id }}"
+
+    - name: Report inventory status
+      debug:
+        msg: "{{ 'Created new' if existing_inventory is none else 'Updated existing' }} inventory '{{ inventory_name }}' with ID: {{ inventory_id }}"
+
+    # ============================================
+    # Phase 4: Template Regeneration
+    # ============================================
+
+    - name: Trigger template regeneration
+      block:
+        - name: Find Generate Templates task
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/templates"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+            status_code: 200
+          register: templates
+
+        - name: Get Generate Templates ID
+          set_fact:
+            generate_template_id: "{{ templates.json | selectattr('name', 'equalto', 'Generate Templates') | map(attribute='id') | first | default(None) }}"
+
+        - name: Run Generate Templates task
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              template_id: "{{ generate_template_id }}"
+              debug: false
+              dry_run: false
+            status_code: [201]
+          register: template_task
+          when: generate_template_id is not none
+
+        - name: Report template generation status
+          debug:
+            msg: "Template regeneration triggered (Task ID: {{ template_task.json.id }})"
+          when: generate_template_id is not none
+
+        - name: Wait for template generation to complete
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks/{{ template_task.json.id }}"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+            status_code: 200
+          register: task_status
+          until: task_status.json.status in ['success', 'error', 'failed']
+          retries: 30
+          delay: 2
+          when: generate_template_id is not none
+
+        - name: Report template generation result
+          debug:
+            msg: "{{ '✓ Templates regenerated successfully' if task_status.json.status == 'success' else '✗ Template generation failed' }}"
+          when: generate_template_id is not none
+
+      rescue:
+        - name: Template generation failed (non-critical)
+          debug:
+            msg: "Warning: Could not trigger template regeneration. Run 'Generate Templates' manually in Semaphore."
+
+    # ============================================
+    # Phase 5: Verification and Summary
+    # ============================================
+
+    - name: Test OPNsense connectivity through Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory/{{ inventory_id }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: final_inventory
+
+    - name: Get available templates count
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/templates"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: final_templates
+
+    - name: Display registration summary
+      debug:
+        msg:
+          - "========================================"
+          - "OPNsense Semaphore Registration Complete"
+          - "========================================"
+          - "OPNsense IP: {{ opnsense_ip }}"
+          - "Semaphore URL: {{ semaphore_url }}"
+          - ""
+          - "Resources Registered:"
+          - "  - SSH Key: '{{ key_name }}' (ID: {{ ssh_key_id }})"
+          - "  - Inventory: '{{ inventory_name }}' (ID: {{ inventory_id }})"
+          - ""
+          - "Available Templates: {{ final_templates.json | length }}"
+          - ""
+          - "OPNsense can now be managed through Semaphore."
+          - "Look for templates with 'opnsense' in the name."
+          - "========================================"
