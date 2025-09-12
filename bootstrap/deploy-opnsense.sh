@@ -551,36 +551,47 @@ apply_custom_config() {
     # Give the reboot command a moment to be processed
     sleep 3
     
-    # Wait for OPNsense to come back (it might go down and up quickly)
+    # Wait for OPNsense to complete full reboot cycle (UP -> DOWN -> UP)
     display_always "  Waiting for OPNsense to complete reboot cycle..."
     local max_wait=180
     local waited=0
-    local got_response=false
+    local state="waiting_for_down"  # States: waiting_for_down, waiting_for_up
     
     while [[ $waited -lt $max_wait ]]; do
         if ping -c 1 -W 1 $OPNSENSE_SERVICES_IP &>/dev/null; then
-            if [[ "$got_response" == "false" ]]; then
-                display_always "  [$(date +%T)] OPNsense is responding to ping"
-                got_response=true
-            fi
-            # Once we get a ping response, check if SSH is also available
-            if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
-                display_always "  ✓ [$(date +%T)] OPNsense is back online with SSH available"
-                echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
-                break
-            else
-                display "  [$(date +%T)] Ping OK but SSH not ready yet (waited ${waited}s)..."
+            # OPNsense is responding
+            if [[ "$state" == "waiting_for_down" ]]; then
+                display "  [$(date +%T)] OPNsense still up, waiting for shutdown (${waited}s)..."
+            elif [[ "$state" == "waiting_for_up" ]]; then
+                display_always "  [$(date +%T)] OPNsense is responding to ping again"
+                # Now check if SSH is also available
+                if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
+                    display_always "  ✓ [$(date +%T)] OPNsense is back online with SSH available"
+                    echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
+                    break
+                else
+                    display "  [$(date +%T)] Ping OK but SSH not ready yet..."
+                fi
             fi
         else
-            display "  [$(date +%T)] No ping response (waited ${waited}s)..."
-            got_response=false
+            # OPNsense is NOT responding
+            if [[ "$state" == "waiting_for_down" ]]; then
+                display_always "  [$(date +%T)] OPNsense has gone down for reboot"
+                state="waiting_for_up"
+            elif [[ "$state" == "waiting_for_up" ]]; then
+                display "  [$(date +%T)] Waiting for OPNsense to come back up (${waited}s)..."
+            fi
         fi
         sleep 2
         ((waited+=2))
     done
     
     if [[ $waited -ge $max_wait ]]; then
-        display_always "  ⚠ OPNsense reboot timeout after ${max_wait}s"
+        if [[ "$state" == "waiting_for_down" ]]; then
+            display_always "  ⚠ OPNsense never went down - reboot may have failed"
+        else
+            display_always "  ⚠ OPNsense reboot timeout after ${max_wait}s"
+        fi
         display_always "    You may need to check the console"
     fi
     
