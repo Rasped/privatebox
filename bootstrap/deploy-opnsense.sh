@@ -66,6 +66,7 @@ REQUIRED_SPACE_MB=5120  # 5GB for compressed + extracted
 
 # OPNsense Configuration
 OPNSENSE_LAN_IP="10.10.10.1"
+OPNSENSE_SERVICES_IP="10.10.20.1"  # Services VLAN IP for management access
 OPNSENSE_DEFAULT_USER="root"
 OPNSENSE_DEFAULT_PASSWORD="opnsense"
 OPNSENSE_CONFIG="${SCRIPT_DIR}/configs/opnsense/config.xml"
@@ -445,14 +446,14 @@ start_vm() {
 test_ssh_connectivity() {
     display_always "Testing connectivity..."
     
-    # Wait for SSH to be available
-    display "  Waiting for SSH on ${OPNSENSE_LAN_IP}:22..."
+    # Wait for SSH to be available on Services VLAN
+    display "  Waiting for SSH on ${OPNSENSE_SERVICES_IP}:22 (Services VLAN)..."
     local max_wait=300
     local waited=0
     
     while [[ $waited -lt $max_wait ]]; do
-        if nc -zv $OPNSENSE_LAN_IP 22 &>/dev/null; then
-            display_always "  ✓ SSH port is open"
+        if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
+            display_always "  ✓ SSH port is open on Services VLAN"
             break
         fi
         sleep 5
@@ -463,16 +464,16 @@ test_ssh_connectivity() {
         error_exit "SSH not available after ${max_wait} seconds"
     fi
     
-    # Test SSH login
-    display "  Testing SSH authentication..."
+    # Test SSH login via Services VLAN
+    display "  Testing SSH authentication via Services VLAN..."
     if sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
        ssh -o StrictHostKeyChecking=no \
            -o ConnectTimeout=5 \
            -o UserKnownHostsFile=/dev/null \
-           ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP} \
+           ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
            "uname -a" &>/dev/null; then
-        display_always "  ✓ SSH authentication successful"
-        echo "[$(date +%T)] SSH connectivity verified" >> "$DEPLOYMENT_INFO_FILE"
+        display_always "  ✓ SSH authentication successful via Services VLAN"
+        echo "[$(date +%T)] SSH connectivity verified via Services VLAN" >> "$DEPLOYMENT_INFO_FILE"
         return 0
     else
         display "  ⚠ SSH authentication failed (may need more time)"
@@ -495,7 +496,7 @@ apply_custom_config() {
     if sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
        ssh -o StrictHostKeyChecking=no \
            -o UserKnownHostsFile=/dev/null \
-           ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP} \
+           ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
            "cp /conf/config.xml /conf/config.xml.backup.$(date +%Y%m%d-%H%M%S)"; then
         display "  ✓ Config backed up"
     else
@@ -508,7 +509,7 @@ apply_custom_config() {
        scp -o StrictHostKeyChecking=no \
            -o UserKnownHostsFile=/dev/null \
            "$OPNSENSE_CONFIG" \
-           ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP}:/conf/config.xml; then
+           ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP}:/conf/config.xml; then
         display_always "  ✓ Configuration uploaded"
     else
         error_exit "Failed to upload configuration"
@@ -522,7 +523,7 @@ apply_custom_config() {
     sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
         ssh -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
-            ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP} \
+            ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
             "/usr/local/etc/rc.reload_all; sleep 2; /sbin/reboot" &>/dev/null || true
     
     # Wait a bit for reboot to start
@@ -533,7 +534,7 @@ apply_custom_config() {
     local max_wait=30
     local waited=0
     while [[ $waited -lt $max_wait ]]; do
-        if ! ping -c 1 -W 1 $OPNSENSE_LAN_IP &>/dev/null; then
+        if ! ping -c 1 -W 1 $OPNSENSE_SERVICES_IP &>/dev/null; then
             display "  OPNsense is rebooting..."
             break
         fi
@@ -551,7 +552,7 @@ apply_custom_config() {
     max_wait=120
     
     while [[ $waited -lt $max_wait ]]; do
-        if nc -zv $OPNSENSE_LAN_IP 22 &>/dev/null; then
+        if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
             display_always "  ✓ OPNsense is back online"
             echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
             break
@@ -585,17 +586,17 @@ validate_deployment() {
         return 1  # No point checking further if VM isn't running
     fi
     
-    # Check LAN connectivity
-    if ping -c 1 -W 2 $OPNSENSE_LAN_IP &>/dev/null; then
-        display "  ✓ LAN interface responding at $OPNSENSE_LAN_IP"
+    # Check Services VLAN connectivity (management access)
+    if ping -c 1 -W 2 $OPNSENSE_SERVICES_IP &>/dev/null; then
+        display "  ✓ Services VLAN interface responding at $OPNSENSE_SERVICES_IP"
     else
-        display "  ✗ Cannot ping LAN interface"
+        display "  ✗ Cannot ping Services VLAN interface"
         all_good=false
     fi
     
-    # Check SSH access
-    if nc -zv $OPNSENSE_LAN_IP 22 &>/dev/null; then
-        display "  ✓ SSH port is open"
+    # Check SSH access via Services VLAN
+    if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
+        display "  ✓ SSH port is open on Services VLAN"
         
         # Test from OPNsense perspective
         display "  Testing OPNsense connectivity..."
@@ -605,7 +606,7 @@ validate_deployment() {
            ssh -o StrictHostKeyChecking=no \
                -o UserKnownHostsFile=/dev/null \
                -o ConnectTimeout=5 \
-               ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP} \
+               ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
                "ping -c 1 -W 2 8.8.8.8" &>/dev/null; then
             display "  ✓ OPNsense has internet connectivity"
         else
@@ -618,7 +619,7 @@ validate_deployment() {
             ssh -o StrictHostKeyChecking=no \
                 -o UserKnownHostsFile=/dev/null \
                 -o ConnectTimeout=5 \
-                ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP} \
+                ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
                 "ifconfig | grep -E 'vlan (20|30|40|50|60|70)'" 2>/dev/null || true)
         
         if [[ -n "$vlan_output" ]]; then
@@ -649,9 +650,9 @@ validate_deployment() {
         display "    This is expected if VLAN 20 isn't trunked to Proxmox"
     fi
     
-    # Check web interface
-    if nc -zv $OPNSENSE_LAN_IP 443 &>/dev/null; then
-        display "  ✓ Web interface available on port 443"
+    # Check web interface via Services VLAN
+    if nc -zv $OPNSENSE_SERVICES_IP 443 &>/dev/null; then
+        display "  ✓ Web interface available on port 443 via Services VLAN"
     else
         display "  ⚠ Web interface not yet available"
     fi
@@ -682,8 +683,10 @@ Network Configuration:
 - Services VLAN: 10.10.20.1/24 on VLAN 20
 
 Access Information:
-- SSH: ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP}
-- Web UI: https://${OPNSENSE_LAN_IP}
+- SSH (LAN): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP}
+- SSH (Services): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP}
+- Web UI (LAN): https://${OPNSENSE_LAN_IP}
+- Web UI (Services): https://${OPNSENSE_SERVICES_IP}
 - Username: ${OPNSENSE_DEFAULT_USER}
 - Password: ${OPNSENSE_DEFAULT_PASSWORD}
 
@@ -707,8 +710,10 @@ EOF
     display_always "  Services: 10.10.20.1/24 on VLAN 20"
     display_always ""
     display_always "Access Methods:"
-    display_always "  SSH: ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP}"
-    display_always "  Web: https://${OPNSENSE_LAN_IP}"
+    display_always "  SSH (Services VLAN): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP}"
+    display_always "  SSH (LAN): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP}"
+    display_always "  Web (Services VLAN): https://${OPNSENSE_SERVICES_IP}"
+    display_always "  Web (LAN): https://${OPNSENSE_LAN_IP}"
     display_always "  Credentials: ${OPNSENSE_DEFAULT_USER}/${OPNSENSE_DEFAULT_PASSWORD}"
     display_always ""
     display_always "IMPORTANT: Change the default password immediately!"
