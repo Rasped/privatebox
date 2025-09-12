@@ -1320,7 +1320,7 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
         <enabled>1</enabled>
         <port>53</port>
         <stats>0</stats>
-        <active_interface>lan</active_interface>
+        <active_interface>lan,opt1</active_interface>
         <dnssec>1</dnssec>
         <dns64>0</dns64>
         <dns64prefix/>
