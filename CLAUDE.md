@@ -52,32 +52,45 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - `tools/generate-templates.py` reads `vars_prompt` with `semaphore_*` and builds typed templates.
 
 ## Semaphore API (Cookie Auth) — IMPORTANT
+- Semaphore ONLY accessible via Services VLAN at 10.10.20.10:3000 (not from workstation).
+- Access requires double-hop: workstation → Proxmox (.10) → Semaphore (10.10.20.10).
 - Use session cookies (not hardcoded tokens) when scripting against Semaphore.
-- Login to get a session cookie:
-  - `curl -s -c cookies.txt -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' http://<VM-IP>:3000/api/auth/login`
-- Call APIs using the cookie:
-  - `curl -s -b cookies.txt http://<VM-IP>:3000/api/projects`
-- In-VM access uses localhost: `http://localhost:3000/…` and `SERVICES_PASSWORD` from `/etc/privatebox/config.env`.
-- In Bash, prefer a helper that retries and returns `Cookie: semaphore=<value>`; see `bootstrap/lib/semaphore-api.sh` (functions `get_admin_session`, `make_api_request`).
-- In Ansible, use `shell`/`command` with curl for cookie handling, or manage a `Cookie` header captured from the login step.
 
-### Curl Examples
+### Cookie Management
+- Check for existing cookie first: `ssh root@192.168.1.10 "test -f /tmp/sem.cookies && echo EXISTS"`
+- If no cookie or expired, check for password:
+  - From Proxmox: look in `/etc/privatebox/config.env` for SERVICES_PASSWORD
+  - From workstation: may need to retrieve from Semaphore ServicePasswords environment (if already have access)
+  - Last resort: check bootstrap logs or ask user
+- Login to get session cookie (from Proxmox):
+  - `curl -sS --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' http://10.10.20.10:3000/api/auth/login`
+- Test cookie validity:
+  - `curl -sS --cookie /tmp/sem.cookies http://10.10.20.10:3000/api/user | grep -q '"admin":true' && echo VALID`
+
+### API Access from Workstation (Double-Hop)
+- All commands via SSH to Proxmox: `ssh root@192.168.1.10 "curl ..."`
+- Example: `ssh root@192.168.1.10 "curl -sS --cookie /tmp/sem.cookies http://10.10.20.10:3000/api/projects"`
+
+### Curl Examples (Run from Proxmox)
 - Login and store cookie:
-  - `curl -sS --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' http://<HOST>:3000/api/auth/login -i`
+  - `curl -sS --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' http://10.10.20.10:3000/api/auth/login`
 - Get project id (PID):
-  - `curl -sS --cookie /tmp/sem.cookies http://<HOST>:3000/api/projects`
+  - `curl -sS --cookie /tmp/sem.cookies http://10.10.20.10:3000/api/projects`
+- List environments (contains passwords):
+  - `curl -sS --cookie /tmp/sem.cookies http://10.10.20.10:3000/api/project/1/environment`
 - List templates for a project:
-  - `curl -sS --cookie /tmp/sem.cookies http://<HOST>:3000/api/project/<PID>/templates`
+  - `curl -sS --cookie /tmp/sem.cookies http://10.10.20.10:3000/api/project/<PID>/templates`
 - Find a template id (TID) by name with jq:
-  - `TID=$(curl -sS --cookie /tmp/sem.cookies http://<HOST>:3000/api/project/<PID>/templates | jq -r '.[] | select(.name=="Generate Templates") | .id')`
+  - `TID=$(curl -sS --cookie /tmp/sem.cookies http://10.10.20.10:3000/api/project/<PID>/templates | jq -r '.[] | select(.name=="Generate Templates") | .id')`
 - Run a template (creates a task):
-  - `curl -sS --cookie /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"template_id":<TID>,"debug":false,"dry_run":false}' http://<HOST>:3000/api/project/<PID>/tasks -i`
+  - `curl -sS --cookie /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"template_id":<TID>,"debug":false,"dry_run":false}' http://10.10.20.10:3000/api/project/<PID>/tasks`
 - Check tasks/status:
-  - `curl -sS --cookie /tmp/sem.cookies http://<HOST>:3000/api/project/<PID>/tasks`
+  - `curl -sS --cookie /tmp/sem.cookies http://10.10.20.10:3000/api/project/<PID>/tasks`
 
 Notes
-- Use `<HOST>=<VM-IP>:3000` from outside, or `localhost:3000` inside the VM.
-- Inside VM you can `source /etc/privatebox/config.env` and use `$SERVICES_PASSWORD`.
+- Semaphore NOT accessible from workstation directly (blocked by VLAN isolation).
+- In Management VM: use `localhost:3000` and `source /etc/privatebox/config.env`.
+- In Ansible playbooks on Proxmox: delegate to localhost or use shell commands with stored cookies.
 
 ## Coding Checklist
 - Idempotent? Retries/timeouts? Clear errors?
