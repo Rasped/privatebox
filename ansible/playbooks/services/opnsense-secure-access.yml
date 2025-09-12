@@ -219,6 +219,7 @@
           register: password_change
           changed_when: "'PASSWORD_CHANGED' in password_change.stdout"
           no_log: true
+          failed_when: false  # Don't fail, we'll handle it
 
         - name: Verify new password works
           shell: |
@@ -231,11 +232,53 @@
               "echo 'NEW_PASSWORD_VERIFIED'"
           register: new_password_verify
           changed_when: false
+          failed_when: false
           no_log: true
+          when: password_change.rc == 0
 
         - name: Report password sync success
           debug:
             msg: "✓ OPNsense root password synchronized with ADMIN_PASSWORD from Semaphore"
+          when: new_password_verify.rc | default(1) == 0
+
+      rescue:
+        - name: Password sync failed - using fallback
+          debug:
+            msg: "Warning: Could not sync with ADMIN_PASSWORD, attempting fallback"
+
+      always:
+        - name: Set fallback password if ADMIN_PASSWORD failed
+          block:
+            - name: Change root password to fallback (opnsense2)
+              shell: |
+                ssh -i {{ ssh_key_path }} \
+                  -o StrictHostKeyChecking=no \
+                  -o ConnectTimeout=5 \
+                  root@{{ opnsense_ip }} \
+                  "echo 'root:opnsense2' | chpasswd && \
+                   echo 'FALLBACK_PASSWORD_SET'"
+              register: fallback_change
+              changed_when: "'FALLBACK_PASSWORD_SET' in fallback_change.stdout"
+
+            - name: Verify fallback password works
+              shell: |
+                SSHPASS='opnsense2' sshpass -e ssh \
+                  -o StrictHostKeyChecking=no \
+                  -o ConnectTimeout=5 \
+                  -o PasswordAuthentication=yes \
+                  -o PreferredAuthentications=password \
+                  root@{{ opnsense_ip }} \
+                  "echo 'FALLBACK_PASSWORD_WORKS'"
+              register: fallback_verify
+              changed_when: false
+
+            - name: Report fallback password set
+              debug:
+                msg: "✓ OPNsense root password set to fallback: opnsense2"
+              when: "'FALLBACK_PASSWORD_WORKS' in fallback_verify.stdout"
+          when: 
+            - password_sync_needed
+            - (password_change.rc | default(1) != 0 or new_password_verify.rc | default(1) != 0)
       when: password_sync_needed
 
     - name: Optional - Disable password authentication
