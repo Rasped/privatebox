@@ -177,10 +177,7 @@ main() {
         log "WARNING: deploy-opnsense.sh not found, skipping"
     else
         if ! bash "${SCRIPT_DIR}/deploy-opnsense.sh"; then
-            display "⚠️  OPNsense deployment failed"
-            display "   Continuing with VM deployment"
-            display "   Note: Management VM may have limited connectivity"
-            log "WARNING: OPNsense deployment failed, continuing"
+            error_exit "OPNsense deployment failed - cannot continue without firewall"
         else
             display "✅ OPNsense firewall deployed"
             log "OPNsense deployed successfully"
