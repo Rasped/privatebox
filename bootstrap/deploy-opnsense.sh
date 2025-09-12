@@ -29,7 +29,7 @@ show_usage() {
     echo "  --help      Show this help message"
     echo ""
     echo "Environment variables:"
-    echo "  OPNSENSE_VMID         VM ID (default: 105)"
+    echo "  OPNSENSE_VMID         VM ID (default: 100)"
     echo "  OPNSENSE_VM_NAME      VM name (default: opnsense)"
     echo "  OPNSENSE_VM_STORAGE   Storage pool (default: local-lvm)"
     echo "  OPNSENSE_START        Start after restore (default: true)"
@@ -50,17 +50,17 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # VM Configuration (after sourcing config)
-VMID="${OPNSENSE_VMID:-105}"
+VMID="${OPNSENSE_VMID:-100}"
 VM_NAME="${OPNSENSE_VM_NAME:-opnsense}"
 VM_STORAGE="${OPNSENSE_VM_STORAGE:-local-lvm}"
 START_AFTER_RESTORE="${OPNSENSE_START:-true}"
 WAN_BRIDGE="${WAN_BRIDGE:-vmbr0}"  # From prepare-host.sh config
 
 # Template Configuration
-TEMPLATE_URL="https://github.com/Rasped/privatebox/releases/download/v1.0.1-opnsense/vzdump-qemu-101-opnsense.vma.zst"
-TEMPLATE_FILENAME="vzdump-qemu-101-opnsense.vma.zst"
-TEMPLATE_MD5="a7a688ce4102dc767130d8f40949d82b"
-TEMPLATE_SIZE_MB=766
+TEMPLATE_URL="https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/opnsense.vma.zst"
+TEMPLATE_FILENAME="opnsense.vma.zst"
+TEMPLATE_MD5="c6d251e1c62f065fd28d720572f8f943"
+TEMPLATE_SIZE_MB=767
 CACHE_DIR="/var/tmp/opnsense-template"
 REQUIRED_SPACE_MB=5120  # 5GB for compressed + extracted
 
