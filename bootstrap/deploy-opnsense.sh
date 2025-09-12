@@ -548,51 +548,39 @@ apply_custom_config() {
             ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
             "/usr/local/etc/rc.reload_all; sleep 2; /sbin/reboot" &>/dev/null || true
     
-    # Wait a bit for reboot to start
-    display "  Waiting for OPNsense to shutdown..."
-    sleep 10
+    # Give the reboot command a moment to be processed
+    sleep 3
     
-    # Wait for it to stop responding
-    local max_wait=30
+    # Wait for OPNsense to come back (it might go down and up quickly)
+    display_always "  Waiting for OPNsense to complete reboot cycle..."
+    local max_wait=180
     local waited=0
+    local got_response=false
+    
     while [[ $waited -lt $max_wait ]]; do
         if ping -c 1 -W 1 $OPNSENSE_SERVICES_IP &>/dev/null; then
-            display "  [$(date +%T)] Still responding to ping (waited ${waited}s)..."
+            if [[ "$got_response" == "false" ]]; then
+                display_always "  [$(date +%T)] OPNsense is responding to ping"
+                got_response=true
+            fi
+            # Once we get a ping response, check if SSH is also available
+            if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
+                display_always "  ✓ [$(date +%T)] OPNsense is back online with SSH available"
+                echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
+                break
+            else
+                display "  [$(date +%T)] Ping OK but SSH not ready yet (waited ${waited}s)..."
+            fi
         else
-            display_always "  [$(date +%T)] OPNsense stopped responding - rebooting..."
-            break
+            display "  [$(date +%T)] No ping response (waited ${waited}s)..."
+            got_response=false
         fi
         sleep 2
         ((waited+=2))
     done
     
     if [[ $waited -ge $max_wait ]]; then
-        display_always "  ⚠ OPNsense did not stop responding after ${max_wait}s"
-        display_always "    Assuming fast reboot or reboot command failed"
-    fi
-    
-    # Wait for it to come back
-    display_always "  Waiting 60 seconds for OPNsense to reboot..."
-    sleep 60
-    
-    # Wait for SSH to be available again
-    display "  Waiting for OPNsense to come back online..."
-    waited=0
-    max_wait=120
-    
-    while [[ $waited -lt $max_wait ]]; do
-        display "  [$(date +%T)] Checking SSH on $OPNSENSE_SERVICES_IP:22 (waited ${waited}s)..."
-        if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
-            display_always "  ✓ [$(date +%T)] OPNsense is back online"
-            echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
-            break
-        fi
-        sleep 5
-        ((waited+=5))
-    done
-    
-    if [[ $waited -ge $max_wait ]]; then
-        display_always "  ⚠ OPNsense did not come back after reboot (waited ${max_wait}s)"
+        display_always "  ⚠ OPNsense reboot timeout after ${max_wait}s"
         display_always "    You may need to check the console"
     fi
     
