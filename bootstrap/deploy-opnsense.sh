@@ -582,8 +582,8 @@ apply_custom_config() {
                 display "  [$(date +%T)] Waiting for OPNsense to come back up (${waited}s)..."
             fi
         fi
-        sleep 2
-        ((waited+=2))
+        sleep 0.5
+        waited=$((waited + 1))  # Increment by 1 second even though we sleep 0.5
     done
     
     if [[ $waited -ge $max_wait ]]; then
