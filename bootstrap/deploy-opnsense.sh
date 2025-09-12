@@ -541,12 +541,9 @@ apply_custom_config() {
     display_always "  Rebooting OPNsense for VLAN configuration..."
     display "    This is required for VLAN interfaces to be properly configured"
     
-    # Try graceful reboot first
-    sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
-        ssh -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
-            "/usr/local/etc/rc.reload_all; sleep 2; /sbin/reboot" &>/dev/null || true
+    # Use Proxmox qm command to reboot the VM cleanly
+    display "  Sending reboot command via Proxmox..."
+    qm reboot $VMID || error_exit "Failed to send reboot command"
     
     # Wait for OPNsense to complete full reboot cycle (UP -> DOWN -> UP)
     display_always "  Waiting for OPNsense to complete reboot cycle..."
