@@ -279,7 +279,7 @@ run_bootstrap() {
             error_exit "Bootstrap failed. Check /tmp/privatebox-bootstrap.log for details"
         fi
     else
-        if ! bash $bootstrap_cmd 2>&1 | while IFS= read -r line; do
+        bash $bootstrap_cmd 2>&1 | while IFS= read -r line; do
             # Filter output for non-verbose mode
             if [[ "$line" =~ ^Phase ]] || [[ "$line" =~ ^✓ ]] || [[ "$line" =~ ^✅ ]] || \
                [[ "$line" =~ ERROR ]] || [[ "$line" =~ "Installation Complete" ]] || \
@@ -288,7 +288,8 @@ run_bootstrap() {
                [[ "$line" =~ "Password:" ]] || [[ "$line" =~ "http://" ]]; then
                 echo "$line"
             fi
-        done; then
+        done
+        if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
             error_exit "Bootstrap failed. Check /tmp/privatebox-bootstrap.log for details"
         fi
     fi
