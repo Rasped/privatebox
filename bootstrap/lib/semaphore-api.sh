@@ -500,9 +500,12 @@ setup_template_synchronization() {
             # Deploy AdGuard
             log_info "Step 6/6: Deploying AdGuard DNS service..."
             if deploy_adguard "$project_id" "$admin_session"; then
-                log_info "✓ AdGuard deployment initiated successfully"
+                log_info "✅ AdGuard deployment completed successfully"
+                log_info "   AdGuard will be accessible at http://10.10.20.10:3080 once started"
             else
-                log_warn "AdGuard deployment could not be initiated (non-fatal)"
+                log_error "❌ AdGuard deployment FAILED"
+                log_warn "   This is non-fatal - you can deploy AdGuard manually from Semaphore"
+                log_warn "   Template name: 'AdGuard: Deploy Container Service'"
             fi
         else
             log_warn "Generate Templates task did not complete successfully, skipping AdGuard deployment"
@@ -684,14 +687,15 @@ deploy_adguard() {
 
     log_info "Deploying AdGuard DNS service..."
 
-    # Find the Deploy AdGuard template
-    local template_id=$(get_template_id_by_name "$project_id" "Deploy AdGuard" "$admin_session")
+    # Find the AdGuard deployment template
+    local template_id=$(get_template_id_by_name "$project_id" "AdGuard: Deploy Container Service" "$admin_session")
     if [ -z "$template_id" ]; then
-        log_warn "Deploy AdGuard template not found, skipping deployment"
+        log_error "❌ AdGuard template not found - expected 'AdGuard: Deploy Container Service'"
+        log_error "   Available templates might not include AdGuard deployment"
         return 1
     fi
 
-    log_info "Found Deploy AdGuard template with ID: $template_id"
+    log_info "Found AdGuard template with ID: $template_id"
 
     # Run the deployment
     local payload=$(jq -n --argjson tid "$template_id" '{template_id: $tid, debug: false, dry_run: false}')
