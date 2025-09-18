@@ -453,33 +453,33 @@ setup_template_synchronization() {
     local admin_session="$2"
     
     log_info "Setting up template synchronization infrastructure..."
-    
+
     # Create API token
-    log_info "Step 1/5: Creating API token..."
+    log_info "Step 1/6: Creating API token..."
     local api_token=$(create_api_token "$admin_session")
     if [ -z "$api_token" ]; then
         log_error "Failed to create API token for template sync"
         return 1
     fi
     log_info "✓ API token created"
-    
+
     # Create SemaphoreAPI environment
-    log_info "Step 2/5: Creating SemaphoreAPI environment..."
+    log_info "Step 2/6: Creating SemaphoreAPI environment..."
     local env_id=$(create_semaphore_api_environment "$project_id" "$api_token" "$admin_session")
     if [ -z "$env_id" ]; then
         log_error "Failed to create SemaphoreAPI environment"
         return 1
     fi
     log_info "✓ Environment created with ID: $env_id"
-    
+
     # Use default resource IDs
-    log_info "Step 3/5: Using default resource IDs..."
+    log_info "Step 3/6: Using default resource IDs..."
     local repo_id=1
     local inv_id=1
     log_info "✓ Using repository ID: $repo_id and inventory ID: $inv_id"
-    
+
     # Create Generate Templates task
-    log_info "Step 4/5: Creating Generate Templates task..."
+    log_info "Step 4/6: Creating Generate Templates task..."
     local template_id=$(create_template_generator_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$template_id" ]; then
         log_error "Failed to create template generator task"
@@ -488,12 +488,29 @@ setup_template_synchronization() {
     log_info "✓ Task created with ID: $template_id"
     
     # Auto-run the Generate Templates task once to sync templates
-    if run_generate_templates_task "$project_id" "$template_id" "$admin_session"; then
-        log_info "✓ Generate Templates task triggered successfully"
+    log_info "Step 5/6: Running Generate Templates task..."
+    local gen_task_id=$(run_generate_templates_task "$project_id" "$template_id" "$admin_session")
+    if [ -n "$gen_task_id" ]; then
+        log_info "✓ Generate Templates task triggered with ID: $gen_task_id"
+
+        # Wait for Generate Templates to complete
+        if wait_for_task_completion "$project_id" "$gen_task_id" "$admin_session" "Generate Templates"; then
+            log_info "✓ Templates generated successfully"
+
+            # Deploy AdGuard
+            log_info "Step 6/6: Deploying AdGuard DNS service..."
+            if deploy_adguard "$project_id" "$admin_session"; then
+                log_info "✓ AdGuard deployment initiated successfully"
+            else
+                log_warn "AdGuard deployment could not be initiated (non-fatal)"
+            fi
+        else
+            log_warn "Generate Templates task did not complete successfully, skipping AdGuard deployment"
+        fi
     else
         log_warn "Generate Templates task could not be triggered automatically"
     fi
-    
+
     log_info "Template synchronization setup COMPLETED"
     return 0
 }
@@ -603,10 +620,110 @@ run_generate_templates_task() {
         return 1
     fi
     local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
+
     if is_api_success "$status_code"; then
-        return 0
+        local task_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
+        if [ -n "$task_id" ] && [ "$task_id" != "null" ]; then
+            echo "$task_id"
+            return 0
+        fi
     fi
     log_warn "Generate Templates run returned status $status_code"
+    return 1
+}
+
+# Wait for a task to complete
+wait_for_task_completion() {
+    local project_id="$1"
+    local task_id="$2"
+    local admin_session="$3"
+    local task_name="${4:-Task}"
+    local max_wait=120  # Maximum 2 minutes
+    local elapsed=0
+
+    log_info "Waiting for $task_name to complete (task_id=$task_id)..."
+
+    while [ $elapsed -lt $max_wait ]; do
+        local api_result=$(make_api_request "GET" \
+            "http://localhost:3000/api/project/$project_id/tasks/$task_id" \
+            "" "$admin_session" "Checking task status")
+
+        if [ $? -ne 0 ]; then
+            log_warn "Failed to check task status"
+            return 1
+        fi
+
+        local status_code=$(get_api_status "$api_result")
+        local response_body=$(get_api_body "$api_result")
+
+        if is_api_success "$status_code"; then
+            local task_status=$(echo "$response_body" | jq -r '.status' 2>/dev/null)
+
+            if [ "$task_status" == "success" ]; then
+                log_info "✓ $task_name completed successfully"
+                return 0
+            elif [ "$task_status" == "error" ] || [ "$task_status" == "failed" ]; then
+                log_error "$task_name failed with status: $task_status"
+                return 1
+            fi
+        fi
+
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+
+    log_warn "$task_name did not complete within ${max_wait} seconds"
+    return 1
+}
+
+# Deploy AdGuard via Semaphore
+deploy_adguard() {
+    local project_id="$1"
+    local admin_session="$2"
+
+    log_info "Deploying AdGuard DNS service..."
+
+    # Find the Deploy AdGuard template
+    local template_id=$(get_template_id_by_name "$project_id" "Deploy AdGuard" "$admin_session")
+    if [ -z "$template_id" ]; then
+        log_warn "Deploy AdGuard template not found, skipping deployment"
+        return 1
+    fi
+
+    log_info "Found Deploy AdGuard template with ID: $template_id"
+
+    # Run the deployment
+    local payload=$(jq -n --argjson tid "$template_id" '{template_id: $tid, debug: false, dry_run: false}')
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/tasks" \
+        "$payload" "$admin_session" "Starting AdGuard deployment")
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to start AdGuard deployment"
+        return 1
+    fi
+
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
+
+    if is_api_success "$status_code"; then
+        local task_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
+        if [ -n "$task_id" ] && [ "$task_id" != "null" ]; then
+            log_info "AdGuard deployment started with task ID: $task_id"
+
+            # Wait for deployment to complete
+            if wait_for_task_completion "$project_id" "$task_id" "$admin_session" "AdGuard deployment"; then
+                log_info "✓ AdGuard deployed successfully"
+                return 0
+            else
+                log_error "AdGuard deployment task failed"
+                return 1
+            fi
+        fi
+    fi
+
+    log_error "Failed to start AdGuard deployment"
     return 1
 }
 
