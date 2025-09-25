@@ -188,7 +188,6 @@
           type: "static"
           project_id: "{{ project_id }}"
           inventory: "{{ inventory_yaml }}"
-          ssh_key_id: "{{ ssh_key_id }}"
         status_code: [201, 204]
       register: create_inventory_result
       when: not existing_inventory
@@ -206,7 +205,6 @@
           type: "static"
           project_id: "{{ project_id }}"
           inventory: "{{ inventory_yaml }}"
-          ssh_key_id: "{{ ssh_key_id }}"
         status_code: [200, 204]
       register: update_inventory_result
       when: existing_inventory
