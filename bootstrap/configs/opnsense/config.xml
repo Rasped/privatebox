@@ -1318,7 +1318,7 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
     <unboundplus version="1.0.12" persisted_at="1756124256.56">
       <general>
         <enabled>1</enabled>
-        <port>53</port>
+        <port>5353</port>
         <stats>0</stats>
         <active_interface>lan,opt1</active_interface>
         <dnssec>1</dnssec>
