@@ -11,8 +11,9 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 ## Target End State
 - One command on Proxmox boots a Debian 13 management VM.
 - Inside VM: Portainer (:9000) and Semaphore (:3000) running.
-- Semaphore: project, repo, SSH keys, environments, and a “Generate Templates” task present.
+- Semaphore: project, repo, SSH keys, environments, and a "Generate Templates" task present.
 - Services deployed via Semaphore templates (AdGuard now; more later).
+- DNS: AdGuard (10.10.20.10:53) → Quad9 (primary) + Unbound fallback (10.10.20.1:5353).
 - TLS: external domain, Caddy DNS‑01 wildcard, split‑horizon DNS (no public A records).
 - All services bind to the management VM IP (not 0.0.0.0).
 
@@ -36,6 +37,8 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - Script auto-detects network and configures everything. Check `/tmp/privatebox-config.conf` if you need different settings.
 
 ## TLS & DNS
+- DNS Architecture: AdGuard (10.10.20.10) filters ads → Quad9 TLS (9.9.9.9) → Unbound fallback (10.10.20.1:5353).
+- Blocklists: OISD Basic + Steven Black Hosts (auto-configured).
 - Use dedicated subdomain (e.g., `pb.example.com`) → wildcard `*.pb.example.com` via DNS‑01.
 - Split‑horizon DNS: internal A records only (AdGuard); no public exposure.
 - Store DNS API creds in Semaphore environments for Caddy.
