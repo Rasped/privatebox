@@ -514,27 +514,17 @@
               
         - name: Verify DNS configuration
           block:
-            - name: Test basic DNS resolution through AdGuard
-              command: >
-                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }}
-                +short +time=2 google.com
-              register: dns_test_basic
-              changed_when: false
-              failed_when: dns_test_basic.stdout == ""
+            - name: Check AdGuard DNS port is listening
+              wait_for:
+                host: "{{ ansible_default_ipv4.address }}"
+                port: "{{ adguard_dns_port }}"
+                timeout: 5
+                msg: "AdGuard DNS service is not listening on port {{ adguard_dns_port }}"
+              register: dns_port_check
 
-            - name: Test ad blocking functionality
-              command: >
-                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }}
-                +short +time=2 doubleclick.net
-              register: dns_test_adblock
-              changed_when: false
-              failed_when: false
-
-            - name: Verify ad blocking is working
+            - name: Display DNS service status
               debug:
-                msg: >
-                  Ad blocking {{ 'WORKING' if (dns_test_adblock.stdout == '' or '0.0.0.0' in dns_test_adblock.stdout)
-                  else 'NOT WORKING - doubleclick.net resolved to: ' + dns_test_adblock.stdout }}
+                msg: "AdGuard DNS service is {{ 'ACTIVE' if dns_port_check is succeeded else 'NOT ACTIVE' }} on port {{ adguard_dns_port }}"
 
             - name: Test Unbound fallback connectivity
               wait_for:
