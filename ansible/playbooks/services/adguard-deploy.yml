@@ -465,7 +465,7 @@
                   upstream_dns:
                     - "tls://dns.quad9.net"       # Primary Quad9 DNS-over-TLS
                     - "tls://dns11.quad9.net"     # Secondary Quad9 DNS-over-TLS
-                    - "10.10.20.1:5353"           # Unbound fallback on OPNsense Services VLAN
+                    - "10.10.20.1"               # Unbound fallback on OPNsense Services VLAN
                   bootstrap_dns:
                     - "9.9.9.9"                   # Quad9 for bootstrap
                     - "149.112.112.112"           # Quad9 secondary for bootstrap
@@ -529,9 +529,9 @@
             - name: Test Unbound fallback connectivity
               wait_for:
                 host: 10.10.20.1
-                port: 5353
+                port: 53
                 timeout: 5
-                msg: "Unbound DNS on OPNsense (10.10.20.1:5353) is not accessible"
+                msg: "Unbound DNS on OPNsense (10.10.20.1:53) is not accessible"
               ignore_errors: true  # Continue even if Unbound is not available
               register: unbound_check
 
@@ -559,7 +559,7 @@
                   - "DNS Configuration Summary:"
                   - "=========================================="
                   - "Primary DNS: Quad9 (TLS)"
-                  - "Fallback DNS: {{ 'Unbound at 10.10.20.1:5353' if unbound_check is succeeded else 'Quad9 secondary' }}"
+                  - "Fallback DNS: {{ 'Unbound at 10.10.20.1:53' if unbound_check is succeeded else 'Quad9 secondary' }}"
                   - "Blocklists: OISD Basic + Steven Black Hosts"
                   - "Ad blocking: {{ 'ACTIVE' if (dns_test_adblock.stdout == '' or '0.0.0.0' in dns_test_adblock.stdout) else 'CHECK REQUIRED' }}"
                   - "DNS queries served: {{ stats_result.json.num_dns_queries | default('N/A') }}"

@@ -691,7 +691,7 @@
     <unboundplus version="1.0.12" persisted_at="1753785976.25">
       <general>
         <enabled>1</enabled>
-        <port>5353</port>
+        <port>53</port>
         <stats>0</stats>
         <active_interface>lan,opt1</active_interface>
         <dnssec>0</dnssec>
