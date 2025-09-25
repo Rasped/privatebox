@@ -99,7 +99,7 @@
 
     - name: Find existing OPNsense key
       set_fact:
-        existing_key: "{{ existing_keys.json | selectattr('name', 'equalto', key_name) | list | first | default({}) }}"
+        existing_key: "{{ existing_keys.json | selectattr('name', 'equalto', key_name) | list | first | default(None) }}"
 
     - name: Create SSH key in Semaphore
       uri:
@@ -117,7 +117,7 @@
             private_key: "{{ ssh_private_key_content.content | b64decode }}"
         status_code: [201, 204]
       register: create_key_result
-      when: existing_key == {}
+      when: existing_key is none
 
     - name: Update existing SSH key in Semaphore
       uri:
@@ -135,15 +135,15 @@
             private_key: "{{ ssh_private_key_content.content | b64decode }}"
         status_code: [200, 204]
       register: update_key_result
-      when: existing_key != {}
+      when: existing_key is not none
 
     - name: Get final SSH key ID
       set_fact:
-        ssh_key_id: "{{ create_key_result.json.id if existing_key == {} else existing_key.id }}"
+        ssh_key_id: "{{ create_key_result.json.id if existing_key is none else existing_key.id }}"
 
     - name: Report SSH key status
       debug:
-        msg: "{{ 'Created new' if existing_key == {} else 'Updated existing' }} SSH key '{{ key_name }}' with ID: {{ ssh_key_id }}"
+        msg: "{{ 'Created new' if existing_key is none else 'Updated existing' }} SSH key '{{ key_name }}' with ID: {{ ssh_key_id }}"
 
     # ============================================
     # Phase 3: Inventory Registration
@@ -173,7 +173,7 @@
 
     - name: Find existing OPNsense inventory
       set_fact:
-        existing_inventory: "{{ existing_inventories.json | selectattr('name', 'equalto', inventory_name) | list | first | default({}) }}"
+        existing_inventory: "{{ existing_inventories.json | selectattr('name', 'equalto', inventory_name) | list | first | default(None) }}"
 
     - name: Create inventory in Semaphore
       uri:
@@ -191,7 +191,7 @@
           ssh_key_id: "{{ ssh_key_id }}"
         status_code: [201, 204]
       register: create_inventory_result
-      when: existing_inventory == {}
+      when: existing_inventory is none
 
     - name: Update existing inventory in Semaphore
       uri:
@@ -209,15 +209,15 @@
           ssh_key_id: "{{ ssh_key_id }}"
         status_code: [200, 204]
       register: update_inventory_result
-      when: existing_inventory != {}
+      when: existing_inventory is not none
 
     - name: Get final inventory ID
       set_fact:
-        inventory_id: "{{ create_inventory_result.json.id if existing_inventory == {} else existing_inventory.id }}"
+        inventory_id: "{{ create_inventory_result.json.id if existing_inventory is none else existing_inventory.id }}"
 
     - name: Report inventory status
       debug:
-        msg: "{{ 'Created new' if existing_inventory == {} else 'Updated existing' }} inventory '{{ inventory_name }}' with ID: {{ inventory_id }}"
+        msg: "{{ 'Created new' if existing_inventory is none else 'Updated existing' }} inventory '{{ inventory_name }}' with ID: {{ inventory_id }}"
 
     # ============================================
     # Phase 4: Template Regeneration
