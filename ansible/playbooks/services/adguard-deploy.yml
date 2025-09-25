@@ -354,11 +354,11 @@
           uri:
             url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
             method: GET
-            status_code: [200, 302]
+            status_code: [200, 302, 401]  # 401 means configured but needs auth
             follow_redirects: none
             timeout: 10
           register: api_status
-          until: api_status.status in [200, 302]
+          until: api_status.status in [200, 302, 401]
           retries: 12
           delay: 5
           
@@ -367,11 +367,19 @@
             url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
             method: GET
             follow_redirects: none
+            status_code: [200, 302, 401]  # Accept all expected statuses
           register: status_check
           failed_when: false
-          
+
+        - name: Display configuration status
+          debug:
+            msg: >
+              AdGuard status: {{ 'Needs initial configuration' if status_check.status == 302
+              else 'Already configured' if status_check.status == 401
+              else 'Accessible and running' }}
+
         - name: Configure AdGuard if not already configured
-          when: status_check.status == 302 or (status_check.json is defined and not status_check.json.protection_enabled | default(false))
+          when: status_check.status == 302  # Only configure if it redirects to setup
           block:
             - name: Check initial configuration
               uri:
@@ -381,15 +389,15 @@
                 body:
                   web:
                     port: 3000
-                    ip: "0.0.0.0"
+                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
                   dns:
                     port: "{{ adguard_dns_port }}"
-                    ip: "0.0.0.0"
+                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
                     autofix: false
                   set_static_ip: false
                 status_code: 200
               register: config_check
-              
+
             - name: Apply AdGuard configuration
               uri:
                 url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/install/configure"
@@ -398,10 +406,10 @@
                 body:
                   web:
                     port: 3000
-                    ip: "0.0.0.0"
+                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
                   dns:
                     port: "{{ adguard_dns_port }}"
-                    ip: "0.0.0.0"
+                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
                   username: "{{ adguard_admin_username }}"
                   password: "{{ adguard_admin_password }}"
                 status_code: 200
@@ -430,7 +438,7 @@
                 msg: "AdGuard is now configured. DNS port: {{ final_status.json.dns_port }}, Protection enabled: {{ final_status.json.protection_enabled }}"
                 
         - name: Configure recommended settings
-          when: status_check.status != 302
+          when: status_check.status in [200, 401]  # Configure if accessible (200) or needs auth (401)
           block:
             - name: Enable protection if not already enabled
               uri:
@@ -444,9 +452,8 @@
                   enabled: true
                 status_code: 200
               register: protection_result
-              failed_when: false
               
-            - name: Configure upstream DNS servers
+            - name: Configure upstream DNS servers (Quad9 + Unbound fallback)
               uri:
                 url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/dns_config"
                 method: POST
@@ -456,28 +463,119 @@
                 body_format: json
                 body:
                   upstream_dns:
-                    - "https://cloudflare-dns.com/dns-query"
-                    - "https://dns.quad9.net/dns-query"
-                    - "tls://1.1.1.1"
-                    - "tls://9.9.9.9"
+                    - "tls://dns.quad9.net"       # Primary Quad9 DNS-over-TLS
+                    - "tls://dns11.quad9.net"     # Secondary Quad9 DNS-over-TLS
+                    - "10.10.20.1:5353"           # Unbound fallback on OPNsense Services VLAN
                   bootstrap_dns:
-                    - "1.1.1.1"
-                    - "9.9.9.9"
-                    - "8.8.8.8"
+                    - "9.9.9.9"                   # Quad9 for bootstrap
+                    - "149.112.112.112"           # Quad9 secondary for bootstrap
+                    - "1.1.1.1"                   # Cloudflare as additional bootstrap
+                  upstream_mode: "parallel"       # Query all servers in parallel for fastest response
+                  cache_size: 4194304            # 4MB cache
+                  cache_ttl_min: 600             # Min TTL 10 minutes
+                  cache_ttl_max: 86400           # Max TTL 24 hours
+                  protection_enabled: true       # Enable protection
                 status_code: 200
               register: dns_config_result
-              failed_when: false
+
+            - name: Configure DNS blocklists
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/filtering/add_url"
+                method: POST
+                user: "{{ adguard_admin_username }}"
+                password: "{{ adguard_admin_password }}"
+                force_basic_auth: true
+                body_format: json
+                body:
+                  name: "{{ item.name }}"
+                  url: "{{ item.url }}"
+                  whitelist: false
+                status_code: 200
+              register: blocklist_result
+              loop:
+                - { name: "OISD Basic", url: "https://abp.oisd.nl/basic/" }
+                - { name: "Steven Black Hosts", url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts" }
+              loop_control:
+                label: "{{ item.name }}"
+              ignore_errors: true  # Ignore if blocklist already exists
+
+            - name: Enable and update blocklists
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/filtering/refresh"
+                method: POST
+                user: "{{ adguard_admin_username }}"
+                password: "{{ adguard_admin_password }}"
+                force_basic_auth: true
+                body_format: json
+                body:
+                  whitelist: false
+                status_code: 200
+              register: refresh_result
               
-        - name: Update system DNS to use AdGuard
+        - name: Verify DNS configuration
           block:
-            - name: Test DNS resolution through AdGuard
+            - name: Test basic DNS resolution through AdGuard
               command: >
-                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }} 
+                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }}
                 +short +time=2 google.com
-              register: dns_test_post_config
+              register: dns_test_basic
+              changed_when: false
+              failed_when: dns_test_basic.stdout == ""
+
+            - name: Test ad blocking functionality
+              command: >
+                dig @{{ ansible_default_ipv4.address }} -p {{ adguard_dns_port }}
+                +short +time=2 doubleclick.net
+              register: dns_test_adblock
               changed_when: false
               failed_when: false
-              
+
+            - name: Verify ad blocking is working
+              debug:
+                msg: >
+                  Ad blocking {{ 'WORKING' if (dns_test_adblock.stdout == '' or '0.0.0.0' in dns_test_adblock.stdout)
+                  else 'NOT WORKING - doubleclick.net resolved to: ' + dns_test_adblock.stdout }}
+
+            - name: Test Unbound fallback connectivity
+              wait_for:
+                host: 10.10.20.1
+                port: 5353
+                timeout: 5
+                msg: "Unbound DNS on OPNsense (10.10.20.1:5353) is not accessible"
+              ignore_errors: true  # Continue even if Unbound is not available
+              register: unbound_check
+
+            - name: Display Unbound fallback status
+              debug:
+                msg: >
+                  Unbound fallback {{ 'AVAILABLE' if unbound_check is succeeded
+                  else 'NOT AVAILABLE - AdGuard will use Quad9 only' }}
+
+            - name: Get AdGuard statistics
+              uri:
+                url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/stats"
+                method: GET
+                user: "{{ adguard_admin_username }}"
+                password: "{{ adguard_admin_password }}"
+                force_basic_auth: true
+                status_code: 200
+              register: stats_result
+              ignore_errors: true  # Don't fail if stats aren't available yet
+
+            - name: Display DNS configuration summary
+              debug:
+                msg:
+                  - "=========================================="
+                  - "DNS Configuration Summary:"
+                  - "=========================================="
+                  - "Primary DNS: Quad9 (TLS)"
+                  - "Fallback DNS: {{ 'Unbound at 10.10.20.1:5353' if unbound_check is succeeded else 'Quad9 secondary' }}"
+                  - "Blocklists: OISD Basic + Steven Black Hosts"
+                  - "Ad blocking: {{ 'ACTIVE' if (dns_test_adblock.stdout == '' or '0.0.0.0' in dns_test_adblock.stdout) else 'CHECK REQUIRED' }}"
+                  - "DNS queries served: {{ stats_result.json.num_dns_queries | default('N/A') }}"
+                  - "Queries blocked: {{ stats_result.json.num_blocked_filtering | default('N/A') }}"
+                  - "=========================================="
+
             # Note: System DNS configuration moved to activate-adguard-dns.yml
             # This keeps deployment independent of DNS changes
 
