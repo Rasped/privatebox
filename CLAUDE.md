@@ -15,7 +15,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Services deployed via Semaphore templates (AdGuard now; more later).
 - DNS: AdGuard (10.10.20.10:53) → Quad9 (primary) + Unbound fallback (10.10.20.1:5353).
 - TLS: external domain, Caddy DNS‑01 wildcard, split‑horizon DNS (no public A records).
-- All services bind to the management VM IP (not 0.0.0.0).
+- All services exposed only on management VM IP (via Podman port mapping).
 
 ## Platform & Constraints
 - Proxmox: latest only. Hardware: Intel N100 target.
@@ -97,7 +97,7 @@ Notes
 
 ## Coding Checklist
 - Idempotent? Retries/timeouts? Clear errors?
-- Bound to VM IP (no `0.0.0.0`)?
+- Exposed only on VM IP (via Podman PublishAddress)?
 - Secrets via Vault/Semaphore? No plaintext?
 - Logs and completion markers written?
 - Docs updated if flow/UX changed?
