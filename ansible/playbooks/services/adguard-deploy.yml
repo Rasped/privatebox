@@ -389,10 +389,10 @@
                 body:
                   web:
                     port: 3000
-                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
+                    ip: "0.0.0.0"  # Bind to all interfaces inside container
                   dns:
                     port: "{{ adguard_dns_port }}"
-                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
+                    ip: "0.0.0.0"  # Bind to all interfaces inside container
                     autofix: false
                   set_static_ip: false
                 status_code: 200
@@ -406,10 +406,10 @@
                 body:
                   web:
                     port: 3000
-                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
+                    ip: "0.0.0.0"  # Bind to all interfaces inside container
                   dns:
                     port: "{{ adguard_dns_port }}"
-                    ip: "{{ ansible_default_ipv4.address }}"  # Bind to Services VLAN IP
+                    ip: "0.0.0.0"  # Bind to all interfaces inside container
                   username: "{{ adguard_admin_username }}"
                   password: "{{ adguard_admin_password }}"
                 status_code: 200
