@@ -97,7 +97,8 @@
       "Bash(python3:*)",
       "Bash(git log:*)",
       "Bash(gh release delete:*)",
-      "Bash(gh release upload:*)"
+      "Bash(gh release upload:*)",
+      "Read(//Users/rasped/**)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
