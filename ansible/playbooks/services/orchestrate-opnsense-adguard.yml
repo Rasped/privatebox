@@ -1,0 +1,188 @@
+---
+- name: "Orchestrate OPNsense and AdGuard Deployment"
+  hosts: proxmox
+  gather_facts: yes
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "SemaphoreAPI"
+      semaphore_category: "orchestration"
+
+    # Fixed internal IPs
+    semaphore_ip: "10.10.20.10"
+    semaphore_url: "http://{{ semaphore_ip }}:3000"
+
+    # Get API token from SemaphoreAPI environment
+    semaphore_token: "{{ SEMAPHORE_API_TOKEN | default('') }}"
+
+    # Project configuration
+    project_id: 1
+
+    # Template names to execute in order
+    templates_to_run:
+      - "OPNsense 1: Establish Secure Access"
+      - "OPNsense 2: Register in Semaphore"
+      - "OPNsense 3: Post-Configuration"
+      - "AdGuard 1: Deploy Container Service"
+
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Prerequisites Check
+    # ============================================
+
+    - name: Verify Semaphore API token is available
+      fail:
+        msg: |
+          SEMAPHORE_API_TOKEN not found in environment.
+          This playbook must be run from Semaphore with the SemaphoreAPI environment selected.
+      when: semaphore_token | length == 0
+
+    - name: Test Semaphore API connectivity
+      uri:
+        url: "{{ semaphore_url }}/api/user"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: api_test
+
+    - name: Display API connection info
+      debug:
+        msg: "Connected to Semaphore as: {{ api_test.json.username }} (admin: {{ api_test.json.admin }})"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 2: Get All Templates
+    # ============================================
+
+    - name: Fetch all templates from Semaphore
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/templates"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: all_templates
+
+    - name: Display available templates
+      debug:
+        msg: "Found {{ all_templates.json | length }} templates in project"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 3: Execute Templates in Sequence
+    # ============================================
+
+    - name: Execute templates in order
+      include_tasks: run_template_task.yml
+      vars:
+        template_name: "{{ item }}"
+        templates_list: "{{ all_templates.json }}"
+      loop: "{{ templates_to_run }}"
+      loop_control:
+        label: "{{ item }}"
+
+    # ============================================
+    # Phase 4: Final Verification
+    # ============================================
+
+    - name: Wait for services to stabilize
+      pause:
+        seconds: 10
+
+    - name: Verify OPNsense is accessible
+      wait_for:
+        host: 10.10.20.1
+        port: 22
+        timeout: 10
+        msg: "OPNsense SSH not accessible"
+      register: opnsense_check
+
+    - name: Verify AdGuard DNS is running
+      wait_for:
+        host: 10.10.20.10
+        port: 53
+        timeout: 10
+        msg: "AdGuard DNS not accessible"
+      register: adguard_check
+
+    - name: Display orchestration summary
+      debug:
+        msg:
+          - "=========================================="
+          - "Orchestration Complete"
+          - "=========================================="
+          - "Templates Executed:"
+          - "  ✓ OPNsense 1: Establish Secure Access"
+          - "  ✓ OPNsense 2: Register in Semaphore"
+          - "  ✓ OPNsense 3: Post-Configuration"
+          - "  ✓ AdGuard 1: Deploy Container Service"
+          - ""
+          - "Service Status:"
+          - "  OPNsense: {{ 'ONLINE' if opnsense_check is succeeded else 'OFFLINE' }}"
+          - "  AdGuard DNS: {{ 'ONLINE' if adguard_check is succeeded else 'OFFLINE' }}"
+          - ""
+          - "Access Points:"
+          - "  OPNsense: ssh root@10.10.20.1"
+          - "  AdGuard Web: http://10.10.20.10:8080"
+          - "  AdGuard DNS: 10.10.20.10:53"
+          - "=========================================="
+
+---
+# Include file for running individual templates
+# This would be saved as run_template_task.yml in the same directory
+- name: Find template by name
+  set_fact:
+    current_template: "{{ templates_list | selectattr('name', 'equalto', template_name) | first | default(None) }}"
+
+- name: Fail if template not found
+  fail:
+    msg: "Template '{{ template_name }}' not found in Semaphore"
+  when: current_template is none
+
+- name: Display template execution start
+  debug:
+    msg: "Starting: {{ template_name }} (ID: {{ current_template.id }})"
+
+- name: Execute template
+  uri:
+    url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ semaphore_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      template_id: "{{ current_template.id }}"
+      debug: false
+      dry_run: false
+    status_code: [201]
+  register: task_result
+
+- name: Wait for task completion
+  uri:
+    url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks/{{ task_result.json.id }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ semaphore_token }}"
+    status_code: 200
+  register: task_status
+  until: task_status.json.status in ['success', 'error', 'failed']
+  retries: 60
+  delay: 5
+
+- name: Check task result
+  fail:
+    msg: "Template '{{ template_name }}' failed with status: {{ task_status.json.status }}"
+  when: task_status.json.status != 'success'
+
+- name: Display template execution complete
+  debug:
+    msg: "✓ Completed: {{ template_name }} (Task ID: {{ task_result.json.id }})"
+
+- name: Wait between template executions
+  pause:
+    seconds: 5
+  when: template_name != templates_to_run[-1]
