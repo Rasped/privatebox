@@ -80,6 +80,10 @@
       vars:
         template_name: "{{ item }}"
         templates_list: "{{ all_templates.json }}"
+        templates_to_run: "{{ templates_to_run }}"
+        semaphore_url: "{{ semaphore_url }}"
+        semaphore_token: "{{ semaphore_token }}"
+        project_id: "{{ project_id }}"
       loop: "{{ templates_to_run }}"
       loop_control:
         label: "{{ item }}"
@@ -129,60 +133,3 @@
           - "  AdGuard Web: http://10.10.20.10:8080"
           - "  AdGuard DNS: 10.10.20.10:53"
           - "=========================================="
-
----
-# Include file for running individual templates
-# This would be saved as run_template_task.yml in the same directory
-- name: Find template by name
-  set_fact:
-    current_template: "{{ templates_list | selectattr('name', 'equalto', template_name) | first | default(None) }}"
-
-- name: Fail if template not found
-  fail:
-    msg: "Template '{{ template_name }}' not found in Semaphore"
-  when: current_template is none
-
-- name: Display template execution start
-  debug:
-    msg: "Starting: {{ template_name }} (ID: {{ current_template.id }})"
-
-- name: Execute template
-  uri:
-    url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks"
-    method: POST
-    headers:
-      Authorization: "Bearer {{ semaphore_token }}"
-      Content-Type: "application/json"
-    body_format: json
-    body:
-      template_id: "{{ current_template.id }}"
-      debug: false
-      dry_run: false
-    status_code: [201]
-  register: task_result
-
-- name: Wait for task completion
-  uri:
-    url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks/{{ task_result.json.id }}"
-    method: GET
-    headers:
-      Authorization: "Bearer {{ semaphore_token }}"
-    status_code: 200
-  register: task_status
-  until: task_status.json.status in ['success', 'error', 'failed']
-  retries: 60
-  delay: 5
-
-- name: Check task result
-  fail:
-    msg: "Template '{{ template_name }}' failed with status: {{ task_status.json.status }}"
-  when: task_status.json.status != 'success'
-
-- name: Display template execution complete
-  debug:
-    msg: "✓ Completed: {{ template_name }} (Task ID: {{ task_result.json.id }})"
-
-- name: Wait between template executions
-  pause:
-    seconds: 5
-  when: template_name != templates_to_run[-1]
