@@ -29,11 +29,13 @@ if [[ -z "${SERVICES_PASSWORD:-}" ]]; then
 fi
 
 log "Starting guest configuration..."
+echo "PROGRESS:Starting guest configuration" > /etc/privatebox-install-complete
 
 #==============================#
 # System packages
 #==============================#
 log "Updating package lists..."
+echo "PROGRESS:Updating system packages" > /etc/privatebox-install-complete
 apt-get update || error_exit "Failed to update package lists"
 
 log "Upgrading system packages to latest versions..."
@@ -86,6 +88,7 @@ USER semaphore
 EOF
 
 log "Building Semaphore image (localhost/semaphore-proxmox:latest)..."
+echo "PROGRESS:Building custom Semaphore image" > /etc/privatebox-install-complete
 podman build -t localhost/semaphore-proxmox:latest /opt/semaphore || error_exit "Failed to build Semaphore image"
 
 #==============================#
@@ -226,6 +229,7 @@ log "Enabling nightly image rebuild timer..."
 systemctl enable --now semaphore-image-update.timer
 
 log "Starting Portainer..."
+echo "PROGRESS:Starting Portainer service" > /etc/privatebox-install-complete
 # Quadlet services are auto-generated, just start them
 systemctl start portainer.service || error_exit "Failed to start Portainer"
 
@@ -239,6 +243,7 @@ for i in {1..30}; do
 done
 
 log "Starting Semaphore..."
+echo "PROGRESS:Starting Semaphore service" > /etc/privatebox-install-complete
 # Quadlet services are auto-generated, just start them
 systemctl start semaphore.service || error_exit "Failed to start Semaphore"
 
@@ -253,6 +258,7 @@ done
 
 # Create admin user via stop/start dance (idempotent)
 log "Creating Semaphore admin user..."
+echo "PROGRESS:Creating Semaphore admin user" > /etc/privatebox-install-complete
 IMAGE="$(podman container inspect -f '{{.ImageName}}' semaphore 2>/dev/null || echo localhost/semaphore-proxmox:latest)"
 
 systemctl stop semaphore.service
@@ -286,6 +292,7 @@ done
 #==============================#
 log "Configuring Semaphore via API (if library present)..."
 if [[ -f /usr/local/lib/semaphore-api.sh ]]; then
+  echo "PROGRESS:Configuring Semaphore API" > /etc/privatebox-install-complete
   log "Loading /usr/local/lib/semaphore-api.sh"
   # shellcheck disable=SC1091
   source /usr/local/lib/semaphore-api.sh

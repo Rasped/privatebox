@@ -474,8 +474,9 @@ create_password_environment() {
 setup_template_synchronization() {
     local project_id="$1"
     local admin_session="$2"
-    
+
     log_info "Setting up template synchronization infrastructure..."
+    echo "PROGRESS:Setting up template synchronization" > /etc/privatebox-install-complete
 
     # Create API token
     log_info "Step 1/6: Creating API token..."
@@ -521,6 +522,7 @@ setup_template_synchronization() {
 
     # Auto-run the Generate Templates task once to sync templates
     log_info "Step 6/7: Running Generate Templates task..."
+    echo "PROGRESS:Generating service templates" > /etc/privatebox-install-complete
     local gen_task_id=$(run_generate_templates_task "$project_id" "$template_id" "$admin_session")
     if [ -n "$gen_task_id" ]; then
         log_info "✓ Generate Templates task triggered with ID: $gen_task_id"
@@ -721,6 +723,7 @@ run_service_orchestration() {
     local admin_session="$2"
 
     log_info "Running service orchestration..."
+    echo "PROGRESS:Running service orchestration" > /etc/privatebox-install-complete
 
     # Find the Orchestrate Services template
     local template_id=$(get_template_id_by_name "$project_id" "Orchestrate Services" "$admin_session")
@@ -752,10 +755,13 @@ run_service_orchestration() {
             log_info "Service orchestration started with task ID: $task_id"
 
             # Wait for orchestration to complete (this runs multiple templates, so may take longer)
+            echo "PROGRESS:Deploying services - OPNsense firewall" > /etc/privatebox-install-complete
             if wait_for_task_completion "$project_id" "$task_id" "$admin_session" "Service orchestration" 1200; then
+                echo "PROGRESS:Deploying services - AdGuard DNS" > /etc/privatebox-install-complete
                 log_info "✓ Service orchestration completed successfully"
                 log_info "   OPNsense configured at 10.10.20.1"
                 log_info "   AdGuard DNS running at 10.10.20.10:53"
+                echo "PROGRESS:Service configuration complete" > /etc/privatebox-install-complete
                 return 0
             else
                 log_error "Service orchestration task failed or timed out"
@@ -956,8 +962,9 @@ create_default_inventory() {
 # Create infrastructure project with SSH key
 create_infrastructure_project_with_ssh_key() {
     local admin_session="${1:-}"
-    
+
     log_info "Creating PrivateBox project with SSH key..."
+    echo "PROGRESS:Creating PrivateBox project" > /etc/privatebox-install-complete
     
     # Get admin session if not provided
     if [ -z "$admin_session" ]; then
@@ -995,13 +1002,14 @@ create_infrastructure_project_with_ssh_key() {
             # Create SSH key for Proxmox if available
             local proxmox_key_id=""
             if [ -f "/root/.credentials/proxmox_ssh_key" ]; then
+                echo "PROGRESS:Uploading SSH keys" > /etc/privatebox-install-complete
                 local ssh_payload=$(jq -n \
                     --arg name "proxmox" \
                     --arg type "ssh" \
                     --argjson pid "$project_id" \
                     --arg priv "$(cat /root/.credentials/proxmox_ssh_key)" \
                     '{name: $name, type: $type, project_id: $pid, ssh: {private_key: $priv}}')
-                
+
                 local api_result=$(make_api_request "POST" \
                     "http://localhost:3000/api/project/$project_id/keys" \
                     "$ssh_payload" "$admin_session" "Creating Proxmox SSH key")
@@ -1058,15 +1066,17 @@ create_infrastructure_project_with_ssh_key() {
             fi
             
             # Create repository
+            echo "PROGRESS:Creating repository" > /etc/privatebox-install-complete
             if ! create_repository "$project_id" "PrivateBox" "${PRIVATEBOX_GIT_URL}" "$admin_session"; then
                 log_error "Failed to create PrivateBox repository"
             fi
             
             # Create password environment
+            echo "PROGRESS:Creating environments" > /etc/privatebox-install-complete
             if ! create_password_environment "$project_id" "$admin_session"; then
                 log_error "Failed to create password environment"
             fi
-            
+
             # Create ProxmoxAPI environment
             if ! create_proxmox_api_environment "$project_id" "$admin_session"; then
                 log_error "Failed to create ProxmoxAPI environment"
