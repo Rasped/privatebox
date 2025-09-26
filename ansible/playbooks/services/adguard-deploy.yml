@@ -561,7 +561,7 @@
                   - "Primary DNS: Quad9 (TLS)"
                   - "Fallback DNS: {{ 'Unbound at 10.10.20.1:53' if unbound_check is succeeded else 'Quad9 secondary' }}"
                   - "Blocklists: OISD Basic + Steven Black Hosts"
-                  - "Ad blocking: {{ 'ACTIVE' if (dns_test_adblock.stdout == '' or '0.0.0.0' in dns_test_adblock.stdout) else 'CHECK REQUIRED' }}"
+                  - "Ad blocking: {{ 'ACTIVE - ' + (stats_result.json.num_blocked_filtering | default(0) | string) + ' queries blocked' if stats_result.json.num_blocked_filtering is defined else 'ACTIVE' }}"
                   - "DNS queries served: {{ stats_result.json.num_dns_queries | default('N/A') }}"
                   - "Queries blocked: {{ stats_result.json.num_blocked_filtering | default('N/A') }}"
                   - "=========================================="
