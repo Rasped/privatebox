@@ -292,12 +292,6 @@
           HealthTimeout=5s
           HealthRetries=3
 
-          [Service]
-          Type=forking
-          Restart=always
-          RestartSec=10
-          TimeoutStartSec=120
-
           [Install]
           WantedBy=default.target
         mode: '0644'
