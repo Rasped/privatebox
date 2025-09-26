@@ -24,7 +24,8 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - **Network auto-detection** and configuration
 - **Portainer** (port 9000) - Container management UI
 - **Semaphore** (port 3000) - Ansible automation UI
-- **Automatic template synchronization** from Ansible playbooks
+- **Automatic template synchronization** from Ansible playbooks ✅
+- **Service orchestration automation** ✅ (auto-deploys OPNsense, AdGuard, Homer)
 - **SSH key management** for Proxmox and containers
 - **Password generation** and storage in `/etc/privatebox/config.env`
 - **Semaphore API integration** with cookie-based auth
@@ -34,6 +35,7 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - **OPNsense VM template** created and backed up
 - **OPNsense with Unbound DNS** configured on port 53
 - **AdGuard deployment playbook** ✅ (fully deployed and configured with Quad9 + Unbound fallback, blocklists active)
+- **Homer dashboard** ✅ (deployed at http://10.10.20.10:8081 with service registry)
 
 ### 🔧 NEEDS FINALIZATION
 
@@ -51,8 +53,11 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 
 #### 2. Dashboard Deployment ✅ COMPLETED
 **Current State**: Homer deployed and running at 10.10.20.10:8081
-**Required**: Homer or Heimdall container deployment
-**Decision Made**: Homer deployed with services registry at /opt/privatebox/services.yml
+**Implementation**:
+- Homer container deployed via Semaphore template
+- Service registry at /opt/privatebox/services.yml
+- Auto-updates services from registry
+- Shows all deployed services with status
 
 **Questions**:
 - Homer (static, simple) or Heimdall (dynamic, more features)?
@@ -176,9 +181,9 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 
 ## Implementation Priority Order
 
-1. **Fix AdGuard-Unbound integration** (core functionality)
-2. **Deploy dashboard** (user visibility)
-3. **Setup encrypted backup partition** (data safety)
+1. ✅ **COMPLETED: AdGuard-Unbound integration** (core functionality)
+2. ✅ **COMPLETED: Deploy dashboard** (user visibility)
+3. **NEXT: Setup encrypted backup partition** (data safety)
 4. **Implement VPNs** (remote access)
 5. **Create update playbooks** (maintenance)
 
