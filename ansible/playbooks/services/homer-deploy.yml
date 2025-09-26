@@ -276,8 +276,7 @@
           AutoUpdate=registry
 
           # Port mapping - bind to Services VLAN IP only
-          PublishAddress=10.10.20.10
-          PublishPort={{ homer_port }}:8080
+          PublishPort=10.10.20.10:{{ homer_port }}:8080
 
           # Volume mount for config (read-only)
           Volume={{ config_dir }}:/www/assets:ro
