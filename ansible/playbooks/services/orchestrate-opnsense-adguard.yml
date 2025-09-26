@@ -80,7 +80,7 @@
       vars:
         template_name: "{{ item }}"
         templates_list: "{{ all_templates.json }}"
-        templates_to_run: "{{ templates_to_run }}"
+        all_templates_to_run: "{{ templates_to_run }}"
         semaphore_url: "{{ semaphore_url }}"
         semaphore_token: "{{ semaphore_token }}"
         project_id: "{{ project_id }}"
