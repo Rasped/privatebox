@@ -49,10 +49,10 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - Should AdGuard listen on all interfaces or just the Services VLAN (10.10.20.x)?
 - Fallback DNS servers if Unbound fails?
 
-#### 2. Dashboard Deployment
-**Current State**: No dashboard exists
+#### 2. Dashboard Deployment ✅ COMPLETED
+**Current State**: Homer deployed and running at 10.10.20.10:8081
 **Required**: Homer or Heimdall container deployment
-**Decision Made**: Use existing FOSS solution, no custom coding
+**Decision Made**: Homer deployed with services registry at /opt/privatebox/services.yml
 
 **Questions**:
 - Homer (static, simple) or Heimdall (dynamic, more features)?
