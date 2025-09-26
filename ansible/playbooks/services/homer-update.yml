@@ -4,7 +4,7 @@
 # This playbook is called when new services are added
 
 - name: "Homer Update: Refresh Dashboard Configuration"
-  hosts: localhost
+  hosts: container-host
   gather_facts: yes
   vars:
     config_dir: "/opt/homer"

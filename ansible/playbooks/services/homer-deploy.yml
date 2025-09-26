@@ -5,7 +5,7 @@
 #   - SERVICES_PASSWORD (for display purposes only)
 
 - name: "Homer 1: Deploy Dashboard Service"
-  hosts: localhost
+  hosts: container-host
   gather_facts: yes
   vars:
     # Service configuration
@@ -35,12 +35,9 @@
 
     - name: Validate environment
       block:
-        - name: Check if running on Management VM
-          assert:
-            that:
-              - ansible_hostname == "privatebox-mgmt"
-            fail_msg: "This playbook must run on the Management VM"
-            success_msg: "✓ Running on Management VM"
+        - name: Display target host
+          debug:
+            msg: "✓ Running on host: {{ ansible_hostname }}"
 
         - name: Check for Podman
           command: which podman
