@@ -6,11 +6,9 @@
 - name: OPNsense Post-Configuration and Cleanup
   hosts: proxmox
   gather_facts: yes
-  become: yes
   vars:
     opnsense_ip: "10.10.20.1"
     opnsense_key: "/root/.credentials/opnsense/id_ed25519"
-    unbound_port: 5353
 
   tasks:
     - name: Check OPNsense SSH connectivity
@@ -50,27 +48,7 @@
       when: legacy_section_check.stdout | int > 0
       register: cleanup_result
 
-    - name: Verify unboundplus port configuration
-      shell: |
-        ssh -i {{ opnsense_key }} \
-        -o StrictHostKeyChecking=no \
-        root@{{ opnsense_ip }} \
-        "grep -A5 '<unboundplus>' /conf/config.xml | grep '<port>' | head -1"
-      register: port_check
-      changed_when: false
-
-    - name: Display current port configuration
-      debug:
-        msg: "Current unboundplus port setting: {{ port_check.stdout }}"
-
-    - name: Update unboundplus port if needed
-      shell: |
-        ssh -i {{ opnsense_key }} \
-        -o StrictHostKeyChecking=no \
-        root@{{ opnsense_ip }} \
-        "sed -i 's|<port>53</port>|<port>{{ unbound_port }}</port>|g' /conf/config.xml"
-      when: "'<port>53</port>' in port_check.stdout"
-      register: port_update
+    # Port configuration removed - using default port 53
 
     - name: Ensure unboundplus interfaces are configured
       shell: |
@@ -87,7 +65,7 @@
         -o StrictHostKeyChecking=no \
         root@{{ opnsense_ip }} \
         "configctl unbound reconfigure"
-      when: cleanup_result.changed or port_update.changed or interface_update.changed
+      when: cleanup_result.changed or interface_update.changed
       register: reconfigure_result
 
     - name: Wait for Unbound to restart
