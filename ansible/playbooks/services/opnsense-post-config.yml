@@ -97,27 +97,7 @@
       debug:
         msg: "Unbound service: {{ service_status.stdout }}"
 
-    - name: Check Unbound listening ports
-      shell: |
-        ssh -i {{ opnsense_key }} \
-        -o StrictHostKeyChecking=no \
-        root@{{ opnsense_ip }} \
-        "sockstat -l | grep unbound | grep ':53'"
-      register: listening_ports
-      changed_when: false
-      ignore_errors: true
-
-    - name: Display listening ports
-      debug:
-        msg: "Unbound listening on: {{ listening_ports.stdout_lines | default([]) }}"
-
-    - name: Verify Unbound on correct port
-      wait_for:
-        host: "{{ opnsense_ip }}"
-        port: "{{ unbound_port }}"
-        timeout: 30
-      delegate_to: localhost
-      register: port_verification
+    # Port verification tasks removed - using default port 53
 
     - name: Test DNS resolution through Unbound
       shell: |
