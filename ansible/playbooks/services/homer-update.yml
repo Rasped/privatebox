@@ -137,7 +137,7 @@
 
     - name: Restart Homer if config changed
       systemd:
-        name: homer.service
+        name: homer-container.service
         state: restarted
       when: config_updated.changed
 
