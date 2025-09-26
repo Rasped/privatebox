@@ -529,15 +529,18 @@ setup_template_synchronization() {
         if wait_for_task_completion "$project_id" "$gen_task_id" "$admin_session" "Generate Templates"; then
             log_info "✓ Templates generated successfully"
 
-            # Deploy AdGuard
-            log_info "Step 7/7: Deploying AdGuard DNS service..."
-            if deploy_adguard "$project_id" "$admin_session"; then
-                log_info "✅ AdGuard deployment completed successfully"
-                log_info "   AdGuard will be accessible at http://10.10.20.10:3080 once started"
+            # Run service orchestration
+            log_info "Step 7/7: Running service orchestration..."
+            if run_service_orchestration "$project_id" "$admin_session"; then
+                log_info "✅ Service orchestration completed successfully"
+                log_info "   Services deployed:"
+                log_info "   - OPNsense firewall at 10.10.20.1"
+                log_info "   - AdGuard DNS at 10.10.20.10:53"
+                log_info "   - AdGuard web interface at http://10.10.20.10:8080"
             else
-                log_error "❌ AdGuard deployment FAILED"
-                log_warn "   This is non-fatal - you can deploy AdGuard manually from Semaphore"
-                log_warn "   Template name: 'AdGuard: Deploy Container Service'"
+                log_error "❌ Service orchestration FAILED"
+                log_warn "   This is non-fatal - you can run 'Orchestrate Services' manually from Semaphore"
+                log_warn "   Or deploy services individually from their respective templates"
             fi
         else
             log_warn "Generate Templates task did not complete successfully, skipping AdGuard deployment"
@@ -712,31 +715,31 @@ wait_for_task_completion() {
     return 1
 }
 
-# Deploy AdGuard via Semaphore
-deploy_adguard() {
+# Run service orchestration via Semaphore
+run_service_orchestration() {
     local project_id="$1"
     local admin_session="$2"
 
-    log_info "Deploying AdGuard DNS service..."
+    log_info "Running service orchestration..."
 
-    # Find the AdGuard deployment template
-    local template_id=$(get_template_id_by_name "$project_id" "AdGuard: Deploy Container Service" "$admin_session")
+    # Find the Orchestrate Services template
+    local template_id=$(get_template_id_by_name "$project_id" "Orchestrate Services" "$admin_session")
     if [ -z "$template_id" ]; then
-        log_error "❌ AdGuard template not found - expected 'AdGuard: Deploy Container Service'"
-        log_error "   Available templates might not include AdGuard deployment"
+        log_error "❌ Orchestrate Services template not found"
+        log_error "   This template should have been created during setup"
         return 1
     fi
 
-    log_info "Found AdGuard template with ID: $template_id"
+    log_info "Found Orchestrate Services template with ID: $template_id"
 
-    # Run the deployment
+    # Run the orchestration
     local payload=$(jq -n --argjson tid "$template_id" '{template_id: $tid, debug: false, dry_run: false}')
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/tasks" \
-        "$payload" "$admin_session" "Starting AdGuard deployment")
+        "$payload" "$admin_session" "Starting service orchestration")
 
     if [ $? -ne 0 ]; then
-        log_error "Failed to start AdGuard deployment"
+        log_error "Failed to start service orchestration"
         return 1
     fi
 
@@ -746,20 +749,22 @@ deploy_adguard() {
     if is_api_success "$status_code"; then
         local task_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$task_id" ] && [ "$task_id" != "null" ]; then
-            log_info "AdGuard deployment started with task ID: $task_id"
+            log_info "Service orchestration started with task ID: $task_id"
 
-            # Wait for deployment to complete
-            if wait_for_task_completion "$project_id" "$task_id" "$admin_session" "AdGuard deployment"; then
-                log_info "✓ AdGuard deployed successfully"
+            # Wait for orchestration to complete (this runs multiple templates, so may take longer)
+            if wait_for_task_completion "$project_id" "$task_id" "$admin_session" "Service orchestration" 1200; then
+                log_info "✓ Service orchestration completed successfully"
+                log_info "   OPNsense configured at 10.10.20.1"
+                log_info "   AdGuard DNS running at 10.10.20.10:53"
                 return 0
             else
-                log_error "AdGuard deployment task failed"
+                log_error "Service orchestration task failed or timed out"
                 return 1
             fi
         fi
     fi
 
-    log_error "Failed to start AdGuard deployment"
+    log_error "Failed to start service orchestration"
     return 1
 }
 
