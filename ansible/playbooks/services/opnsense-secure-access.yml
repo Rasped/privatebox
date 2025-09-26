@@ -1,5 +1,5 @@
 ---
-- name: "OPNsense: Establish secure access and sync password"
+- name: "OPNsense 1: Establish Secure Access"
   hosts: proxmox
   gather_facts: yes
   vars:

@@ -1,5 +1,5 @@
 ---
-- name: "OPNsense: Register in Semaphore for management"
+- name: "OPNsense 2: Register in Semaphore"
   hosts: proxmox
   gather_facts: yes
   vars:

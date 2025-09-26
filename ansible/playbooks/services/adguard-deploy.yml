@@ -1,5 +1,5 @@
 ---
-- name: "AdGuard: Deploy Container Service"
+- name: "AdGuard 1: Deploy Container Service"
   hosts: container-host
   become: true
   gather_facts: true
