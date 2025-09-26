@@ -195,18 +195,23 @@ create_semaphore_api_environment() {
     return 1
 }
 
-# Create Generate Templates task
-create_template_generator_task() {
-    local project_id="$1"
-    local repository_id="$2"
-    local inventory_id="$3"
-    local environment_id="$4"
-    local admin_session="$5"
-    
-    log_info "Creating Generate Templates task..."
-    
+# Generic function to create Python-based templates
+create_python_template() {
+    local template_name="$1"
+    local playbook_path="$2"
+    local description="$3"
+    local project_id="$4"
+    local repository_id="$5"
+    local inventory_id="$6"
+    local environment_id="$7"
+    local admin_session="$8"
+
+    log_info "Creating $template_name task..."
+
     local template_payload=$(jq -n \
-        --arg name "Generate Templates" \
+        --arg name "$template_name" \
+        --arg playbook "$playbook_path" \
+        --arg desc "$description" \
         --argjson pid "$project_id" \
         --argjson inv_id "$inventory_id" \
         --argjson repo_id "$repository_id" \
@@ -218,111 +223,64 @@ create_template_generator_task() {
             repository_id: $repo_id,
             environment_id: $env_id,
             app: "python",
-            playbook: "tools/generate-templates.py",
-            description: "Automatically generate Semaphore templates from playbooks",
+            playbook: $playbook,
+            description: $desc,
             arguments: "[]",
             allow_override_args_in_task: false,
             type: ""
         }')
-    
+
     local api_result=$(make_api_request "POST" \
         "http://localhost:3000/api/project/$project_id/templates" \
-        "$template_payload" "$admin_session" "Creating template generator task")
-    
+        "$template_payload" "$admin_session" "Creating $template_name task")
+
     if [ $? -ne 0 ]; then
-        log_error "API request failed for template creation"
+        log_error "API request failed for $template_name creation"
         return 1
     fi
-    
+
     local status_code=$(get_api_status "$api_result")
     local response_body=$(get_api_body "$api_result")
-    
+
     if is_api_success "$status_code"; then
-        local template_id=$(echo "$response_body" | jq -r '.id')
-        if [ -n "$template_id" ] && [ "$template_id" != "null" ]; then
-            log_info "✓ Generate Templates task created successfully with ID: $template_id"
+        local template_id=$(echo "$response_body" | jq -r '.id // empty')
+        if [ -n "$template_id" ]; then
+            log_info "✓ $template_name task created with ID: $template_id"
             echo "$template_id"
             return 0
         fi
     fi
-    
+
     # If template already exists, return its ID
     if echo "$response_body" | grep -qi "already exists"; then
-        local existing_id=$(get_template_id_by_name "$project_id" "Generate Templates" "$admin_session" 2>/dev/null)
+        local existing_id=$(get_template_id_by_name "$project_id" "$template_name" "$admin_session" 2>/dev/null)
         if [ -n "$existing_id" ]; then
-            log_info "Using existing Generate Templates task with ID: $existing_id"
+            log_info "Using existing $template_name task with ID: $existing_id"
             echo "$existing_id"
             return 0
         fi
     fi
-    
-    log_error "Failed to create template. Status: $status_code"
+
+    log_error "Failed to create $template_name. Status: $status_code"
     return 1
+}
+
+# Create Generate Templates task
+create_template_generator_task() {
+    create_python_template \
+        "Generate Templates" \
+        "tools/generate-templates.py" \
+        "Automatically generate Semaphore templates from playbooks" \
+        "$@"
 }
 
 # Create Orchestrate Services task
 create_orchestrate_services_task() {
-    local project_id="$1"
-    local repository_id="$2"
-    local inventory_id="$3"
-    local environment_id="$4"
-    local admin_session="$5"
-
-    log_info "Creating Orchestrate Services task..."
-
-    local template_payload=$(jq -n \
-        --arg name "Orchestrate Services" \
-        --argjson pid "$project_id" \
-        --argjson inv_id "$inventory_id" \
-        --argjson repo_id "$repository_id" \
-        --argjson env_id "$environment_id" \
-        '{
-            name: $name,
-            project_id: $pid,
-            inventory_id: $inv_id,
-            repository_id: $repo_id,
-            environment_id: $env_id,
-            app: "python",
-            playbook: "tools/orchestrate-services.py",
-            description: "Orchestrate OPNsense and AdGuard service deployment",
-            arguments: "[]",
-            allow_override_args_in_task: false,
-            type: ""
-        }')
-
-    local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/templates" \
-        "$template_payload" "$admin_session" "Creating orchestration task")
-
-    if [ $? -ne 0 ]; then
-        log_error "API request failed for orchestration template creation"
-        return 1
-    fi
-
-    local status_code=$(get_api_status "$api_result")
-    local response_body=$(get_api_body "$api_result")
-
-    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
-        local template_id=$(echo "$response_body" | jq -r '.id // empty')
-        if [ -n "$template_id" ]; then
-            log_info "✓ Orchestrate Services task created with ID: $template_id"
-            echo "$template_id"
-            return 0
-        fi
-    fi
-
-    # If template already exists, return its ID
-    if echo "$response_body" | grep -qi "already exists"; then
-        local existing_id=$(get_template_id_by_name "$project_id" "Orchestrate Services" "$admin_session" 2>/dev/null)
-        if [ -n "$existing_id" ]; then
-            log_info "Using existing Orchestrate Services task with ID: $existing_id"
-            echo "$existing_id"
-            return 0
-        fi
-    fi
-
-    log_error "Failed to create orchestration template. Status: $status_code"
-    return 1
+    create_python_template \
+        "Orchestrate Services" \
+        "tools/orchestrate-services.py" \
+        "Orchestrate OPNsense and AdGuard service deployment" \
+        "$@"
 }
 
 # Create ProxmoxAPI environment
