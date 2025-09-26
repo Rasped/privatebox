@@ -320,9 +320,9 @@
               - "- Individual devices: Use {{ service_info.dns_server }}:{{ service_info.dns_port }}"
               - ""
               - "Service Management:"
-              - "- Status: sudo systemctl status adguard-container"
+              - "- Status: sudo systemctl status adguard.service"
               - "- Logs: sudo podman logs adguard-home"
-              - "- Restart: sudo systemctl restart adguard-container"
+              - "- Restart: sudo systemctl restart adguard.service"
               - "=========================================="
               
         - name: Save deployment info
