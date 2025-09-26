@@ -69,16 +69,35 @@ wait_for_vm() {
 check_marker_file() {
     local vm_ip="$1"
     local elapsed=0
-    local last_progress=""  # Track last progress message to avoid duplicates
+    local last_line_count=0  # Track how many lines we've already processed
 
     log "Checking for installation marker file..."
 
     while [[ $elapsed -lt $TIMEOUT ]]; do
-        local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY_PATH" \
+        # Get the entire file to process new progress messages
+        local file_content=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY_PATH" \
                       "${VM_USERNAME}@${vm_ip}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
 
-        # Trim only leading/trailing whitespace and newlines
-        status=$(echo "$status" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # Get the last line for status check
+        local status=$(echo "$file_content" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+        # Process any new progress messages
+        if [[ -n "$file_content" ]] && [[ "$file_content" != "PENDING" ]]; then
+            local current_line_count=$(echo "$file_content" | wc -l)
+
+            # Display new progress messages since last check
+            if [[ $current_line_count -gt $last_line_count ]]; then
+                local new_lines=$(echo "$file_content" | tail -n $((current_line_count - last_line_count)))
+                while IFS= read -r line; do
+                    if [[ "$line" == PROGRESS:* ]]; then
+                        local progress_msg="${line#PROGRESS:}"
+                        display "   ✓ ${progress_msg}"
+                        log "Progress: $progress_msg"
+                    fi
+                done <<< "$new_lines"
+                last_line_count=$current_line_count
+            fi
+        fi
 
         case "$status" in
             SUCCESS)
@@ -89,23 +108,11 @@ check_marker_file() {
                 log "Installation failed with error"
                 return 1
                 ;;
-            PROGRESS:*)
-                # Extract progress message after PROGRESS:
-                local progress_msg="${status#PROGRESS:}"
-                # Only display if it's a new progress message
-                if [[ "$progress_msg" != "$last_progress" ]]; then
-                    display "   ✓ ${progress_msg}"
-                    log "Progress: $progress_msg"
-                    last_progress="$progress_msg"
-                fi
-                sleep $CHECK_INTERVAL
-                elapsed=$((elapsed + CHECK_INTERVAL))
-                ;;
-            PENDING|*)
+            PENDING|PROGRESS:*)
                 sleep $CHECK_INTERVAL
                 elapsed=$((elapsed + CHECK_INTERVAL))
 
-                if [[ $((elapsed % 30)) -eq 0 ]]; then
+                if [[ $((elapsed % 30)) -eq 0 ]] && [[ "$status" == "PENDING" ]]; then
                     display "   Guest setup in progress... (${elapsed}s elapsed)"
                 fi
                 ;;
