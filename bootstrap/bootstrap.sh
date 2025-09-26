@@ -165,10 +165,10 @@ main() {
         exit 0
     fi
     
-    # Phase 1.5: OPNsense Deployment
-    display "Phase 1.5: OPNsense Firewall Deployment"
-    display "----------------------------------------"
-    log "Starting Phase 1.5: OPNsense deployment"
+    # Phase 2: OPNsense Deployment
+    display "Phase 2: OPNsense Deployment"
+    display "-----------------------------"
+    log "Starting Phase 2: OPNsense deployment"
     
     if [[ ! -f "${SCRIPT_DIR}/deploy-opnsense.sh" ]]; then
         display "⚠️  OPNsense deployment script not found"
@@ -185,10 +185,10 @@ main() {
     fi
     display ""
     
-    # Phase 2: VM Provisioning
-    display "Phase 2: VM Provisioning"
-    display "------------------------"
-    log "Starting Phase 2: VM provisioning"
+    # Phase 3: Management VM Provisioning
+    display "Phase 3: Management VM Provisioning"
+    display "------------------------------------"
+    log "Starting Phase 3: Management VM provisioning"
     
     if [[ ! -f "${SCRIPT_DIR}/create-vm.sh" ]]; then
         error_exit "create-vm.sh not found"
@@ -201,18 +201,18 @@ main() {
     display "✅ VM provisioning complete"
     display ""
     
-    # Note: Phase 3 runs inside the VM via cloud-init
-    display "Phase 3: Guest Configuration"
-    display "----------------------------"
+    # Note: Phase 4 runs inside the VM via cloud-init
+    display "Phase 4: Service Configuration"
+    display "-------------------------------"
     display "⏳ Waiting for guest setup to complete..."
     display "   This may take 5-10 minutes"
-    log "Phase 3: Guest configuration started via cloud-init"
+    log "Phase 4: Service configuration started via cloud-init"
     
-    # Phase 4: Host Verification
+    # Phase 5: Installation Verification
     display ""
-    display "Phase 4: Installation Verification"
+    display "Phase 5: Installation Verification"
     display "----------------------------------"
-    log "Starting Phase 4: Host verification"
+    log "Starting Phase 5: Installation verification"
     
     if [[ ! -f "${SCRIPT_DIR}/verify-install.sh" ]]; then
         error_exit "verify-install.sh not found"
