@@ -80,6 +80,15 @@
         group: root
         mode: '0644'
 
+    - name: Deploy Homer icons
+      copy:
+        src: ../../templates/homer/tools/
+        dest: "{{ config_dir }}/tools/"
+        owner: root
+        group: root
+        mode: '0644'
+        directory_mode: '0755'
+
     - name: Pull Homer container image
       command: podman pull docker.io/{{ homer_image }}:{{ homer_version }}
       register: pull_result

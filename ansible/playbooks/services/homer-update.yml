@@ -18,12 +18,22 @@
         mode: '0644'
       register: config_updated
 
-    - name: Restart Homer if config changed
+    - name: Deploy updated Homer icons
+      copy:
+        src: ../../templates/homer/tools/
+        dest: "{{ config_dir }}/tools/"
+        owner: root
+        group: root
+        mode: '0644'
+        directory_mode: '0755'
+      register: icons_updated
+
+    - name: Restart Homer if config or icons changed
       systemd:
         name: homer.service
         state: restarted
-      when: config_updated.changed
+      when: config_updated.changed or icons_updated.changed
 
     - name: Display update status
       debug:
-        msg: "Homer dashboard {{ 'restarted with new configuration' if config_updated.changed else 'already up to date' }}"
+        msg: "Homer dashboard {{ 'restarted with updates' if (config_updated.changed or icons_updated.changed) else 'already up to date' }}"
