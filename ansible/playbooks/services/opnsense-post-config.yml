@@ -50,14 +50,25 @@
 
     # Port configuration removed - using default port 53
 
+    - name: Check current unboundplus interface configuration
+      shell: |
+        ssh -i {{ opnsense_key }} \
+        -o StrictHostKeyChecking=no \
+        root@{{ opnsense_ip }} \
+        "grep '<active_interface>' /conf/config.xml | head -1"
+      register: interface_check
+      changed_when: false
+
     - name: Ensure unboundplus interfaces are configured
       shell: |
         ssh -i {{ opnsense_key }} \
         -o StrictHostKeyChecking=no \
         root@{{ opnsense_ip }} \
-        "sed -i 's|<active_interface/>|<active_interface>lan,opt1</active_interface>|g' /conf/config.xml && \
-         sed -i 's|<active_interface></active_interface>|<active_interface>lan,opt1</active_interface>|g' /conf/config.xml"
+        "cp /conf/config.xml /conf/config.xml.interface_backup && \
+         sed -i.bak 's|<active_interface/>|<active_interface>lan,opt1</active_interface>|g' /conf/config.xml && \
+         sed -i.bak 's|<active_interface></active_interface>|<active_interface>lan,opt1</active_interface>|g' /conf/config.xml"
       register: interface_update
+      when: "'lan,opt1' not in interface_check.stdout"
 
     - name: Apply Unbound configuration changes
       shell: |
