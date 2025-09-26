@@ -102,7 +102,7 @@
         ssh -i {{ opnsense_key }} \
         -o StrictHostKeyChecking=no \
         root@{{ opnsense_ip }} \
-        "sockstat -l | grep unbound | grep -E ':53|:{{ unbound_port }}'"
+        "sockstat -l | grep unbound | grep ':53'"
       register: listening_ports
       changed_when: false
       ignore_errors: true
@@ -121,7 +121,7 @@
 
     - name: Test DNS resolution through Unbound
       shell: |
-        dig @{{ opnsense_ip }} -p {{ unbound_port }} google.com +short
+        dig @{{ opnsense_ip }} google.com +short
       delegate_to: localhost
       register: dns_test
       ignore_errors: true
@@ -143,7 +143,6 @@
           - "OPNsense Post-Configuration Complete"
           - "=========================================="
           - "Legacy unbound section: {{ 'REMOVED' if cleanup_result.changed else 'NOT FOUND' }}"
-          - "Unbound port: {{ unbound_port }}"
           - "Unbound interfaces: lan,opt1"
           - "Service status: {{ 'RUNNING' if 'is running' in service_status.stdout else 'CHECK REQUIRED' }}"
           - "DNS resolution: {{ 'WORKING' if dns_test.rc == 0 else 'CHECK REQUIRED' }}"
