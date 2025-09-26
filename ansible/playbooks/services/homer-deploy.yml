@@ -16,7 +16,11 @@
     registry_file: "/opt/privatebox/services.yml"
 
     # Container image
-    homer_image: "docker.io/b4bz/homer:{{ homer_version }}"
+    homer_image: "b4bz/homer"
+
+    # Quadlet configuration
+    use_system_quadlet: true
+    quadlet_system_path: "/etc/containers/systemd"
 
     # Get password from Semaphore
     services_password: "{{ lookup('env', 'SERVICES_PASSWORD') | default('NOT_SET', true) }}"
@@ -256,56 +260,33 @@
         mode: '0644'
 
     - name: Pull Homer container image
-      command: podman pull {{ homer_image }}
+      command: podman pull docker.io/{{ homer_image }}:{{ homer_version }}
       register: pull_result
       changed_when: "'Copying blob' in pull_result.stdout"
 
-    - name: Create Podman Quadlet unit file
-      copy:
-        dest: "/etc/containers/systemd/{{ service_name }}.container"
-        content: |
-          [Unit]
-          Description=Homer Dashboard
-          After=network-online.target
-          Wants=network-online.target
-          StartLimitIntervalSec=0
-
-          [Container]
-          Image={{ homer_image }}
-          ContainerName={{ service_name }}
-          AutoUpdate=registry
-
-          # Port mapping - bind to Services VLAN IP only
-          PublishPort=10.10.20.10:{{ homer_port }}:8080
-
-          # Volume mount for config (read-only)
-          Volume={{ config_dir }}:/www/assets:ro
-
-          # Security options
-          SecurityLabelDisable=false
-          ReadOnly=true
-          NoNewPrivileges=true
-
-          # Health check
-          HealthCmd=/bin/sh -c "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"
-          HealthInterval=30s
-          HealthTimeout=5s
-          HealthRetries=3
-
-          [Install]
-          WantedBy=default.target
+    - name: Deploy Quadlet unit file
+      template:
+        src: ../../files/quadlet/homer.container.j2
+        dest: "{{ quadlet_system_path }}/{{ service_name }}.container"
+        owner: root
+        group: root
         mode: '0644'
-      register: quadlet_created
+      register: quadlet_deployed
 
     - name: Reload systemd daemon
       systemd:
-        daemon_reload: yes
-      when: quadlet_created.changed
+        daemon_reload: true
+      when: quadlet_deployed.changed
 
-    - name: Enable and start Homer service
+    - name: Enable Homer service
       systemd:
         name: "{{ service_name }}.service"
         enabled: yes
+      register: service_enabled
+
+    - name: Start Homer service
+      systemd:
+        name: "{{ service_name }}.service"
         state: started
       register: service_started
 

@@ -1,0 +1,52 @@
+[Unit]
+Description=Homer Dashboard - Static dashboard for all services
+Documentation=https://github.com/bastienwirtz/homer
+Wants=network-online.target
+After=network-online.target
+{% if use_system_quadlet | default(true) %}
+Before=multi-user.target
+{% endif %}
+
+[Container]
+# Container image
+Image={{ container_image_registry | default('docker.io') }}/{{ homer_image }}:{{ homer_version }}
+ContainerName={{ service_name }}
+
+# Network configuration
+PublishPort={{ ansible_default_ipv4.address }}:{{ homer_port }}:8080
+
+# Volume mounts
+Volume={{ config_dir }}:/www/assets:ro
+
+# Security settings
+SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}
+NoNewPrivileges={{ container_no_new_privileges | default('true') | lower }}
+
+# Health check
+HealthCmd=/bin/sh -c "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"
+HealthInterval={{ health_check_interval | default('30s') }}
+HealthRetries={{ health_check_retries | default(3) }}
+HealthStartPeriod={{ health_check_start_period | default('60s') }}
+HealthTimeout={{ health_check_timeout | default('10s') }}
+
+# Logging
+LogDriver={{ container_log_driver | default('journald') }}
+
+# Pull policy
+Pull={{ container_pull_policy | default('missing') }}
+
+[Service]
+# Restart policy
+Restart={{ container_restart_policy | default('always') }}
+RestartSec={{ container_restart_sec | default(30) }}
+
+# Systemd service settings
+TimeoutStartSec={{ systemd_timeout_start_sec | default(900) }}
+TimeoutStopSec={{ systemd_timeout_stop_sec | default(90) }}
+
+# Run pre-start commands if needed
+ExecStartPre=/bin/mkdir -p {{ config_dir }}
+
+[Install]
+# Enable service at boot
+WantedBy=multi-user.target default.target
