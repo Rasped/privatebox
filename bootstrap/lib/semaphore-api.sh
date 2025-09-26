@@ -260,6 +260,71 @@ create_template_generator_task() {
     return 1
 }
 
+# Create Orchestrate Services task
+create_orchestrate_services_task() {
+    local project_id="$1"
+    local repository_id="$2"
+    local inventory_id="$3"
+    local environment_id="$4"
+    local admin_session="$5"
+
+    log_info "Creating Orchestrate Services task..."
+
+    local template_payload=$(jq -n \
+        --arg name "Orchestrate Services" \
+        --argjson pid "$project_id" \
+        --argjson inv_id "$inventory_id" \
+        --argjson repo_id "$repository_id" \
+        --argjson env_id "$environment_id" \
+        '{
+            name: $name,
+            project_id: $pid,
+            inventory_id: $inv_id,
+            repository_id: $repo_id,
+            environment_id: $env_id,
+            app: "python",
+            playbook: "tools/orchestrate-services.py",
+            description: "Orchestrate OPNsense and AdGuard service deployment",
+            arguments: "[]",
+            allow_override_args_in_task: false,
+            type: ""
+        }')
+
+    local api_result=$(make_api_request "POST" \
+        "http://localhost:3000/api/project/$project_id/templates" \
+        "$template_payload" "$admin_session" "Creating orchestration task")
+
+    if [ $? -ne 0 ]; then
+        log_error "API request failed for orchestration template creation"
+        return 1
+    fi
+
+    local status_code=$(get_api_status "$api_result")
+    local response_body=$(get_api_body "$api_result")
+
+    if [ "$status_code" -eq 201 ] || [ "$status_code" -eq 200 ]; then
+        local template_id=$(echo "$response_body" | jq -r '.id // empty')
+        if [ -n "$template_id" ]; then
+            log_info "✓ Orchestrate Services task created with ID: $template_id"
+            echo "$template_id"
+            return 0
+        fi
+    fi
+
+    # If template already exists, return its ID
+    if echo "$response_body" | grep -qi "already exists"; then
+        local existing_id=$(get_template_id_by_name "$project_id" "Orchestrate Services" "$admin_session" 2>/dev/null)
+        if [ -n "$existing_id" ]; then
+            log_info "Using existing Orchestrate Services task with ID: $existing_id"
+            echo "$existing_id"
+            return 0
+        fi
+    fi
+
+    log_error "Failed to create orchestration template. Status: $status_code"
+    return 1
+}
+
 # Create ProxmoxAPI environment
 create_proxmox_api_environment() {
     local project_id="$1"
@@ -479,16 +544,25 @@ setup_template_synchronization() {
     log_info "✓ Using repository ID: $repo_id and inventory ID: $inv_id"
 
     # Create Generate Templates task
-    log_info "Step 4/6: Creating Generate Templates task..."
+    log_info "Step 4/7: Creating Generate Templates task..."
     local template_id=$(create_template_generator_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$template_id" ]; then
         log_error "Failed to create template generator task"
         return 1
     fi
     log_info "✓ Task created with ID: $template_id"
-    
+
+    # Create Orchestrate Services task
+    log_info "Step 5/7: Creating Orchestrate Services task..."
+    local orchestrate_id=$(create_orchestrate_services_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
+    if [ -z "$orchestrate_id" ]; then
+        log_error "Failed to create orchestrate services task"
+        return 1
+    fi
+    log_info "✓ Orchestrate Services task created with ID: $orchestrate_id"
+
     # Auto-run the Generate Templates task once to sync templates
-    log_info "Step 5/6: Running Generate Templates task..."
+    log_info "Step 6/7: Running Generate Templates task..."
     local gen_task_id=$(run_generate_templates_task "$project_id" "$template_id" "$admin_session")
     if [ -n "$gen_task_id" ]; then
         log_info "✓ Generate Templates task triggered with ID: $gen_task_id"
@@ -498,7 +572,7 @@ setup_template_synchronization() {
             log_info "✓ Templates generated successfully"
 
             # Deploy AdGuard
-            log_info "Step 6/6: Deploying AdGuard DNS service..."
+            log_info "Step 7/7: Deploying AdGuard DNS service..."
             if deploy_adguard "$project_id" "$admin_session"; then
                 log_info "✅ AdGuard deployment completed successfully"
                 log_info "   AdGuard will be accessible at http://10.10.20.10:3080 once started"
