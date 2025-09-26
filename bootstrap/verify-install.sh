@@ -69,16 +69,17 @@ wait_for_vm() {
 check_marker_file() {
     local vm_ip="$1"
     local elapsed=0
-    
+    local last_progress=""  # Track last progress message to avoid duplicates
+
     log "Checking for installation marker file..."
-    
+
     while [[ $elapsed -lt $TIMEOUT ]]; do
         local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY_PATH" \
                       "${VM_USERNAME}@${vm_ip}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
-        
+
         # Trim whitespace from status
         status=$(echo "$status" | tr -d '[:space:]')
-        
+
         case "$status" in
             SUCCESS)
                 log "Installation completed successfully"
@@ -88,17 +89,29 @@ check_marker_file() {
                 log "Installation failed with error"
                 return 1
                 ;;
+            PROGRESS:*)
+                # Extract progress message after PROGRESS:
+                local progress_msg="${status#PROGRESS:}"
+                # Only display if it's a new progress message
+                if [[ "$progress_msg" != "$last_progress" ]]; then
+                    display "   ✓ ${progress_msg}"
+                    log "Progress: $progress_msg"
+                    last_progress="$progress_msg"
+                fi
+                sleep $CHECK_INTERVAL
+                elapsed=$((elapsed + CHECK_INTERVAL))
+                ;;
             PENDING|*)
                 sleep $CHECK_INTERVAL
                 elapsed=$((elapsed + CHECK_INTERVAL))
-                
+
                 if [[ $((elapsed % 30)) -eq 0 ]]; then
                     display "   Guest setup in progress... (${elapsed}s elapsed)"
                 fi
                 ;;
         esac
     done
-    
+
     log "Timeout waiting for installation marker"
     return 1
 }
