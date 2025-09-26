@@ -77,8 +77,8 @@ check_marker_file() {
         local status=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY_PATH" \
                       "${VM_USERNAME}@${vm_ip}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
 
-        # Trim whitespace from status
-        status=$(echo "$status" | tr -d '[:space:]')
+        # Trim only leading/trailing whitespace and newlines
+        status=$(echo "$status" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
         case "$status" in
             SUCCESS)
