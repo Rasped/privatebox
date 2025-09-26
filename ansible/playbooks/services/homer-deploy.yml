@@ -292,10 +292,6 @@
           HealthTimeout=5s
           HealthRetries=3
 
-          # Restart policy
-          Restart=on-failure
-          RestartSec=10
-
           [Service]
           Type=forking
           Restart=always
