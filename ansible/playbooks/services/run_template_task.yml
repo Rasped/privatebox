@@ -54,4 +54,4 @@
 - name: Wait between template executions
   pause:
     seconds: 5
-  when: template_name != templates_to_run[-1]
+  when: template_name != all_templates_to_run[-1]
