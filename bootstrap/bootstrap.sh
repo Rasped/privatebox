@@ -201,23 +201,112 @@ main() {
     display "✅ VM provisioning complete"
     display ""
     
-    # Note: Phase 4 runs inside the VM via cloud-init
+    # Phase 4: Service Configuration (runs inside VM via cloud-init)
     display "Phase 4: Service Configuration"
     display "-------------------------------"
+    log "Phase 4: Service configuration started via cloud-init"
+
+    # Monitor Phase 4 progress by checking the VM's marker file
     display "⏳ Waiting for guest setup to complete..."
     display "   This may take 5-10 minutes"
-    log "Phase 4: Service configuration started via cloud-init"
-    
-    # Phase 5: Installation Verification
+
+    # Define SSH key path (same as verify-install.sh uses)
+    local ssh_key_path="${SSH_KEY_PATH:-/root/.ssh/id_rsa}"
+    local ssh_opts="-o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    if [[ -f "$ssh_key_path" ]]; then
+        ssh_opts="$ssh_opts -i $ssh_key_path"
+    fi
+
+    # Wait for VM to be accessible first
+    local elapsed=0
+    local vm_accessible=false
+    local phase4_progress_shown=false
+    while [[ $elapsed -lt 120 ]]; do
+        if ssh $ssh_opts "${VM_USERNAME}@${STATIC_IP}" "echo 'SSH ready'" &>/dev/null; then
+            vm_accessible=true
+            break
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+
+    if [[ "$vm_accessible" == true ]]; then
+        # Poll for Phase 4 progress messages
+        local last_line_count=0
+        local phase4_timeout=900  # 15 minutes
+        elapsed=0
+
+        while [[ $elapsed -lt $phase4_timeout ]]; do
+            # Get the marker file content
+            local file_content=$(ssh $ssh_opts \
+                          "${VM_USERNAME}@${STATIC_IP}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
+
+            # Get the last line for status check
+            local status=$(echo "$file_content" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+            # Process any new progress messages
+            if [[ -n "$file_content" ]] && [[ "$file_content" != "PENDING" ]]; then
+                local current_line_count=$(echo "$file_content" | wc -l)
+
+                # Display new progress messages since last check
+                if [[ $current_line_count -gt $last_line_count ]]; then
+                    local new_lines=$(echo "$file_content" | tail -n $((current_line_count - last_line_count)))
+                    while IFS= read -r line; do
+                        if [[ "$line" == PROGRESS:* ]]; then
+                            local progress_msg="${line#PROGRESS:}"
+                            display "   ✓ ${progress_msg}"
+                            log "Phase 4 progress: $progress_msg"
+                            phase4_progress_shown=true
+                        fi
+                    done <<< "$new_lines"
+                    last_line_count=$current_line_count
+                fi
+            fi
+
+            # Check if Phase 4 is complete
+            case "$status" in
+                SUCCESS)
+                    log "Phase 4 completed successfully"
+                    display "✅ Service configuration complete"
+                    phase4_progress_shown=true
+                    break
+                    ;;
+                ERROR)
+                    error_exit "Service configuration failed"
+                    ;;
+                *)
+                    sleep 10
+                    elapsed=$((elapsed + 10))
+
+                    if [[ $((elapsed % 30)) -eq 0 ]] && [[ "$status" == "PENDING" ]]; then
+                        display "   Still configuring... (${elapsed}s elapsed)"
+                    fi
+                    ;;
+            esac
+        done
+
+        if [[ $elapsed -ge $phase4_timeout ]]; then
+            error_exit "Service configuration timeout after ${phase4_timeout} seconds"
+        fi
+    else
+        display "⚠️  Cannot monitor progress - VM not accessible yet"
+        display "   Proceeding to verification phase..."
+    fi
+
     display ""
+
+    # Export flag for Phase 5 to know if progress was shown
+    export PHASE4_PROGRESS_SHOWN="$phase4_progress_shown"
+
+    # Phase 5: Installation Verification
     display "Phase 5: Installation Verification"
     display "----------------------------------"
     log "Starting Phase 5: Installation verification"
-    
+
     if [[ ! -f "${SCRIPT_DIR}/verify-install.sh" ]]; then
         error_exit "verify-install.sh not found"
     fi
-    
+
     if ! bash "${SCRIPT_DIR}/verify-install.sh"; then
         error_exit "Installation verification failed"
     fi

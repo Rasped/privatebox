@@ -69,20 +69,35 @@ wait_for_vm() {
 check_marker_file() {
     local vm_ip="$1"
     local elapsed=0
-    local last_line_count=0  # Track how many lines we've already processed
+    local last_line_count=0
 
-    log "Checking for installation marker file..."
+    log "Checking for installation completion..."
 
-    while [[ $elapsed -lt $TIMEOUT ]]; do
-        # Get the entire file to process new progress messages
+    # Check if Phase 4 already showed progress
+    local show_progress=true
+    if [[ "${PHASE4_PROGRESS_SHOWN:-false}" == "true" ]]; then
+        show_progress=false
+        log "Phase 4 already displayed progress, skipping duplicate display"
+    else
+        log "Phase 4 did not show progress, will display it now"
+    fi
+
+    # Use appropriate timeout based on whether we're showing progress
+    local timeout=900  # 15 minutes if showing progress
+    if [[ "$show_progress" == false ]]; then
+        timeout=60  # 1 minute if just verifying
+    fi
+
+    while [[ $elapsed -lt $timeout ]]; do
+        # Get the marker file content
         local file_content=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY_PATH" \
                       "${VM_USERNAME}@${vm_ip}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
 
         # Get the last line for status check
         local status=$(echo "$file_content" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-        # Process any new progress messages
-        if [[ -n "$file_content" ]] && [[ "$file_content" != "PENDING" ]]; then
+        # Show progress only if Phase 4 didn't
+        if [[ "$show_progress" == true ]] && [[ -n "$file_content" ]] && [[ "$file_content" != "PENDING" ]]; then
             local current_line_count=$(echo "$file_content" | wc -l)
 
             # Display new progress messages since last check
@@ -109,11 +124,13 @@ check_marker_file() {
                 return 1
                 ;;
             PENDING|PROGRESS:*)
-                sleep $CHECK_INTERVAL
-                elapsed=$((elapsed + CHECK_INTERVAL))
+                sleep 10
+                elapsed=$((elapsed + 10))
 
                 if [[ $((elapsed % 30)) -eq 0 ]] && [[ "$status" == "PENDING" ]]; then
-                    display "   Guest setup in progress... (${elapsed}s elapsed)"
+                    if [[ "$show_progress" == true ]]; then
+                        display "   Guest setup in progress... (${elapsed}s elapsed)"
+                    fi
                 fi
                 ;;
         esac
@@ -207,13 +224,22 @@ main() {
     
     display "✅ VM is accessible at $VM_IP"
     
-    # Check installation marker (cloud-init will create this when done)
-    display "⏳ Waiting for guest configuration to complete..."
+    # Verify installation completed
+    if [[ "${PHASE4_PROGRESS_SHOWN:-false}" == "true" ]]; then
+        display "Verifying installation status..."
+    else
+        display "⏳ Waiting for guest configuration to complete..."
+    fi
+
     if ! check_marker_file "$VM_IP"; then
         error_exit "Guest configuration did not complete successfully"
     fi
-    
-    display "✅ Guest configuration completed"
+
+    if [[ "${PHASE4_PROGRESS_SHOWN:-false}" == "true" ]]; then
+        display "✅ Installation verified"
+    else
+        display "✅ Guest configuration completed"
+    fi
     
     # Check service health
     display ""
