@@ -48,7 +48,8 @@ class SemaphoreOrchestrator:
             "OPNsense 1: Establish Secure Access",
             "OPNsense 2: Register in Semaphore",
             "OPNsense 3: Post-Configuration",
-            "AdGuard 1: Deploy Container Service"
+            "AdGuard 1: Deploy Container Service",
+            "Homer 1: Deploy Dashboard Service"
         ]
 
         if not self.api_token:
@@ -306,6 +307,7 @@ class SemaphoreOrchestrator:
             print("  - OPNsense firewall configured at 10.10.20.1")
             print("  - AdGuard DNS service running at 10.10.20.10:53")
             print("  - AdGuard web interface at http://10.10.20.10:8080")
+            print("  - Homer dashboard at http://10.10.20.10:8081")
             return True
 
 

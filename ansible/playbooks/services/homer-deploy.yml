@@ -1,0 +1,403 @@
+---
+# Homer Dashboard Deployment
+# Deploys Homer dashboard on Management VM with dynamic service registry
+# Required variables from Semaphore:
+#   - SERVICES_PASSWORD (for display purposes only)
+
+- name: "Homer 1: Deploy Dashboard Service"
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    # Service configuration
+    homer_port: 8081
+    homer_version: "latest"
+    service_name: "homer"
+    config_dir: "/opt/homer"
+    registry_file: "/opt/privatebox/services.yml"
+
+    # Container image
+    homer_image: "docker.io/b4bz/homer:{{ homer_version }}"
+
+    # Get password from Semaphore
+    services_password: "{{ lookup('env', 'SERVICES_PASSWORD') | default('NOT_SET', true) }}"
+
+  tasks:
+    - name: Display deployment header
+      debug:
+        msg:
+          - "=========================================="
+          - "     HOMER DASHBOARD DEPLOYMENT"
+          - "=========================================="
+          - "Target: Management VM (localhost)"
+          - "Port: {{ homer_port }}"
+          - "Config: {{ config_dir }}/config.yml"
+          - "Registry: {{ registry_file }}"
+
+    - name: Validate environment
+      block:
+        - name: Check if running on Management VM
+          assert:
+            that:
+              - ansible_hostname == "privatebox-mgmt"
+            fail_msg: "This playbook must run on the Management VM"
+            success_msg: "✓ Running on Management VM"
+
+        - name: Check for Podman
+          command: which podman
+          changed_when: false
+          failed_when: false
+          register: podman_check
+
+        - name: Validate Podman is installed
+          assert:
+            that:
+              - podman_check.rc == 0
+            fail_msg: "Podman is not installed"
+            success_msg: "✓ Podman is available"
+
+    - name: Create required directories
+      block:
+        - name: Create Homer config directory
+          file:
+            path: "{{ config_dir }}"
+            state: directory
+            mode: '0755'
+            owner: root
+            group: root
+
+        - name: Create PrivateBox directory
+          file:
+            path: "/opt/privatebox"
+            state: directory
+            mode: '0755'
+            owner: root
+            group: root
+
+        - name: Create Quadlet directory
+          file:
+            path: "/etc/containers/systemd"
+            state: directory
+            mode: '0755'
+            owner: root
+            group: root
+
+    - name: Initialize or update services registry
+      block:
+        - name: Check if services registry exists
+          stat:
+            path: "{{ registry_file }}"
+          register: registry_exists
+
+        - name: Create initial services registry
+          when: not registry_exists.stat.exists
+          copy:
+            dest: "{{ registry_file }}"
+            content: |
+              # PrivateBox Services Registry
+              # This file is used to generate the Homer dashboard configuration
+              # Add new services here and run the dashboard update template
+
+              services:
+                - name: "Portainer"
+                  logo: "assets/tools/portainer.png"
+                  subtitle: "Container Management"
+                  tag: "management"
+                  url: "http://10.10.20.10:9000"
+                  target: "_blank"
+
+                - name: "Semaphore"
+                  logo: "assets/tools/ansible.png"
+                  subtitle: "Ansible Automation"
+                  tag: "automation"
+                  url: "http://10.10.20.10:3000"
+                  target: "_blank"
+
+                - name: "AdGuard Home"
+                  logo: "assets/tools/adguardhome.png"
+                  subtitle: "DNS Filtering"
+                  tag: "security"
+                  url: "http://10.10.20.10:8080"
+                  target: "_blank"
+
+                - name: "OPNsense"
+                  logo: "assets/tools/opnsense.png"
+                  subtitle: "Firewall"
+                  tag: "network"
+                  url: "https://10.10.20.1"
+                  target: "_blank"
+            mode: '0644'
+
+        - name: Add Homer to services registry if not present
+          lineinfile:
+            path: "{{ registry_file }}"
+            insertafter: "^services:"
+            line: |2
+                - name: "Homer Dashboard"
+                  logo: "assets/tools/homer.png"
+                  subtitle: "Service Dashboard"
+                  tag: "management"
+                  url: "http://10.10.20.10:{{ homer_port }}"
+                  target: "_self"
+            state: present
+          when: registry_exists.stat.exists
+
+    - name: Load services from registry
+      slurp:
+        src: "{{ registry_file }}"
+      register: services_content
+
+    - name: Parse services registry
+      set_fact:
+        services_data: "{{ services_content.content | b64decode | from_yaml }}"
+
+    - name: Generate Homer configuration
+      copy:
+        dest: "{{ config_dir }}/config.yml"
+        content: |
+          ---
+          # Homer Dashboard Configuration
+          # Generated from {{ registry_file }}
+          # Last updated: {{ ansible_date_time.iso8601 }}
+
+          title: "PrivateBox Dashboard"
+          subtitle: "Home Network Services"
+          logo: "logo.png"
+
+          header: true
+          footer: false
+
+          theme: default
+          colors:
+            light:
+              highlight-primary: "#3367d6"
+              highlight-secondary: "#4285f4"
+              highlight-hover: "#5a95f5"
+              background: "#f5f5f5"
+              card-background: "#ffffff"
+              text: "#363636"
+              text-header: "#ffffff"
+              text-title: "#303030"
+              text-subtitle: "#424242"
+              card-shadow: rgba(0, 0, 0, 0.1)
+              link-hover: "#363636"
+            dark:
+              highlight-primary: "#3367d6"
+              highlight-secondary: "#4285f4"
+              highlight-hover: "#5a95f5"
+              background: "#131313"
+              card-background: "#2b2b2b"
+              text: "#eaeaea"
+              text-header: "#ffffff"
+              text-title: "#fafafa"
+              text-subtitle: "#f5f5f5"
+              card-shadow: rgba(0, 0, 0, 0.4)
+              link-hover: "#ffdd57"
+
+          message:
+            style: "is-info"
+            title: "Welcome!"
+            content: "PrivateBox Network Services - All services protected by authentication"
+
+          links: []
+
+          services:
+            - name: "Network Services"
+              icon: "fas fa-network-wired"
+              items:
+          {% for service in services_data.services %}
+          {% if service.tag == 'network' %}
+                - name: "{{ service.name }}"
+                  logo: "{{ service.logo | default('assets/tools/sample.png') }}"
+                  subtitle: "{{ service.subtitle | default('') }}"
+                  tag: "{{ service.tag | default('app') }}"
+                  url: "{{ service.url }}"
+                  target: "{{ service.target | default('_blank') }}"
+          {% endif %}
+          {% endfor %}
+
+            - name: "Management"
+              icon: "fas fa-tools"
+              items:
+          {% for service in services_data.services %}
+          {% if service.tag == 'management' %}
+                - name: "{{ service.name }}"
+                  logo: "{{ service.logo | default('assets/tools/sample.png') }}"
+                  subtitle: "{{ service.subtitle | default('') }}"
+                  tag: "{{ service.tag | default('app') }}"
+                  url: "{{ service.url }}"
+                  target: "{{ service.target | default('_blank') }}"
+          {% endif %}
+          {% endfor %}
+
+            - name: "Security"
+              icon: "fas fa-shield-alt"
+              items:
+          {% for service in services_data.services %}
+          {% if service.tag == 'security' %}
+                - name: "{{ service.name }}"
+                  logo: "{{ service.logo | default('assets/tools/sample.png') }}"
+                  subtitle: "{{ service.subtitle | default('') }}"
+                  tag: "{{ service.tag | default('app') }}"
+                  url: "{{ service.url }}"
+                  target: "{{ service.target | default('_blank') }}"
+          {% endif %}
+          {% endfor %}
+
+            - name: "Automation"
+              icon: "fas fa-robot"
+              items:
+          {% for service in services_data.services %}
+          {% if service.tag == 'automation' %}
+                - name: "{{ service.name }}"
+                  logo: "{{ service.logo | default('assets/tools/sample.png') }}"
+                  subtitle: "{{ service.subtitle | default('') }}"
+                  tag: "{{ service.tag | default('app') }}"
+                  url: "{{ service.url }}"
+                  target: "{{ service.target | default('_blank') }}"
+          {% endif %}
+          {% endfor %}
+        mode: '0644'
+
+    - name: Pull Homer container image
+      command: podman pull {{ homer_image }}
+      register: pull_result
+      changed_when: "'Copying blob' in pull_result.stdout"
+
+    - name: Create Podman Quadlet unit file
+      copy:
+        dest: "/etc/containers/systemd/{{ service_name }}.container"
+        content: |
+          [Unit]
+          Description=Homer Dashboard
+          After=network-online.target
+          Wants=network-online.target
+          StartLimitIntervalSec=0
+
+          [Container]
+          Image={{ homer_image }}
+          ContainerName={{ service_name }}
+          AutoUpdate=registry
+
+          # Port mapping - bind to Services VLAN IP only
+          PublishAddress=10.10.20.10
+          PublishPort={{ homer_port }}:8080
+
+          # Volume mount for config (read-only)
+          Volume={{ config_dir }}:/www/assets:ro
+
+          # Resource limits
+          Memory=256m
+          MemorySwap=512m
+          CPUQuota=50%
+
+          # Security options
+          SecurityLabelDisable=false
+          ReadOnly=true
+          NoNewPrivileges=true
+
+          # Health check
+          HealthCmd=/bin/sh -c "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"
+          HealthInterval=30s
+          HealthTimeout=5s
+          HealthRetries=3
+
+          # Restart policy
+          Restart=on-failure
+          RestartSec=10
+
+          [Service]
+          Type=forking
+          Restart=always
+          RestartSec=10
+          TimeoutStartSec=120
+
+          [Install]
+          WantedBy=default.target
+        mode: '0644'
+      register: quadlet_created
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+      when: quadlet_created.changed
+
+    - name: Enable and start Homer service
+      systemd:
+        name: "{{ service_name }}.service"
+        enabled: yes
+        state: started
+      register: service_started
+
+    - name: Wait for Homer to be accessible
+      wait_for:
+        host: 10.10.20.10
+        port: "{{ homer_port }}"
+        delay: 5
+        timeout: 30
+
+    - name: Verify Homer is responding
+      uri:
+        url: "http://10.10.20.10:{{ homer_port }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: homer_check
+      retries: 3
+      delay: 5
+
+    - name: Get service status
+      systemd:
+        name: "{{ service_name }}.service"
+      register: service_status
+
+    - name: Create update script
+      copy:
+        dest: "/usr/local/bin/update-homer-dashboard.sh"
+        content: |
+          #!/bin/bash
+          # Update Homer dashboard from services registry
+
+          echo "Updating Homer dashboard configuration..."
+
+          # Generate new config from registry
+          ansible-playbook /opt/privatebox/ansible/playbooks/services/homer-update.yml
+
+          # Restart Homer to load new config
+          systemctl restart homer.service
+
+          echo "Dashboard updated successfully"
+        mode: '0755'
+
+    - name: Display deployment summary
+      vars:
+        deployment_info:
+          status: "{{ 'SUCCESS' if homer_check.status == 200 else 'FAILED' }}"
+          url: "http://10.10.20.10:{{ homer_port }}"
+          service: "{{ service_name }}.service"
+          config: "{{ config_dir }}/config.yml"
+          registry: "{{ registry_file }}"
+      debug:
+        msg:
+          - ""
+          - "=========================================="
+          - "     DEPLOYMENT {{ deployment_info.status }}"
+          - "=========================================="
+          - ""
+          - "Homer Dashboard is now accessible at:"
+          - "  {{ deployment_info.url }}"
+          - ""
+          - "Configuration:"
+          - "  Config: {{ deployment_info.config }}"
+          - "  Registry: {{ deployment_info.registry }}"
+          - ""
+          - "To add new services:"
+          - "  1. Edit {{ deployment_info.registry }}"
+          - "  2. Run: /usr/local/bin/update-homer-dashboard.sh"
+          - ""
+          - "Service Management:"
+          - "  systemctl status {{ deployment_info.service }}"
+          - "  systemctl restart {{ deployment_info.service }}"
+          - ""
+          - "Container Logs:"
+          - "  journalctl -u {{ deployment_info.service }} -f"
+          - ""

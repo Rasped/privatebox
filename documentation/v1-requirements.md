@@ -32,17 +32,17 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 
 #### Services
 - **OPNsense VM template** created and backed up
-- **OPNsense with Unbound DNS** configured on port 5353
-- **AdGuard deployment playbook** (can deploy but not fully configured)
+- **OPNsense with Unbound DNS** configured on port 53
+- **AdGuard deployment playbook** ✅ (fully deployed and configured with Quad9 + Unbound fallback, blocklists active)
 
 ### 🔧 NEEDS FINALIZATION
 
-#### 1. AdGuard-Unbound Integration
-**Current State**: Both services exist independently
+#### 1. AdGuard-Unbound Integration ✅ COMPLETED
+**Current State**: Fully integrated and working
 **Required**:
-- Configure AdGuard to use `10.10.10.1:5353` as upstream DNS
-- Add blocklists during deployment
-- Test DNS resolution chain: Client → AdGuard → Unbound → Internet
+- ✅ Configure AdGuard to use `10.10.20.1:53` as fallback DNS (COMPLETED - configured with Quad9 primary + Unbound fallback)
+- ✅ Add blocklists during deployment (COMPLETED - OISD Basic + Steven Black Hosts configured)
+- ✅ Test DNS resolution chain: Client → AdGuard → Quad9 → Unbound → Internet (VERIFIED WORKING)
 
 **Questions**:
 - Which 2 blocklists should be configured? (OISD? Steven Black? EasyList? AdGuard DNS filter?)
