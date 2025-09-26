@@ -24,9 +24,23 @@ class SemaphoreOrchestrator:
 
     def __init__(self):
         """Initialize the orchestrator."""
+        # Parse command line arguments for Semaphore variables
+        # Semaphore passes variables as KEY=VALUE arguments
+        variables = {}
+        for arg in sys.argv[1:]:
+            if '=' in arg:
+                key, value = arg.split('=', 1)
+                variables[key] = value
+
+        # Get API token from parsed arguments (how Semaphore provides it)
+        self.api_token = variables.get('SEMAPHORE_API_TOKEN')
+
+        # Fall back to environment variable if not in arguments
+        if not self.api_token:
+            self.api_token = os.environ.get("SEMAPHORE_API_TOKEN")
+
         self.base_url = "http://localhost:3000"
         self.project_id = 1
-        self.api_token = os.environ.get("SEMAPHORE_API_TOKEN")
         self.headers = {"Authorization": f"Bearer {self.api_token}"}
 
         # Define the template sequence
@@ -38,7 +52,9 @@ class SemaphoreOrchestrator:
         ]
 
         if not self.api_token:
-            print("✗ SEMAPHORE_API_TOKEN not found in environment")
+            print("✗ SEMAPHORE_API_TOKEN not found in arguments or environment")
+            print("  Debug: Command line arguments:", sys.argv)
+            print("  Debug: Parsed variables:", variables)
             sys.exit(1)
 
     def test_connectivity(self):
