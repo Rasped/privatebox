@@ -320,7 +320,7 @@
 
     - name: Enable and start Homer service
       systemd:
-        name: "{{ service_name }}-container.service"
+        name: "{{ service_name }}.service"
         enabled: yes
         state: started
       register: service_started
@@ -344,7 +344,7 @@
 
     - name: Get service status
       systemd:
-        name: "{{ service_name }}-container.service"
+        name: "{{ service_name }}.service"
       register: service_status
 
     - name: Create update script
@@ -360,7 +360,7 @@
           ansible-playbook /opt/privatebox/ansible/playbooks/services/homer-update.yml
 
           # Restart Homer to load new config
-          systemctl restart homer-container.service
+          systemctl restart homer.service
 
           echo "Dashboard updated successfully"
         mode: '0755'
@@ -370,7 +370,7 @@
         deployment_info:
           status: "{{ 'SUCCESS' if homer_check.status == 200 else 'FAILED' }}"
           url: "http://10.10.20.10:{{ homer_port }}"
-          service: "{{ service_name }}-container.service"
+          service: "{{ service_name }}.service"
           config: "{{ config_dir }}/config.yml"
           registry: "{{ registry_file }}"
       debug:
