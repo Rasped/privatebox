@@ -35,7 +35,7 @@ LogDriver={{ container_log_driver | default('journald') }}
 # Pull policy
 Pull={{ container_pull_policy | default('missing') }}
 
-# Auto-update configuration
+# Auto-update enabled - Homer is low-risk dashboard only
 Label=io.containers.autoupdate=registry
 
 [Service]

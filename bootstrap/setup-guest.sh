@@ -52,19 +52,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 log "Enabling Podman socket (Docker API compatibility)..."
 systemctl enable --now podman.socket || error_exit "Failed to enable Podman socket"
 
-log "Enabling podman-auto-update timer..."
-systemctl enable --now podman-auto-update.timer || error_exit "Failed to enable podman-auto-update.timer"
-
-log "Configuring podman-auto-update timer for Sunday 2:30 AM..."
-mkdir -p /etc/systemd/system/podman-auto-update.timer.d
-tee /etc/systemd/system/podman-auto-update.timer.d/override.conf > /dev/null <<'EOF'
-[Timer]
-OnCalendar=
-OnCalendar=Sun *-*-* 02:30:00
-RandomizedDelaySec=30min
-Persistent=true
-EOF
-systemctl daemon-reload
+# Automatic container updates disabled - manual updates only via Semaphore
+log "Container auto-updates disabled - use Semaphore for manual updates"
 
 #==============================#
 # Directories & volumes
@@ -121,7 +110,7 @@ Volume=snippets:/snippets:z
 PublishPort=9000:9000
 PublishPort=8000:8000
 Environment=TZ=UTC
-Label=io.containers.autoupdate=registry
+# Auto-update disabled - manual updates only
 
 [Service]
 Restart=always
@@ -193,7 +182,7 @@ Environment=TZ=UTC
 # Volume=/etc/ssl/certs/pve-ca.pem:/etc/ssl/certs/pve-ca.pem:ro,Z
 # Environment=REQUESTS_CA_BUNDLE=/etc/ssl/certs/pve-ca.pem
 Exec=semaphore server --config=/etc/semaphore/config.json
-Label=io.containers.autoupdate=registry
+# Auto-update disabled - manual updates only
 
 [Service]
 Restart=always

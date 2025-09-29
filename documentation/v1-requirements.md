@@ -86,29 +86,25 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - Retention policy? (keep last 7? 30? unlimited?)
 - Should Management VM configs also be backed up?
 
-#### 3. Container Auto-Updates ✅ COMPLETED
-**Current State**: All containers have auto-update enabled
+#### 3. Update Management ✅ COMPLETED
+**Current State**: Manual updates via Semaphore with one exception
 **Implementation**:
-- All containers have `io.containers.autoupdate=registry` labels
-- Weekly Sunday 2:30 AM schedule with 30min randomization
-- Podman auto-update timer configured via systemd drop-in files
-- Fixed TTY issue in cloud-init environment
+- **Manual updates only**: All systems require user-initiated updates via Semaphore
+- **Homer exception**: Dashboard auto-updates (low-risk, display-only)
+- **Ansible playbooks**: Available for manual execution of updates
+- **User control**: No unexpected system changes or reboots
 
-#### 4. Update Playbooks 🔄 IN PROGRESS
-**Required**: Automatic updates for all system components
-**Scope**: Proxmox host, OPNsense firewall, Debian management VM
+**Rationale**:
+- Respects user agency over their equipment
+- Prevents unexpected breakage from automatic updates
+- Reduces liability and support burden
+- Maintains system stability and predictability
 
-**Implementation Plan**:
-- **OPNsense**: Native automatic updates via config.xml cron entry (NEXT)
-- **Debian**: Native unattended-upgrades package configuration
-- **Proxmox**: Ansible playbook for security updates only
-- **Coordination**: Batch playbook to orchestrate all updates via Semaphore
-
-**Decisions Made**:
-- Default state: auto-updates ON
-- Schedule: Weekly Sunday 2:00 AM (before container updates at 2:30 AM)
-- Auto-reboot: Enabled at 2:30 AM if required
-- Strategy: All systems updated in sequence (OPNsense → Debian → Proxmox)
+**Update Tools Available**:
+- **Proxmox**: Manual update playbooks via Semaphore
+- **OPNsense**: Manual firmware updates via web UI or Semaphore
+- **Debian**: Manual apt updates via Semaphore
+- **Containers**: Manual image pulls/restarts via Portainer or Semaphore
 
 #### 5. TLS/HTTPS Support
 **Current State**: All services use HTTP
@@ -170,10 +166,10 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 
 1. ✅ **COMPLETED: AdGuard-Unbound integration** (core functionality)
 2. ✅ **COMPLETED: Deploy dashboard** (user visibility)
-3. ✅ **COMPLETED: Container auto-updates** (container maintenance)
-4. 🔄 **IN PROGRESS: System update automation** (OS/firmware maintenance)
-5. **NEXT: Setup encrypted backup partition** (data safety)
-6. **Implement VPNs** (remote access)
+3. ✅ **COMPLETED: Update management strategy** (manual updates with tools)
+4. **NEXT: Setup encrypted backup partition** (data safety)
+5. **Implement VPNs** (remote access)
+6. **Create manual update playbooks** (user-controlled maintenance)
 
 ## Success Criteria for v1
 
