@@ -35,6 +35,9 @@ LogDriver={{ container_log_driver | default('journald') }}
 # Pull policy
 Pull={{ container_pull_policy | default('missing') }}
 
+# Auto-update configuration
+Label=io.containers.autoupdate=registry
+
 [Service]
 # Restart policy
 Restart={{ container_restart_policy | default('always') }}
