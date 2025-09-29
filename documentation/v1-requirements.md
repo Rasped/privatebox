@@ -59,15 +59,6 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - Auto-updates services from registry
 - Shows all deployed services with status
 
-**Questions**:
-- Homer (static, simple) or Heimdall (dynamic, more features)?
-- Which services should appear on dashboard?
-  - Portainer (http://10.10.20.10:9000)?
-  - Semaphore (http://10.10.20.10:3000)?
-  - AdGuard (http://10.10.20.x:8080)?
-  - OPNsense (https://10.10.10.1)?
-- Should dashboard be accessible from all VLANs or just Management?
-- What port for dashboard? (8081? 8082?)
 
 ### 📋 NEEDS IMPLEMENTATION
 
@@ -95,33 +86,29 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - Retention policy? (keep last 7? 30? unlimited?)
 - Should Management VM configs also be backed up?
 
-#### 3. Update Playbooks
-**Required**: Ansible playbooks with toggle and interval options
-**Scope**: Proxmox, OPNsense, Debian OS updates
+#### 3. Container Auto-Updates ✅ COMPLETED
+**Current State**: All containers have auto-update enabled
+**Implementation**:
+- All containers have `io.containers.autoupdate=registry` labels
+- Weekly Sunday 2:30 AM schedule with 30min randomization
+- Podman auto-update timer configured via systemd drop-in files
+- Fixed TTY issue in cloud-init environment
 
-**Questions**:
-- Default state: auto-updates ON or OFF?
-- Default interval if ON? (daily at 2am? weekly Sunday 2am?)
-- Update strategy:
-  - Rolling (one service at a time)?
-  - Maintenance window (all at once)?
-- Notification method for updates? (log file only? email? dashboard alert?)
-- Should updates auto-reboot if required?
-- Rollback strategy if update fails?
+#### 4. Update Playbooks 🔄 IN PROGRESS
+**Required**: Automatic updates for all system components
+**Scope**: Proxmox host, OPNsense firewall, Debian management VM
 
-#### 4. Container Auto-Updates
-**Current State**: Podman Pull policy set to "missing"
-**Required**: Auto-update mechanism for container images
+**Implementation Plan**:
+- **OPNsense**: Native automatic updates via config.xml cron entry (NEXT)
+- **Debian**: Native unattended-upgrades package configuration
+- **Proxmox**: Ansible playbook for security updates only
+- **Coordination**: Batch playbook to orchestrate all updates via Semaphore
 
-**Questions**:
-- Use Podman auto-update labels or systemd timers?
-- Update frequency? (nightly? weekly?)
-- Should container updates coordinate with OS updates?
-- Which containers should auto-update?
-  - Portainer?
-  - Semaphore?
-  - AdGuard?
-  - Dashboard?
+**Decisions Made**:
+- Default state: auto-updates ON
+- Schedule: Weekly Sunday 2:00 AM (before container updates at 2:30 AM)
+- Auto-reboot: Enabled at 2:30 AM if required
+- Strategy: All systems updated in sequence (OPNsense → Debian → Proxmox)
 
 #### 5. TLS/HTTPS Support
 **Current State**: All services use HTTP
@@ -183,9 +170,10 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 
 1. ✅ **COMPLETED: AdGuard-Unbound integration** (core functionality)
 2. ✅ **COMPLETED: Deploy dashboard** (user visibility)
-3. **NEXT: Setup encrypted backup partition** (data safety)
-4. **Implement VPNs** (remote access)
-5. **Create update playbooks** (maintenance)
+3. ✅ **COMPLETED: Container auto-updates** (container maintenance)
+4. 🔄 **IN PROGRESS: System update automation** (OS/firmware maintenance)
+5. **NEXT: Setup encrypted backup partition** (data safety)
+6. **Implement VPNs** (remote access)
 
 ## Success Criteria for v1
 
