@@ -56,7 +56,8 @@ log "Enabling podman-auto-update timer..."
 systemctl enable --now podman-auto-update.timer || error_exit "Failed to enable podman-auto-update.timer"
 
 log "Configuring podman-auto-update timer for Sunday 2:30 AM..."
-systemctl edit --force --drop-in=schedule podman-auto-update.timer <<'EOF'
+mkdir -p /etc/systemd/system/podman-auto-update.timer.d
+tee /etc/systemd/system/podman-auto-update.timer.d/override.conf > /dev/null <<'EOF'
 [Timer]
 OnCalendar=
 OnCalendar=Sun *-*-* 02:30:00
