@@ -91,6 +91,9 @@ LogDriver={{ container_log_driver }}
 # Pull policy
 Pull={{ container_pull_policy | default('missing') }}
 
+# Auto-update configuration
+Label=io.containers.autoupdate=registry
+
 # If service needs specific DNS servers
 # DNS=8.8.8.8
 # DNS=8.8.4.4
