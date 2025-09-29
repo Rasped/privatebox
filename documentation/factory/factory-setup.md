@@ -163,6 +163,38 @@ If any test fails:
 
 ## Production Server
 
+### Hardware: PrivateBox Unit (Dogfooding)
+
+**Why use our own product as production server:**
+- Real-world stress test (24/7 operation, critical role)
+- Validates hardware reliability before selling
+- Tests full software stack under load
+- Demonstrates confidence in product
+- Same hardware customers receive (authentic testing)
+- If it can't handle factory coordination, it's not ready to ship
+
+**Configuration:**
+- Standard PrivateBox unit (Intel N150, 16GB RAM, 256GB SSD)
+- Connected to factory network (192.168.100.250)
+- Runs all factory services:
+  - Proxmox VE (hypervisor)
+  - Production API VM (FastAPI/Flask)
+  - Database VM (PostgreSQL or SQLite)
+  - CDN server (nginx)
+  - Print server (monitors port 21)
+  - Monitoring dashboard
+- Additional load: 4x USB printers, ProCurve monitoring
+
+**What this proves:**
+- Hardware handles 24/7 operation
+- RAM sufficient for multiple VMs + database
+- Storage performs under continuous read/write
+- Network interfaces stable under sustained traffic
+- Thermal management adequate
+- Power consumption reasonable (on UPS)
+
+If production server fails, we know there's a hardware issue before it ships to customers.
+
 ### Responsibilities
 1. **Factory coordination API** - Track build status, store credentials
 2. **CDN for offline assets** - Serve Debian images, containers, templates
@@ -285,6 +317,57 @@ If operator says "no" to successful print:
 - Simply replug into port 21
 - Print server re-queries and prints again
 - No manual intervention needed
+
+### Zebra TLP 2844 Printer Details
+
+**Specifications:**
+- Resolution: 203 DPI (8 dots/mm)
+- Max print width: 4 inches (102mm)
+- Max print speed: 4 inches/second
+- Interface: USB to production server
+- Language: ZPL (Zebra Programming Language)
+- Media: Thermal transfer labels (no ink required)
+
+**Label Format (ZPL):**
+```zpl
+^XA
+^FO50,50^A0N,40,40^FDPrivateBox^FS
+^FO50,100^BY2^BCN,100,Y,N,N^FD{serial}^FS
+^FO50,220^A0N,25,25^FDSSH: {admin_password}^FS
+^FO50,260^A0N,25,25^FDWeb: {services_password}^FS
+^FO50,300^A0N,20,20^FDprivatebox.dk/setup^FS
+^XZ
+```
+
+**Print Command (Python):**
+```python
+import usb.core
+import usb.util
+
+def print_label(serial, admin_pass, services_pass):
+    # Find Zebra printer on USB
+    dev = usb.core.find(idVendor=0x0a5f, idProduct=0x0009)
+
+    zpl = f"""
+    ^XA
+    ^FO50,50^A0N,40,40^FDPrivateBox^FS
+    ^FO50,100^BY2^BCN,100,Y,N,N^FD{serial}^FS
+    ^FO50,220^A0N,25,25^FDSSH: {admin_pass}^FS
+    ^FO50,260^A0N,25,25^FDWeb: {services_pass}^FS
+    ^FO50,300^A0N,20,20^FDprivatebox.dk/setup^FS
+    ^XZ
+    """
+
+    dev.write(1, zpl.encode())
+```
+
+**Benefits of Zebra TLP 2844:**
+- Industrial reliability (100,000+ labels)
+- Fast printing (label in ~2 seconds)
+- No consumables except labels
+- Simple USB interface
+- Standard ZPL language (well documented)
+- 2 spares ensure production continuity
 
 ## Debug Station (Port 22)
 
@@ -496,23 +579,78 @@ Monthly:
 
 ## Bill of Materials
 
-### Hardware
-- ProCurve 2810-24G switch (or equivalent)
-- Production server (old PC, NUC, or Raspberry Pi 4)
-- Label printer (thermal or laser)
+### Hardware (Actual)
+
+**Network Infrastructure:**
+- ProCurve 2810-24G switch (in hand)
+- APC SmartUPS 1500 (battery backup + surge protection)
 - Network cables (CAT6, various lengths)
+
+**Production Server:**
+- PrivateBox unit (Intel N150, 16GB RAM, 256GB SSD)
+- Purpose: Factory coordination, API server, CDN, print server
+- Benefit: Dogfooding - production server runs on same hardware we sell
+- Connected to port 23 on factory network
+
+**Printers (4x Zebra TLP 2844):**
+- Primary unit labeling printer (port 21 station)
+- Shipping label printer (separate workflow)
+- 2x Spare units (production continuity)
+- Cost: 830 DKK total (~208 DKK each)
+- Type: Thermal transfer (reliable, fast, no ink/toner)
+- Interface: USB to production server
+
+**Build Hardware:**
 - USB sticks for Proxmox installer (if not using PXE)
+- VGA cables for console access (troubleshooting)
+- KVM switch (optional, for debugging multiple units)
 
 ### Software
-- Proxmox VE installer with custom answer.toml
-- Production server API (Python Flask/FastAPI)
-- Print server monitoring script
-- Database (PostgreSQL or SQLite)
 
-### Network
-- Factory network: 192.168.100.0/24
-- Internet uplink (for downloading assets during build)
-- Isolated from corporate/office network (security)
+**Production Server Stack:**
+- Proxmox VE 9.0 (hypervisor)
+- Production API VM (FastAPI/Flask)
+  - API server (units, heartbeat, debug logs)
+  - CDN server (nginx serving local assets)
+  - Print server (monitors ProCurve port 21)
+  - Database (SQLite for simplicity, PostgreSQL if needed)
+- Zebra printer driver (ZPL support)
+
+**Build Software:**
+- Proxmox VE installer with custom answer.toml
+- PrivateBox bootstrap (from GitHub main)
+- Self-test scripts
+- Heartbeat reporting
+
+### Network Configuration
+
+**Factory Network: 192.168.100.0/24**
+- Gateway: 192.168.100.1 (router/firewall)
+- Production server: 192.168.100.250
+- DHCP pool: 192.168.100.10-230 (build units)
+- Isolated from corporate/office network
+
+**Power Protection:**
+- SmartUPS 1500 backs up:
+  - ProCurve switch
+  - Production server
+  - Primary label printer
+  - Router/internet gateway
+- Build units NOT on UPS (can handle power loss mid-build)
+
+### Cost Summary
+
+| Item | Quantity | Cost (DKK) | Notes |
+|------|----------|------------|-------|
+| ProCurve 2810-24G | 1 | [In hand] | Used/refurb acceptable |
+| APC SmartUPS 1500 | 1 | [Pending] | ~2,000 DKK used |
+| Zebra TLP 2844 | 4 | 830 | Excellent price |
+| PrivateBox (production) | 1 | 1,150 | Dogfooding unit |
+| Cables, misc | - | 500 | Estimate |
+| **Total** | | **~4,500 DKK** | One-time setup cost |
+
+**Per-unit production cost:** 1,150 DKK (hardware only)
+**Factory infrastructure:** 4,500 DKK (reusable, scales to 1000s of units)
 
 ---
 
