@@ -108,7 +108,6 @@ Volume=/run/podman/podman.sock:/var/run/docker.sock:z
 Volume=/opt/portainer/data:/data:z
 Volume=snippets:/snippets:z
 PublishPort=9000:9000
-PublishPort=8000:8000
 Environment=TZ=UTC
 # Auto-update disabled - manual updates only
 
@@ -139,7 +138,7 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
   "cookie_hash": "${COOKIE_HASH}",
   "cookie_encryption": "${COOKIE_ENCRYPTION}",
   "access_key_encryption": "${ACCESS_KEY_ENCRYPTION}",
-  "web": { "listen": "0.0.0.0:3000" },
+  "web": { "listen": "10.10.20.10:3000" },
   "email": { "alert": false },
   "telegram": { "alert": false },
   "ldap": { "enable": false },

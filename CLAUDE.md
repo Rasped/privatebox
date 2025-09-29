@@ -2,6 +2,30 @@
 
 Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned with flow, security, and end state.
 
+## Product Context — CRITICAL
+**PrivateBox is a commercial consumer appliance, NOT a homelab project.**
+
+- **Business**: SubRosa ApS (Denmark) selling pre-configured firewall appliances to consumers
+- **Hardware**: Intel N150 mini-PC (16GB RAM, 256GB SSD, dual NICs) - €349 retail
+- **Target users**: Privacy-conscious consumers and technical enthusiasts who value time over DIY
+- **Key selling points**: No subscriptions, fully open source, physical ownership, no cloud dependencies
+- **Market**: Direct-to-consumer, EU/Denmark focus, launching late 2025
+
+### Why This Matters for Design Decisions
+- **Recovery system is mandatory**: Customers need appliance-like factory reset without vendor support
+- **Offline operation required**: Customer's network may be broken when they need recovery
+- **Support must scale**: Documentation-first, no phone support, community-driven
+- **Professional quality**: This competes with Firewalla ($229-459) and Ubiquiti - corner-cutting shows
+- **Regulatory compliance**: CE marking, WEEE registration, 2-year EU warranty, GDPR by design
+- **Physical console access**: Intel N150 hardware has VGA/HDMI, USB keyboard support guaranteed
+
+### Design Implications
+1. Recovery infrastructure (7 partitions, encrypted vault, immutable OS) is **appropriately thorough**, not over-engineered
+2. "Golden image timing" matters - customers expect consistent experience
+3. Offline asset storage prevents dependency on GitHub/internet during recovery
+4. Physical-only recovery prevents remote attacks on consumer devices
+5. Every technical decision impacts support burden and customer satisfaction
+
 ## Golden Rules
 - Be concise and surgical; prefer small, verifiable diffs.
 - Ansible-first; Bash only when modules fall short.
@@ -13,15 +37,15 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Inside VM: Portainer (:9000) and Semaphore (:3000) running.
 - Semaphore: project, repo, SSH keys, environments, and a "Generate Templates" task present.
 - Services deployed via Semaphore templates (AdGuard now; more later).
-- DNS: AdGuard (10.10.20.10:53) → Quad9 (primary) + Unbound fallback (10.10.20.1:5353).
+- DNS: AdGuard (10.10.20.10:53) → Quad9 (primary, port 53) → Unbound fallback (10.10.20.1:53).
 - TLS: external domain, Caddy DNS‑01 wildcard, split‑horizon DNS (no public A records).
 - All services exposed only on management VM IP (via Podman port mapping).
 
 ## Platform & Constraints
-- Proxmox: latest only. Hardware: Intel N100 target.
+- Proxmox: latest only. Hardware: Intel N150 with 16GB RAM.
 - VM OS: Debian 13 cloud image.
 - Bridges: `vmbr0` = WAN, `vmbr1` = LAN (VLAN-aware).
-- Network design: See `documentation/vlan-design.md` for complete architecture.
+- Network design: See `documentation/network-architecture/vlan-design.md` for complete architecture.
 - OPNsense: use VM template approach (manual config → convert to template → store on GitHub).
 
 ## Flow Summary
@@ -37,7 +61,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - Script auto-detects network and configures everything. Check `/tmp/privatebox-config.conf` if you need different settings.
 
 ## TLS & DNS
-- DNS Architecture: AdGuard (10.10.20.10) filters ads → Quad9 TLS (9.9.9.9) → Unbound fallback (10.10.20.1:5353).
+- DNS Architecture: AdGuard (10.10.20.10:53) filters ads → Quad9 (primary, port 53) → Unbound fallback (10.10.20.1:53).
 - Blocklists: OISD Basic + Steven Black Hosts (auto-configured).
 - Use dedicated subdomain (e.g., `pb.example.com`) → wildcard `*.pb.example.com` via DNS‑01.
 - Split‑horizon DNS: internal A records only (AdGuard); no public exposure.
