@@ -642,15 +642,21 @@ Monthly:
 
 | Item | Quantity | Cost (DKK) | Notes |
 |------|----------|------------|-------|
-| ProCurve 2810-24G | 1 | [In hand] | Used/refurb acceptable |
-| APC SmartUPS 1500 | 1 | [Pending] | ~2,000 DKK used |
-| Zebra TLP 2844 | 4 | 830 | Excellent price |
+| ProCurve 2810-24G | 1 | 100 | Excellent used deal |
+| APC SmartUPS 1500 | 1 | 1,400 | Used market |
+| Zebra TLP 2844 | 4 | 830 | 208 DKK each |
 | PrivateBox (production) | 1 | 1,150 | Dogfooding unit |
 | Cables, misc | - | 500 | Estimate |
-| **Total** | | **~4,500 DKK** | One-time setup cost |
+| **Total** | | **~4,000 DKK** | One-time setup cost |
 
 **Per-unit production cost:** 1,150 DKK (hardware only)
-**Factory infrastructure:** 4,500 DKK (reusable, scales to 1000s of units)
+**Factory infrastructure:** 4,000 DKK (reusable, scales to 1000s of units)
+
+**ROI calculation:**
+- Infrastructure investment: 4,000 DKK
+- Profit per unit: ~1,100 DKK (at 45% margin)
+- Break-even: 4 units sold
+- After 20 units: 22,000 DKK profit (infrastructure paid off 5.5x)
 
 ---
 
