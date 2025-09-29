@@ -200,6 +200,7 @@ If production server fails, we know there's a hardware issue before it ships to 
 2. **CDN for offline assets** - Serve Debian images, containers, templates
 3. **Print server** - Monitor labeling port, trigger label printing
 4. **Heartbeat monitoring** - Detect stuck builds
+5. **Remote unit monitoring** - SSH to stuck units, auto-collect diagnostics
 
 ### API Endpoints
 
@@ -428,18 +429,123 @@ Last 10 Completed:
 ...
 ```
 
-## Stuck Build Detection
+## Stuck Build Detection & Auto-Debug
 
+### Detection Logic
 ```
 Server-side monitoring:
 - If heartbeat stops for >5 minutes without success/failure POST
 - Mark unit as "stuck"
-- Alert operator to check physical unit on that port
-- Common causes:
+- Trigger automatic diagnostic collection
+- Alert operator with debug data
+
+Common causes:
   * Network cable unplugged
   * Power loss
   * Proxmox installer hung
   * Bootstrap script error
+  * Out of memory/disk space
+  * CDN asset download failure
+```
+
+### Automatic Diagnostic Collection
+
+When a unit is detected as stuck, production server automatically SSH to the unit and collects diagnostics:
+
+```python
+# Production server auto-debug script
+def debug_stuck_unit(mac_wan, proxmox_ip):
+    """
+    SSH to stuck unit and collect diagnostic data.
+    Uses default Proxmox root password during build phase.
+    """
+
+    diagnostics = {}
+
+    # Bootstrap log (where did it fail?)
+    diagnostics['bootstrap_log'] = ssh_exec(
+        f"root@{proxmox_ip}",
+        "tail -100 /tmp/privatebox-bootstrap.log"
+    )
+
+    # Guest setup log (if VM was created)
+    diagnostics['guest_log'] = ssh_exec(
+        f"root@{proxmox_ip}",
+        "ssh debian@10.10.20.10 'tail -100 /var/log/privatebox-guest-setup.log' 2>/dev/null"
+    )
+
+    # System status
+    diagnostics['vms'] = ssh_exec(f"root@{proxmox_ip}", "qm list")
+    diagnostics['disk'] = ssh_exec(f"root@{proxmox_ip}", "df -h")
+    diagnostics['memory'] = ssh_exec(f"root@{proxmox_ip}", "free -h")
+    diagnostics['network'] = ssh_exec(f"root@{proxmox_ip}", "ip addr show")
+    diagnostics['processes'] = ssh_exec(f"root@{proxmox_ip}", "ps aux | head -20")
+
+    # Store in database
+    save_debug_data(mac_wan, diagnostics)
+
+    # Alert operator with summary
+    alert(f"Port {get_port(mac_wan)} stuck - diagnostics collected")
+
+    return diagnostics
+```
+
+### Enhanced Heartbeat (Includes Proxmox IP)
+
+```bash
+# Modified heartbeat to include Proxmox IP for debugging
+POST /api/heartbeat
+{
+  "mac_wan": "aa:bb:cc:dd:ee:ff",
+  "proxmox_ip": "192.168.100.17",  # Added: enables SSH access
+  "status": "building",
+  "stage": "deploying_services",
+  "timestamp": "2025-09-29T12:34:56Z"
+}
+```
+
+### Security Notes
+
+**Why this is safe:**
+- Only works during build phase (Proxmox has WAN IP)
+- After self-test, Proxmox WAN removed (SSH no longer possible)
+- Factory network isolated (no internet access to units)
+- Default password only used during build, changed by customer
+
+**Monitoring window:**
+- Build start → Self-test complete (typically 10-15 minutes)
+- After that, unit isolated behind OPNsense
+
+### Benefits
+
+1. **Zero manual intervention** - Diagnostics collected automatically
+2. **Pattern detection** - "All failing at same stage = CDN issue"
+3. **Faster debugging** - See logs without walking to unit
+4. **Historical data** - Track failure patterns over time
+5. **Remote triage** - Determine if physical inspection needed
+
+### Dashboard Integration
+
+```
+Stuck Build Alert - Port 7
+
+Unit: aa:bb:cc:dd:ee:ff
+Last Stage: deploying_services
+Stuck Time: 6m 23s
+
+Auto-Diagnostics:
+✓ Bootstrap log collected
+✓ System status collected
+✗ Guest log not available (VM not created)
+
+Last Log Entry:
+[2025-09-29 12:34:56] Downloading OPNsense template...
+[Connection timeout after 300s]
+
+Likely Cause: CDN asset download failure
+Action: Check production server CDN service
+
+[View Full Logs] [Retry Build] [Mark for Manual Debug]
 ```
 
 ## Quality Control Metrics
@@ -548,12 +654,71 @@ Monthly:
 
 ## Future Enhancements (Not v1)
 
-- PXE boot server (eliminate USB stick requirement)
-- Automated hardware testing (CPU, RAM, disk health)
-- Barcode scanning at label station (instead of MAC detection)
-- Customer-specific pre-configuration (VPN accounts, domain names)
-- Batch tracking (group of 20 units = one batch ID)
-- Shipping manifest generation (from labeled units)
+### Infrastructure Improvements
+- **PXE boot server** - Eliminate USB stick requirement, faster deployment
+- **Automated hardware testing** - CPU stress test, RAM check, disk health before build
+- **Barcode scanning at label station** - Replace MAC detection with scanner gun (faster, more reliable)
+- **Multi-site support** - Run factory setup in multiple locations with central coordination
+
+### Production Optimization
+- **Batch tracking** - Group of 20 units = one batch ID, quality control by batch
+- **Build time prediction** - ML-based estimation of completion time per unit
+- **Parallel self-test** - Test multiple services simultaneously (faster builds)
+- **Smart resource allocation** - Prioritize CDN bandwidth to units that need it most
+- **Automated retry** - Failed units automatically reformatted and requeued
+
+### Quality & Analytics
+- **Hardware failure prediction** - Track patterns (e.g., "Units from supplier batch X fail RAM test")
+- **Build performance metrics** - Graph build times over day/week, identify bottlenecks
+- **Component lifespan tracking** - "Unit 573 built on 2025-09-29, sold 2025-10-15, first support ticket 2026-01-20"
+- **Thermal monitoring** - Temperature sensors on production server, prevent thermal throttling
+- **Power consumption tracking** - SmartUPS reports per-unit power draw, validate efficiency claims
+
+### Customer Experience
+- **Customer-specific pre-configuration** - VPN accounts, domain names, custom VLANs
+- **QR code provisioning** - Label includes QR code → customer scans → auto-setup wizard
+- **Remote activation** - Customer registers serial → you enable features remotely (optional services)
+- **Warranty tracking** - Automatic 2-year warranty database, alert before expiry
+
+### Shipping & Logistics
+- **Shipping label automation** - Weight, dimensions, tracking number from second Zebra printer
+- **Shipping manifest generation** - "20 units built today → generate packing list"
+- **Inventory integration** - Track components used per build, reorder when low
+- **Customer notification** - "Your PrivateBox (serial XXX) shipped today, tracking: YYY"
+
+### Advanced Debugging
+- **Video capture** - Camera on each build station, record last 5 minutes before failure
+- **Network packet capture** - tcpdump on stuck units, analyze why downloads fail
+- **Performance profiling** - Bootstrap reports timing for each stage, identify slow steps
+- **A/B testing** - Try different configurations on different units, measure impact
+
+### Factory Operations
+- **Shift management** - Track which operator labeled which units, quality per person
+- **Maintenance scheduling** - "Zebra printer 1 has printed 5,000 labels, schedule cleaning"
+- **Environmental monitoring** - Temperature, humidity in factory (affects hardware longevity)
+- **Security cameras** - Record factory floor, verify units not tampered with
+- **Access control** - RFID badges, track who accessed which unit when
+
+### Integration & Automation
+- **ERP integration** - Connect to accounting software (invoices, inventory, etc.)
+- **Support ticket integration** - Failed unit serial → create ticket in support system
+- **Analytics dashboard** - Real-time factory metrics on wall-mounted display
+- **Mobile app** - Operator scans unit with phone, sees status/next action
+- **Voice alerts** - "Unit on port 7 is ready for labeling" (hands-free for operator)
+
+### Compliance & Documentation
+- **CE marking automation** - Generate Declaration of Conformity per unit
+- **WEEE reporting** - Auto-report sold units to Danish WEEE registry
+- **Audit trail** - Complete history: "Unit X built by operator Y on date Z, tested by system"
+- **Customer consent logging** - "Customer agreed to terms at activation time"
+- **Export documentation** - Auto-generate customs paperwork for non-EU sales
+
+### Smart Ideas (Experimental)
+- **Predictive CDN caching** - Pre-download assets before builds start (faster builds)
+- **Load balancing** - If CDN slow, fetch from internet mirror instead
+- **Staged rollouts** - Test new bootstrap version on 10% of builds first
+- **Canary deployments** - Build one test unit before starting batch of 20
+- **Auto-calibration** - System learns optimal build parameters over time
 
 ## Troubleshooting
 
