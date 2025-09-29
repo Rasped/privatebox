@@ -979,8 +979,22 @@ d1gvVYrZXIblXHP/6ci71Vm+lFVIWTGtp7zaDLDe/+3txOfT+TEzeFX9MIvDUtETvdnxdA45zaD3cR/F
       <zones/>
       <templates/>
     </captiveportal>
-    <cron version="1.0.4" persisted_at="1753785974.98">
-      <jobs/>
+    <cron version="1.0.4">
+      <jobs>
+        <job uuid="00000000-0000-0000-0000-000000000001">
+          <origin>cron</origin>
+          <enabled>1</enabled>
+          <minutes>0</minutes>
+          <hours>4</hours>
+          <days>*</days>
+          <months>*</months>
+          <weekdays>0</weekdays>
+          <who>root</who>
+          <command>firmware auto-update</command>
+          <parameters></parameters>
+          <description>Weekly automatic firmware update</description>
+        </job>
+      </jobs>
     </cron>
     <DHCRelay version="1.0.1" persisted_at="1753785974.98"/>
     <Firewall>
