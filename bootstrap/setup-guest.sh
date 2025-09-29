@@ -55,6 +55,16 @@ systemctl enable --now podman.socket || error_exit "Failed to enable Podman sock
 log "Enabling podman-auto-update timer..."
 systemctl enable --now podman-auto-update.timer || error_exit "Failed to enable podman-auto-update.timer"
 
+log "Configuring podman-auto-update timer for Sunday 2:30 AM..."
+systemctl edit --force --drop-in=schedule podman-auto-update.timer <<'EOF'
+[Timer]
+OnCalendar=
+OnCalendar=Sun *-*-* 02:30:00
+RandomizedDelaySec=30min
+Persistent=true
+EOF
+systemctl daemon-reload
+
 #==============================#
 # Directories & volumes
 #==============================#
@@ -110,7 +120,7 @@ Volume=snippets:/snippets:z
 PublishPort=9000:9000
 PublishPort=8000:8000
 Environment=TZ=UTC
-Label=io.containers.autoupdate=image
+Label=io.containers.autoupdate=registry
 
 [Service]
 Restart=always
@@ -182,7 +192,7 @@ Environment=TZ=UTC
 # Volume=/etc/ssl/certs/pve-ca.pem:/etc/ssl/certs/pve-ca.pem:ro,Z
 # Environment=REQUESTS_CA_BUNDLE=/etc/ssl/certs/pve-ca.pem
 Exec=semaphore server --config=/etc/semaphore/config.json
-Label=io.containers.autoupdate=image
+Label=io.containers.autoupdate=registry
 
 [Service]
 Restart=always
