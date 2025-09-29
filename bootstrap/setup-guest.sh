@@ -138,7 +138,7 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
   "cookie_hash": "${COOKIE_HASH}",
   "cookie_encryption": "${COOKIE_ENCRYPTION}",
   "access_key_encryption": "${ACCESS_KEY_ENCRYPTION}",
-  "web": { "listen": "10.10.20.10:3000" },
+  "web": { "listen": "0.0.0.0:3000" },
   "email": { "alert": false },
   "telegram": { "alert": false },
   "ldap": { "enable": false },
