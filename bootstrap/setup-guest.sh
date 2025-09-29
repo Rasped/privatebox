@@ -167,7 +167,7 @@ Volume=/opt/semaphore/config:/etc/semaphore:Z
 # Persistent playbooks/projects and Ansible home (optional but handy)
 Volume=/opt/semaphore/projects:/projects:Z
 Volume=/opt/semaphore/ansible:/home/semaphore/.ansible:Z
-PublishPort=3000:3000
+PublishPort=10.10.20.10:3000:3000
 Environment=SEMAPHORE_DB_DIALECT=bolt
 Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
 Environment=SEMAPHORE_ADMIN=admin
