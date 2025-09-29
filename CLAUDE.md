@@ -6,7 +6,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 **PrivateBox is a commercial consumer appliance, NOT a homelab project.**
 
 - **Business**: SubRosa ApS (Denmark) selling pre-configured firewall appliances to consumers
-- **Hardware**: Intel N150 mini-PC (16GB RAM, 256GB SSD, dual NICs) - €349 retail
+- **Hardware**: Intel N150 mini-PC (16GB RAM, 256GB SSD, dual NICs) - €399 retail
 - **Target users**: Privacy-conscious consumers and technical enthusiasts who value time over DIY
 - **Key selling points**: No subscriptions, fully open source, physical ownership, no cloud dependencies
 - **Market**: Direct-to-consumer, EU/Denmark focus, launching late 2025
