@@ -142,33 +142,31 @@
             status_code: 200
           register: api_test_result
 
-        - name: Prepare OPNsenseAPI environment payload
-          set_fact:
-            opnsense_env_payload:
-              name: "OPNsenseAPI"
-              project_id: "{{ project_id | int }}"
-              json: "{{ {'OPNSENSE_API_URL': 'https://' + opnsense_ip} | to_json }}"
-              env: "{}"
-              secrets:
-                - type: "var"
-                  name: "OPNSENSE_API_KEY"
-                  secret: "{{ apikey_json.key }}"
-                  operation: "create"
-                - type: "var"
-                  name: "OPNSENSE_API_SECRET"
-                  secret: "{{ apikey_json.secret }}"
-                  operation: "create"
-
-        - name: Create OPNsenseAPI environment in Semaphore
-          uri:
-            url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
-            method: POST
-            headers:
-              Authorization: "Bearer {{ semaphore_token }}"
-              Content-Type: "application/json"
-            body_format: json
-            body: "{{ opnsense_env_payload }}"
-            status_code: [201, 204]
+        - name: Create OPNsenseAPI environment in Semaphore (using jq for proper JSON types)
+          shell: |
+            jq -n \
+              --arg name "OPNsenseAPI" \
+              --argjson pid {{ project_id }} \
+              --arg api_url "https://{{ opnsense_ip }}" \
+              --arg api_key "{{ apikey_json.key }}" \
+              --arg api_secret "{{ apikey_json.secret }}" \
+              '{
+                name: $name,
+                project_id: $pid,
+                json: ({OPNSENSE_API_URL: $api_url} | tostring),
+                env: "{}",
+                secrets: [
+                  {type: "var", name: "OPNSENSE_API_KEY", secret: $api_key, operation: "create"},
+                  {type: "var", name: "OPNSENSE_API_SECRET", secret: $api_secret, operation: "create"}
+                ]
+              }' | \
+            curl -sS -f \
+              -H "Authorization: Bearer {{ semaphore_token }}" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+          args:
+            warn: false
           register: create_env_result
 
         - name: Clean up API key creation script from OPNsense
