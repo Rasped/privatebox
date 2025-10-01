@@ -123,80 +123,7 @@
       when: enable_debug | bool
 
     # ============================================
-    # Phase 2: SSH Key Deployment (if needed)
-    # ============================================
-
-    - name: Create credentials directory
-      file:
-        path: "{{ credentials_dir }}"
-        state: directory
-        mode: '0700'
-        owner: root
-        group: root
-      when: ssh_setup_needed
-
-    - name: Generate SSH keypair if missing
-      openssh_keypair:
-        path: "{{ ssh_key_path }}"
-        type: ed25519
-        comment: "opnsense-{{ opnsense_ip }}-{{ ansible_date_time.date }}"
-        state: present
-        mode: '0600'
-      when: 
-        - ssh_setup_needed
-        - not ssh_key_exists.stat.exists
-
-    - name: Read public key
-      slurp:
-        src: "{{ ssh_key_path }}.pub"
-      register: public_key_content
-      when: ssh_setup_needed
-
-    - name: Deploy SSH public key to OPNsense
-      shell: |
-        SSHPASS='{{ working_password }}' sshpass -e ssh \
-          -o StrictHostKeyChecking=no \
-          -o ConnectTimeout=5 \
-          -o PasswordAuthentication=yes \
-          -o PreferredAuthentications=password \
-          root@{{ opnsense_ip }} \
-          "mkdir -p /root/.ssh && \
-           chmod 700 /root/.ssh && \
-           echo '{{ public_key_content.content | b64decode | trim }}' >> /root/.ssh/authorized_keys && \
-           chmod 600 /root/.ssh/authorized_keys && \
-           echo 'KEY_DEPLOYED'"
-      register: key_deploy
-      when: ssh_setup_needed
-      changed_when: "'KEY_DEPLOYED' in key_deploy.stdout"
-      no_log: "{{ working_password != opnsense_default_password }}"
-
-    - name: Verify SSH key authentication works
-      shell: |
-        ssh -i {{ ssh_key_path }} \
-          -o StrictHostKeyChecking=no \
-          -o ConnectTimeout=5 \
-          -o PasswordAuthentication=no \
-          -o PreferredAuthentications=publickey \
-          root@{{ opnsense_ip }} \
-          "echo 'KEY_AUTH_SUCCESS' && hostname"
-      register: key_verify
-      when: ssh_setup_needed
-      changed_when: false
-
-    - name: Fail if SSH key deployment failed
-      fail:
-        msg: "SSH key was deployed but authentication is not working"
-      when:
-        - ssh_setup_needed
-        - "'KEY_AUTH_SUCCESS' not in key_verify.stdout"
-
-    - name: Report SSH setup success
-      debug:
-        msg: "✓ SSH key authentication successfully configured"
-      when: ssh_setup_needed
-
-    # ============================================
-    # Phase 3: Password Synchronization
+    # Phase 2: Password Synchronization (if needed)
     # ============================================
 
     - name: Test if default password still works
@@ -237,11 +164,14 @@
         # This is the same script called by console menu "Option 3: Reset root password"
         # It updates BOTH system password (/etc/master.passwd) AND web UI password (/conf/config.xml)
         # Note: OPNsense uses tcsh, so we use 'set VAR=value' syntax (not bash-style VAR=value)
+        # IMPORTANT: Run BEFORE SSH key setup because password.php regenerates authorized_keys from config.xml
         - name: Change root password to ADMIN_PASSWORD
           shell: |
-            ssh -i {{ ssh_key_path }} \
+            SSHPASS='{{ working_password }}' sshpass -e ssh \
               -o StrictHostKeyChecking=no \
               -o ConnectTimeout=5 \
+              -o PasswordAuthentication=yes \
+              -o PreferredAuthentications=password \
               root@{{ opnsense_ip }} \
               'set NEWPW="{{ admin_password }}" && printf "y\n$NEWPW\n$NEWPW\n" | /usr/local/opnsense/scripts/shell/password.php'
           register: password_change
@@ -251,15 +181,18 @@
 
         - name: Verify config.xml was modified (web UI password changed)
           shell: |
-            ssh -i {{ ssh_key_path }} \
+            SSHPASS='{{ admin_password }}' sshpass -e ssh \
               -o StrictHostKeyChecking=no \
               -o ConnectTimeout=5 \
+              -o PasswordAuthentication=yes \
+              -o PreferredAuthentications=password \
               root@{{ opnsense_ip }} \
               "grep -q '<password>\$2y\$' /conf/config.xml && echo 'CONFIG_UPDATED'"
           register: config_verify
           changed_when: false
           failed_when: "'CONFIG_UPDATED' not in config_verify.stdout"
           when: password_change.changed
+          no_log: true
 
         - name: Verify new password works (SSH)
           shell: |
@@ -280,14 +213,21 @@
         - name: Check password change result
           fail:
             msg: "Password change command succeeded but new password does not work. Password may not have been changed."
-          when: 
+          when:
             - password_change.rc == 0
             - new_password_verify.rc != 0
+
+        - name: Update working_password fact after successful change
+          set_fact:
+            working_password: "{{ admin_password }}"
+          when:
+            - password_change.rc == 0
+            - new_password_verify.rc == 0
 
         - name: Report password sync success
           debug:
             msg: "✓ OPNsense root password synchronized with ADMIN_PASSWORD from Semaphore"
-          when: 
+          when:
             - password_change.rc == 0
             - new_password_verify.rc == 0
 
@@ -296,6 +236,183 @@
           fail:
             msg: "Failed to synchronize OPNsense password with ADMIN_PASSWORD from Semaphore"
       when: password_sync_needed
+
+    # ============================================
+    # Phase 3: SSH Key Deployment via API (if needed)
+    # ============================================
+
+    - name: Deploy SSH key via ephemeral API key
+      block:
+        - name: Create credentials directory
+          file:
+            path: "{{ credentials_dir }}"
+            state: directory
+            mode: '0700'
+            owner: root
+            group: root
+
+        - name: Generate SSH keypair if missing
+          openssh_keypair:
+            path: "{{ ssh_key_path }}"
+            type: ed25519
+            comment: "opnsense-{{ opnsense_ip }}-{{ ansible_date_time.date }}"
+            state: present
+            mode: '0600'
+          when: not ssh_key_exists.stat.exists
+
+        - name: Read public key
+          slurp:
+            src: "{{ ssh_key_path }}.pub"
+          register: public_key_content
+
+        - name: Copy API key generation script to Proxmox
+          copy:
+            src: "{{ playbook_dir }}/../files/opnsense/create-apikey.php"
+            dest: "/tmp/opnsense-create-apikey.php"
+            mode: '0644'
+
+        - name: Upload API key generation script to OPNsense
+          shell: |
+            SSHPASS='{{ working_password }}' sshpass -e scp \
+              -o StrictHostKeyChecking=no \
+              /tmp/opnsense-create-apikey.php \
+              root@{{ opnsense_ip }}:/tmp/create-apikey.php
+          changed_when: true
+
+        - name: Generate temporary API key
+          shell: |
+            SSHPASS='{{ working_password }}' sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o PasswordAuthentication=yes \
+              -o PreferredAuthentications=password \
+              root@{{ opnsense_ip }} \
+              '/usr/local/bin/php /tmp/create-apikey.php'
+          register: apikey_result
+          changed_when: true
+          no_log: true
+
+        - name: Parse API key credentials
+          set_fact:
+            temp_api_key: "{{ (apikey_result.stdout | from_json).key }}"
+            temp_api_secret: "{{ (apikey_result.stdout | from_json).secret }}"
+          no_log: true
+
+        - name: Get root user data including UUID via API
+          shell: |
+            ssh -o StrictHostKeyChecking=no \
+              root@{{ opnsense_ip }} \
+              "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
+               https://localhost/api/auth/user/get"
+          register: user_data
+          changed_when: false
+          no_log: true
+
+        - name: Parse root user UUID from API response
+          set_fact:
+            root_uuid: "{{ (user_data.stdout | from_json).user.uuid }}"
+
+        - name: Add SSH public key via API
+          shell: |
+            ssh -o StrictHostKeyChecking=no \
+              root@{{ opnsense_ip }} \
+              "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
+               -X POST -H 'Content-Type: application/json' \
+               -d '{\"user\":{\"authorizedkeys\":\"{{ public_key_content.content | b64decode | trim }}\"}}' \
+               https://localhost/api/auth/user/set/{{ root_uuid }}"
+          register: api_set_result
+          changed_when: "'saved' in api_set_result.stdout"
+          failed_when: "'saved' not in api_set_result.stdout"
+          no_log: true
+
+        - name: Sync user to apply SSH key to filesystem
+          shell: |
+            SSHPASS='{{ working_password }}' sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o PasswordAuthentication=yes \
+              -o PreferredAuthentications=password \
+              root@{{ opnsense_ip }} \
+              '/usr/local/opnsense/scripts/auth/sync_user.php -u root'
+          register: sync_result
+          changed_when: "'updated' in sync_result.stdout"
+          no_log: true
+
+        - name: Verify SSH key authentication works
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              -o PasswordAuthentication=no \
+              -o PreferredAuthentications=publickey \
+              root@{{ opnsense_ip }} \
+              "echo 'KEY_AUTH_SUCCESS' && hostname"
+          register: key_verify
+          changed_when: false
+
+        - name: Get temporary API key ID for deletion
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              root@{{ opnsense_ip }} \
+              "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
+               https://localhost/api/auth/user/searchApiKey | \
+               jq -r '.rows[] | select(.key==\"{{ temp_api_key }}\") | .id'"
+          register: api_key_id
+          changed_when: false
+          no_log: true
+
+        - name: Delete temporary API key
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              root@{{ opnsense_ip }} \
+              "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
+               -X POST https://localhost/api/auth/user/delApiKey/{{ api_key_id.stdout | trim }}"
+          register: api_delete_result
+          changed_when: "'deleted' in api_delete_result.stdout"
+          no_log: true
+
+        - name: Remove API key generation script from OPNsense
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              root@{{ opnsense_ip }} \
+              'rm -f /tmp/create-apikey.php'
+          changed_when: true
+
+        - name: Remove API key generation script from Proxmox
+          file:
+            path: "/tmp/opnsense-create-apikey.php"
+            state: absent
+
+        - name: Report SSH setup success
+          debug:
+            msg: "✓ SSH key authentication successfully configured via ephemeral API key"
+
+      rescue:
+        - name: Cleanup OPNsense on failure
+          shell: |
+            SSHPASS='{{ working_password }}' sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              root@{{ opnsense_ip }} \
+              'rm -f /tmp/create-apikey.php'
+          failed_when: false
+
+        - name: Cleanup Proxmox on failure
+          file:
+            path: "/tmp/opnsense-create-apikey.php"
+            state: absent
+          failed_when: false
+
+        - name: Report SSH setup failure
+          fail:
+            msg: "Failed to set up SSH key authentication via API"
+
+      when: ssh_setup_needed
+
+    # ============================================
+    # Phase 4: Optional - Disable Password Authentication
+    # ============================================
 
     - name: Optional - Disable password authentication
       shell: |
@@ -312,7 +429,7 @@
       changed_when: "'PASSWORD_AUTH_DISABLED' in disable_password.stdout"
 
     # ============================================
-    # Phase 4: Final Summary
+    # Phase 5: Final Summary
     # ============================================
 
     - name: Get SSH key fingerprint
