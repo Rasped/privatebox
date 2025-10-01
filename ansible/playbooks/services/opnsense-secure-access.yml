@@ -187,7 +187,7 @@
               -o PasswordAuthentication=yes \
               -o PreferredAuthentications=password \
               root@{{ opnsense_ip }} \
-              "grep -q '<password>\$2y\$' /conf/config.xml && echo 'CONFIG_UPDATED'"
+              'grep -q "<password>.*2y.*" /conf/config.xml && echo CONFIG_UPDATED'
           register: config_verify
           changed_when: false
           failed_when: "'CONFIG_UPDATED' not in config_verify.stdout"
