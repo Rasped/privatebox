@@ -267,7 +267,7 @@
 
         - name: Copy API key generation script to Proxmox
           copy:
-            src: "{{ playbook_dir }}/../files/opnsense/create-apikey.php"
+            src: "{{ playbook_dir }}/../../files/opnsense/create-apikey.php"
             dest: "/tmp/opnsense-create-apikey.php"
             mode: '0644'
 
