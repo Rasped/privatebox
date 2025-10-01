@@ -299,7 +299,10 @@
 
         - name: Get root user data including UUID via API
           shell: |
-            ssh -o StrictHostKeyChecking=no \
+            SSHPASS='{{ working_password }}' sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o PasswordAuthentication=yes \
+              -o PreferredAuthentications=password \
               root@{{ opnsense_ip }} \
               "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
                https://localhost/api/auth/user/get"
@@ -313,7 +316,10 @@
 
         - name: Add SSH public key via API
           shell: |
-            ssh -o StrictHostKeyChecking=no \
+            SSHPASS='{{ working_password }}' sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o PasswordAuthentication=yes \
+              -o PreferredAuthentications=password \
               root@{{ opnsense_ip }} \
               "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
                -X POST -H 'Content-Type: application/json' \
