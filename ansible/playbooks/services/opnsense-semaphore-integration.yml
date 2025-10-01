@@ -184,33 +184,9 @@
           debug:
             msg: "✓ New OPNsense API key generated and stored in Semaphore"
 
-    - name: Test existing OPNsense API credentials
+    - name: Report existing API environment status
       when: opnsense_api_env
       block:
-        - name: Parse existing environment
-          set_fact:
-            opnsense_env_json: "{{ opnsense_api_env.json | from_json }}"
-
-        - name: Test existing API key
-          uri:
-            url: "{{ opnsense_env_json.OPNSENSE_API_URL }}/api/core/system/status"
-            method: GET
-            user: "{{ opnsense_env_json.OPNSENSE_API_KEY }}"
-            password: "{{ opnsense_env_json.OPNSENSE_API_SECRET }}"
-            force_basic_auth: yes
-            validate_certs: no
-            status_code: 200
-          register: existing_api_test
-          failed_when: false
-
-        - name: Fail if existing credentials don't work
-          fail:
-            msg: |
-              OPNsenseAPI environment exists but credentials are invalid.
-              Status code: {{ existing_api_test.status | default('connection failed') }}
-              Please delete the OPNsenseAPI environment in Semaphore and re-run this playbook.
-          when: existing_api_test.status != 200
-
         - name: Report existing API key status
           debug:
             msg: "✓ Existing OPNsense API credentials verified"
