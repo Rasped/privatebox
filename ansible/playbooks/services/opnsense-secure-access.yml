@@ -297,22 +297,16 @@
             temp_api_secret: "{{ (apikey_result.stdout | from_json).secret }}"
           no_log: true
 
-        - name: Get root user data including UUID via API
+        - name: Get root user UUID from config.xml
           shell: |
             SSHPASS='{{ working_password }}' sshpass -e ssh \
               -o StrictHostKeyChecking=no \
               -o PasswordAuthentication=yes \
               -o PreferredAuthentications=password \
               root@{{ opnsense_ip }} \
-              "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
-               https://localhost/api/auth/user/get"
-          register: user_data
+              "xmllint --xpath 'string(//user[uid=0]/@uuid)' /conf/config.xml"
+          register: root_uuid_result
           changed_when: false
-          no_log: true
-
-        - name: Parse root user UUID from API response
-          set_fact:
-            root_uuid: "{{ (user_data.stdout | from_json).user.uuid }}"
 
         - name: Add SSH public key via API
           shell: |
@@ -324,7 +318,7 @@
               "curl -s -k -u '{{ temp_api_key }}:{{ temp_api_secret }}' \
                -X POST -H 'Content-Type: application/json' \
                -d '{\"user\":{\"authorizedkeys\":\"{{ public_key_content.content | b64decode | trim }}\"}}' \
-               https://localhost/api/auth/user/set/{{ root_uuid }}"
+               https://localhost/api/auth/user/set/{{ root_uuid_result.stdout | trim }}"
           register: api_set_result
           changed_when: "'saved' in api_set_result.stdout"
           failed_when: "'saved' not in api_set_result.stdout"
