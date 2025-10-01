@@ -236,16 +236,14 @@
         # Use OPNsense's official password reset script (/usr/local/opnsense/scripts/shell/password.php)
         # This is the same script called by console menu "Option 3: Reset root password"
         # It updates BOTH system password (/etc/master.passwd) AND web UI password (/conf/config.xml)
-        # Password is base64-encoded to safely handle special characters through shell/SSH
+        # Note: OPNsense uses tcsh, so we use 'set VAR=value' syntax (not bash-style VAR=value)
         - name: Change root password to ADMIN_PASSWORD
           shell: |
             ssh -i {{ ssh_key_path }} \
               -o StrictHostKeyChecking=no \
               -o ConnectTimeout=5 \
               root@{{ opnsense_ip }} \
-              "NEW_PASS=\$(echo '{{ admin_password | b64encode }}' | base64 -d) && \
-               printf 'y\n%s\n%s\n' \"\$NEW_PASS\" \"\$NEW_PASS\" | \
-               /usr/local/opnsense/scripts/shell/password.php 2>&1"
+              'set NEWPW="{{ admin_password }}" && printf "y\n$NEWPW\n$NEWPW\n" | /usr/local/opnsense/scripts/shell/password.php'
           register: password_change
           changed_when: "'successfully' in password_change.stdout"
           failed_when: password_change.rc != 0 or 'successfully' not in password_change.stdout
