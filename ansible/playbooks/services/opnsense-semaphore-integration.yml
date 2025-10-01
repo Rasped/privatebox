@@ -1,5 +1,5 @@
 ---
-- name: "OPNsense 2: Register in Semaphore"
+- name: "OPNsense 2: Semaphore Integration"
   hosts: proxmox
   gather_facts: yes
   vars:
@@ -80,7 +80,127 @@
       when: enable_debug | bool
 
     # ============================================
-    # Phase 2: SSH Key Registration
+    # Phase 2: OPNsense API Key Management
+    # ============================================
+
+    - name: Check if OPNsenseAPI environment exists
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        status_code: 200
+      register: existing_environments
+
+    - name: Find OPNsenseAPI environment
+      set_fact:
+        opnsense_api_env: "{{ existing_environments.json | selectattr('name', 'equalto', 'OPNsenseAPI') | list | first | default(false) }}"
+
+    - name: Generate new OPNsense API key
+      when: not opnsense_api_env
+      block:
+        - name: Upload API key creation script to OPNsense
+          shell: |
+            scp -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              {{ playbook_dir }}/../../files/opnsense/create-apikey.php \
+              root@{{ opnsense_ip }}:/tmp/
+          changed_when: true
+
+        - name: Execute API key creation script
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              root@{{ opnsense_ip }} \
+              '/usr/local/bin/php /tmp/create-apikey.php'
+          register: apikey_result
+          changed_when: true
+
+        - name: Parse API key result
+          set_fact:
+            apikey_json: "{{ apikey_result.stdout | from_json }}"
+
+        - name: Fail if API key generation failed
+          fail:
+            msg: "API key generation failed: {{ apikey_json.error | default('Unknown error') }}"
+          when: apikey_json.result != 'ok'
+
+        - name: Test new API key works
+          uri:
+            url: "https://{{ opnsense_ip }}/api/core/system/status"
+            method: GET
+            user: "{{ apikey_json.key }}"
+            password: "{{ apikey_json.secret }}"
+            force_basic_auth: yes
+            validate_certs: no
+            status_code: 200
+          register: api_test_result
+
+        - name: Create OPNsenseAPI environment in Semaphore
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              name: "OPNsenseAPI"
+              project_id: "{{ project_id }}"
+              json: |
+                {
+                  "OPNSENSE_API_URL": "https://{{ opnsense_ip }}",
+                  "OPNSENSE_API_KEY": "{{ apikey_json.key }}",
+                  "OPNSENSE_API_SECRET": "{{ apikey_json.secret }}"
+                }
+            status_code: [201, 204]
+          register: create_env_result
+
+        - name: Clean up API key creation script
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              root@{{ opnsense_ip }} \
+              'rm -f /tmp/create-apikey.php'
+          changed_when: false
+
+        - name: Report API key generation success
+          debug:
+            msg: "✓ New OPNsense API key generated and stored in Semaphore"
+
+    - name: Test existing OPNsense API credentials
+      when: opnsense_api_env
+      block:
+        - name: Parse existing environment
+          set_fact:
+            opnsense_env_json: "{{ opnsense_api_env.json | from_json }}"
+
+        - name: Test existing API key
+          uri:
+            url: "{{ opnsense_env_json.OPNSENSE_API_URL }}/api/core/system/status"
+            method: GET
+            user: "{{ opnsense_env_json.OPNSENSE_API_KEY }}"
+            password: "{{ opnsense_env_json.OPNSENSE_API_SECRET }}"
+            force_basic_auth: yes
+            validate_certs: no
+            status_code: 200
+          register: existing_api_test
+          failed_when: false
+
+        - name: Fail if existing credentials don't work
+          fail:
+            msg: |
+              OPNsenseAPI environment exists but credentials are invalid.
+              Status code: {{ existing_api_test.status | default('connection failed') }}
+              Please delete the OPNsenseAPI environment in Semaphore and re-run this playbook.
+          when: existing_api_test.status != 200
+
+        - name: Report existing API key status
+          debug:
+            msg: "✓ Existing OPNsense API credentials verified"
+
+    # ============================================
+    # Phase 3: SSH Key Registration
     # ============================================
 
     - name: Read SSH private key
@@ -146,7 +266,7 @@
         msg: "{{ 'Created new' if not existing_key else 'Updated existing' }} SSH key '{{ key_name }}' with ID: {{ ssh_key_id }}"
 
     # ============================================
-    # Phase 3: Inventory Registration
+    # Phase 4: Inventory Registration
     # ============================================
 
     - name: Build inventory YAML
@@ -218,7 +338,7 @@
         msg: "{{ 'Created new' if not existing_inventory else 'Updated existing' }} inventory '{{ inventory_name }}' with ID: {{ inventory_id }}"
 
     # ============================================
-    # Phase 4: Template Regeneration
+    # Phase 5: Template Regeneration
     # ============================================
 
     - name: Trigger template regeneration
