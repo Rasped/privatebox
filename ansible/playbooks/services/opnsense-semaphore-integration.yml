@@ -152,7 +152,7 @@
             body_format: json
             body:
               name: "OPNsenseAPI"
-              project_id: "{{ project_id | int }}"
+              project_id: {{ project_id | int }}
               json: "{{ {'OPNSENSE_API_URL': 'https://' + opnsense_ip} | to_json }}"
               env: "{}"
               secrets:
