@@ -233,19 +233,37 @@
 
     - name: Sync OPNsense password with Semaphore
       block:
+        # Use OPNsense's official password reset script (/usr/local/opnsense/scripts/shell/password.php)
+        # This is the same script called by console menu "Option 3: Reset root password"
+        # It updates BOTH system password (/etc/master.passwd) AND web UI password (/conf/config.xml)
+        # Password is base64-encoded to safely handle special characters through shell/SSH
         - name: Change root password to ADMIN_PASSWORD
           shell: |
             ssh -i {{ ssh_key_path }} \
               -o StrictHostKeyChecking=no \
               -o ConnectTimeout=5 \
               root@{{ opnsense_ip }} \
-              "echo {{ admin_password | quote }} | configctl system password root && \
-               echo 'PASSWORD_CHANGED'"
+              "NEW_PASS=\$(echo '{{ admin_password | b64encode }}' | base64 -d) && \
+               printf 'y\n%s\n%s\n' \"\$NEW_PASS\" \"\$NEW_PASS\" | \
+               /usr/local/opnsense/scripts/shell/password.php 2>&1"
           register: password_change
-          changed_when: "'PASSWORD_CHANGED' in password_change.stdout"
+          changed_when: "'successfully' in password_change.stdout"
+          failed_when: password_change.rc != 0 or 'successfully' not in password_change.stdout
           no_log: true
 
-        - name: Verify new password works
+        - name: Verify config.xml was modified (web UI password changed)
+          shell: |
+            ssh -i {{ ssh_key_path }} \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              root@{{ opnsense_ip }} \
+              "grep -q '<password>\$2y\$' /conf/config.xml && echo 'CONFIG_UPDATED'"
+          register: config_verify
+          changed_when: false
+          failed_when: "'CONFIG_UPDATED' not in config_verify.stdout"
+          when: password_change.changed
+
+        - name: Verify new password works (SSH)
           shell: |
             SSHPASS='{{ admin_password }}' sshpass -e ssh \
               -o StrictHostKeyChecking=no \
