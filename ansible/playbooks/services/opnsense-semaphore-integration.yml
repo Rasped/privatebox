@@ -153,7 +153,17 @@
             body:
               name: "OPNsenseAPI"
               project_id: "{{ project_id | int }}"
-              json: "{{ {'OPNSENSE_API_URL': 'https://' + opnsense_ip, 'OPNSENSE_API_KEY': apikey_json.key, 'OPNSENSE_API_SECRET': apikey_json.secret} | to_json }}"
+              json: "{{ {'OPNSENSE_API_URL': 'https://' + opnsense_ip} | to_json }}"
+              env: "{}"
+              secrets:
+                - type: "var"
+                  name: "OPNSENSE_API_KEY"
+                  secret: "{{ apikey_json.key }}"
+                  operation: "create"
+                - type: "var"
+                  name: "OPNSENSE_API_SECRET"
+                  secret: "{{ apikey_json.secret }}"
+                  operation: "create"
             status_code: [201, 204]
           register: create_env_result
 
