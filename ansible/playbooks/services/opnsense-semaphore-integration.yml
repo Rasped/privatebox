@@ -165,8 +165,6 @@
               -H "Content-Type: application/json" \
               -d @- \
               "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
-          args:
-            warn: false
           register: create_env_result
 
         - name: Clean up API key creation script from OPNsense
