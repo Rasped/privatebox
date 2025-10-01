@@ -99,12 +99,18 @@
     - name: Generate new OPNsense API key
       when: not opnsense_api_env
       block:
+        - name: Copy API key creation script to Proxmox
+          copy:
+            src: "{{ playbook_dir }}/../../files/opnsense/create-apikey.php"
+            dest: "/tmp/opnsense-create-apikey.php"
+            mode: '0644'
+
         - name: Upload API key creation script to OPNsense
           shell: |
             scp -i {{ ssh_key_path }} \
               -o StrictHostKeyChecking=no \
-              {{ playbook_dir }}/../../files/opnsense/create-apikey.php \
-              root@{{ opnsense_ip }}:/tmp/
+              /tmp/opnsense-create-apikey.php \
+              root@{{ opnsense_ip }}:/tmp/create-apikey.php
           changed_when: true
 
         - name: Execute API key creation script
@@ -156,13 +162,18 @@
             status_code: [201, 204]
           register: create_env_result
 
-        - name: Clean up API key creation script
+        - name: Clean up API key creation script from OPNsense
           shell: |
             ssh -i {{ ssh_key_path }} \
               -o StrictHostKeyChecking=no \
               root@{{ opnsense_ip }} \
               'rm -f /tmp/create-apikey.php'
           changed_when: false
+
+        - name: Clean up API key creation script from Proxmox
+          file:
+            path: "/tmp/opnsense-create-apikey.php"
+            state: absent
 
         - name: Report API key generation success
           debug:
