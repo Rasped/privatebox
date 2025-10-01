@@ -46,7 +46,7 @@ class SemaphoreOrchestrator:
         # Define the template sequence
         self.template_sequence = [
             "OPNsense 1: Establish Secure Access",
-            "OPNsense 2: Register in Semaphore",
+            "OPNsense 2: Semaphore Integration",
             "OPNsense 3: Post-Configuration",
             "AdGuard 1: Deploy Container Service",
             "Homer 1: Deploy Dashboard Service"
