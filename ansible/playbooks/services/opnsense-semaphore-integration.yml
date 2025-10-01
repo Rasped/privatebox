@@ -142,17 +142,11 @@
             status_code: 200
           register: api_test_result
 
-        - name: Create OPNsenseAPI environment in Semaphore
-          uri:
-            url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
-            method: POST
-            headers:
-              Authorization: "Bearer {{ semaphore_token }}"
-              Content-Type: "application/json"
-            body_format: json
-            body:
+        - name: Prepare OPNsenseAPI environment payload
+          set_fact:
+            opnsense_env_payload:
               name: "OPNsenseAPI"
-              project_id: {{ project_id | int }}
+              project_id: "{{ project_id | int }}"
               json: "{{ {'OPNSENSE_API_URL': 'https://' + opnsense_ip} | to_json }}"
               env: "{}"
               secrets:
@@ -164,6 +158,16 @@
                   name: "OPNSENSE_API_SECRET"
                   secret: "{{ apikey_json.secret }}"
                   operation: "create"
+
+        - name: Create OPNsenseAPI environment in Semaphore
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+              Content-Type: "application/json"
+            body_format: json
+            body: "{{ opnsense_env_payload }}"
             status_code: [201, 204]
           register: create_env_result
 
