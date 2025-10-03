@@ -234,7 +234,7 @@
         body:
           name: "{{ key_name }}"
           type: "ssh"
-          project_id: "{{ project_id | int }}"
+          project_id: {{ project_id | int }}
           ssh:
             private_key: "{{ decoded_private_key.stdout }}"
         status_code: [201, 204]
@@ -251,7 +251,7 @@
         body:
           name: "{{ key_name }}"
           type: "ssh"
-          project_id: "{{ project_id | int }}"
+          project_id: {{ project_id | int }}
           ssh:
             private_key: "{{ decoded_private_key.stdout }}"
         status_code: [200, 204]
