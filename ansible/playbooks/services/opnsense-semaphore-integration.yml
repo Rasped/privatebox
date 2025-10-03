@@ -241,23 +241,6 @@
       when: not existing_key
       changed_when: true
 
-    - name: Update existing SSH key in Semaphore (using jq for proper JSON types)
-      shell: |
-        jq -n \
-          --arg name "{{ key_name }}" \
-          --arg type "ssh" \
-          --argjson pid {{ project_id }} \
-          --arg key "{{ decoded_private_key.stdout }}" \
-          '{name: $name, type: $type, project_id: $pid, ssh: {private_key: $key}}' | \
-        curl -sS -f -X PUT \
-          -H "Authorization: Bearer {{ semaphore_token }}" \
-          -H "Content-Type: application/json" \
-          -d @- \
-          "{{ semaphore_url }}/api/project/{{ project_id }}/keys/{{ existing_key.id }}"
-      register: update_key_result
-      when: existing_key
-      changed_when: true
-
     - name: Get final SSH key ID
       set_fact:
         ssh_key_id: "{{ ((create_key_result.stdout | from_json).id if not existing_key else existing_key.id) | int }}"
@@ -312,24 +295,6 @@
           "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
       register: create_inventory_result
       when: not existing_inventory
-      changed_when: true
-
-    - name: Update existing inventory in Semaphore (using jq for proper JSON types)
-      shell: |
-        jq -n \
-          --arg name "{{ inventory_name }}" \
-          --arg type "static" \
-          --argjson pid {{ project_id }} \
-          --arg inv "{{ inventory_yaml }}" \
-          --argjson keyid {{ ssh_key_id }} \
-          '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $keyid}' | \
-        curl -sS -f -X PUT \
-          -H "Authorization: Bearer {{ semaphore_token }}" \
-          -H "Content-Type: application/json" \
-          -d @- \
-          "{{ semaphore_url }}/api/project/{{ project_id }}/inventory/{{ existing_inventory.id }}"
-      register: update_inventory_result
-      when: existing_inventory
       changed_when: true
 
     - name: Get final inventory ID
