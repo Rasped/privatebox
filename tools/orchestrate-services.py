@@ -49,6 +49,7 @@ class SemaphoreOrchestrator:
             "OPNsense 2: Semaphore Integration",
             "OPNsense 3: Post-Configuration",
             "AdGuard 1: Deploy Container Service",
+            "Headscale 1: Deploy VPN Control Server",
             "Homer 1: Deploy Dashboard Service"
         ]
 
