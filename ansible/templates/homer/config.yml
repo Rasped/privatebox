@@ -8,6 +8,7 @@ logo: "logo.png"
 
 header: true
 footer: false
+connectivityCheck: true
 
 theme: default
 colors:
@@ -51,7 +52,8 @@ services:
         logo: "assets/tools/adguardhome.png"
         subtitle: "DNS Filtering"
         tag: "security"
-        url: "http://10.10.20.10:8080"
+        url: "http://10.10.20.10:8080/login.html"
+        type: "Ping"
         target: "_blank"
 
       - name: "OPNsense"
@@ -60,7 +62,15 @@ services:
         tag: "network"
         url: "https://10.10.20.1"
         target: "_blank"
-        
+
+      - name: "Headscale"
+        logo: "assets/tools/headscale.png"
+        subtitle: "VPN Control Server"
+        tag: "vpn"
+        url: "http://10.10.20.10:8082/health"
+        type: "Ping"
+        target: "_blank"
+
   - name: "Management"
     icon: "fas fa-tools"
     items:
@@ -68,19 +78,22 @@ services:
         logo: "assets/tools/portainer.png"
         subtitle: "Container Management"
         tag: "management"
-        url: "http://10.10.20.10:9000"
+        url: "http://10.10.20.10:9000/api/status"
+        type: "Ping"
         target: "_blank"
 
       - name: "Semaphore"
         logo: "assets/tools/ansible.png"
         subtitle: "Ansible Automation"
         tag: "automation"
-        url: "http://10.10.20.10:3000"
+        url: "http://10.10.20.10:3000/api/ping"
+        type: "Ping"
         target: "_blank"
 
-      - name: "Homer Dashboard"
-        logo: "assets/tools/homer.png"
-        subtitle: "Service Dashboard"
-        tag: "management"
-        url: "http://10.10.20.10:8081"
-        target: "_self"
+      - name: "Proxmox"
+        logo: "assets/tools/proxmox.png"
+        subtitle: "Virtualization Platform"
+        tag: "infrastructure"
+        url: "https://10.10.20.20:8006"
+        target: "_blank"
+
