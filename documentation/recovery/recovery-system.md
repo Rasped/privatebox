@@ -15,13 +15,41 @@ PrivateBox includes a built-in recovery system that provides factory reset capab
 ## Partition Layout
 
 ```
-/dev/sda1 - [EFI]          - 512MB  - FAT32    - Normal boot
-/dev/sda2 - [PROXMOX]      - Rest   - ZFS      - Main system
-/dev/sda3 - [VAULT]        - 100MB  - LUKS     - Encrypted passwords
-/dev/sda4 - [RECOVERY-OS]  - 500MB  - SQUASHFS - Immutable Alpine Linux
-/dev/sda5 - [RECOVERY-IMG] - 10GB   - SQUASHFS - Compressed Proxmox image
-/dev/sda6 - [RECOVERY-WRK] - 2GB    - EXT4     - Temp workspace
+/dev/sda1 - [EFI]            - 512MB  - FAT32    - Normal boot
+/dev/sda2 - [PROXMOX]        - Rest   - ZFS      - Main system
+/dev/sda3 - [RECOVERY-ASSETS]- 4GB    - EXT4     - Downloaded assets for offline operation
+/dev/sda4 - [VAULT]          - 100MB  - LUKS     - Encrypted passwords
+/dev/sda5 - [RECOVERY-OS]    - 500MB  - SQUASHFS - Immutable Alpine Linux
+/dev/sda6 - [RECOVERY-IMG]   - 10GB   - SQUASHFS - Compressed Proxmox image
+/dev/sda7 - [RECOVERY-WRK]   - 2GB    - EXT4     - Temp workspace
 ```
+
+## Implementation Strategy
+
+### Two-Phase Approach
+
+**Phase 1: Offline Capability (Low Risk)**
+- Download and store all required assets locally
+- Modify existing scripts to use local copies instead of internet downloads
+- Enable PrivateBox to run completely offline after initial setup
+- Test each component's offline operation incrementally
+
+**Phase 2: Recovery Infrastructure (High Risk)**
+- Create encrypted password vault
+- Generate and store golden Proxmox image
+- Build recovery OS and partition structure
+- Implement factory reset capability
+
+### Critical Timing Correction
+
+The golden Proxmox image must be created **immediately** after Proxmox installation, before ANY PrivateBox components are installed. This ensures recovery restores to truly virgin state.
+
+**Assets Requiring Local Storage:**
+- Debian 13 cloud image (~500MB)
+- Container images: AdGuard, Homer, Portainer, Semaphore (~2GB)
+- OPNsense template/backup (~500MB)
+- PrivateBox source code (~100MB)
+- Required packages and dependencies (~500MB)
 
 ## Recovery Flow
 
@@ -29,11 +57,12 @@ PrivateBox includes a built-in recovery system that provides factory reset capab
 
 1. Bootstrap checks for recovery partitions
 2. If missing, creates partition structure
-3. Generates unique passwords (SERVICES_PASSWORD, etc.)
-4. Encrypts and stores passwords in VAULT partition
-5. Creates golden Proxmox image before configuration
-6. Installs Alpine-based recovery OS
-7. Continues normal installation
+3. **Downloads all required assets to RECOVERY-ASSETS partition** (Phase 1)
+4. **Creates golden Proxmox image IMMEDIATELY** (truly virgin, before ANY PrivateBox components)
+5. Generates unique passwords (SERVICES_PASSWORD, etc.)
+6. Encrypts and stores passwords in VAULT partition
+7. Installs Alpine-based recovery OS
+8. Continues normal PrivateBox installation using local assets
 
 ### During Recovery
 
@@ -108,11 +137,15 @@ shred -u /tmp/vault.key
 
 ### Golden Image Creation
 
-The Proxmox golden image is created during initial installation:
-1. Minimal Proxmox installed
-2. Before any configuration, system is snapshot
-3. Image compressed and stored in RECOVERY-IMG partition
-4. Normal bootstrap continues
+**CRITICAL**: The Proxmox golden image must be created at the correct time:
+1. Minimal Proxmox installed (clean base system)
+2. Recovery partitions created
+3. Assets downloaded to RECOVERY-ASSETS
+4. **Image created IMMEDIATELY** - before any PrivateBox components installed
+5. Image compressed and stored in RECOVERY-IMG partition
+6. PrivateBox installation continues using local assets
+
+This ensures recovery restores to truly virgin Proxmox, then bootstrap re-runs with preserved passwords.
 
 ### Recovery Workspace
 
@@ -122,6 +155,60 @@ The RECOVERY-WRK partition provides temporary space for:
 - Log files during recovery
 
 This partition is wiped after each recovery operation.
+
+## Asset Management for Offline Operation
+
+### Recovery Assets Partition Structure
+
+```
+/recovery-assets/
+├── images/
+│   ├── debian-13-cloudimg-amd64.qcow2
+│   └── checksums.sha256
+├── containers/
+│   ├── adguard-home-latest.tar
+│   ├── homer-latest.tar
+│   ├── portainer-ce-latest.tar
+│   ├── semaphore-latest.tar
+│   └── manifest.json
+├── templates/
+│   ├── opnsense-template.tar.gz
+│   └── configs/
+├── source/
+│   ├── privatebox-main.tar.gz
+│   └── ansible-playbooks.tar.gz
+└── packages/
+    ├── debian-packages.tar.gz
+    └── requirements.txt
+```
+
+### Download Script Modifications
+
+Each current download operation must be modified to check local assets first:
+
+1. **Debian Cloud Image**: `bootstrap/bootstrap.sh` Phase 2
+   - Check `/recovery-assets/images/debian-13-cloudimg-amd64.qcow2`
+   - Fall back to cloud.debian.org if missing
+
+2. **Container Images**: Ansible container deployments
+   - Check `/recovery-assets/containers/<service>-latest.tar`
+   - Fall back to `podman pull` if missing
+
+3. **OPNsense Template**: OPNsense deployment playbook
+   - Check `/recovery-assets/templates/opnsense-template.tar.gz`
+   - Fall back to GitHub if missing
+
+4. **Source Code**: Template generation and updates
+   - Check `/recovery-assets/source/privatebox-main.tar.gz`
+   - Fall back to git operations if missing
+
+### Asset Update Strategy
+
+Assets should be refreshed periodically (manual operation):
+- Download latest versions to staging area
+- Verify checksums and functionality
+- Replace production assets atomically
+- Update manifests and version tracking
 
 ## User Experience
 

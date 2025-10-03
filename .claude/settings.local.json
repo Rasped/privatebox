@@ -98,7 +98,13 @@
       "Bash(git log:*)",
       "Bash(gh release delete:*)",
       "Bash(gh release upload:*)",
-      "Read(//Users/rasped/**)"
+      "Read(//Users/rasped/**)",
+      "Bash(git clone:*)",
+      "Bash(podman pull:*)",
+      "Bash(podman save:*)",
+      "Bash(xargs ls:*)",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:learn.redhat.com)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
