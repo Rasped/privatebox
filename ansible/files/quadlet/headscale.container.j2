@@ -27,6 +27,9 @@ Volume={{ headscale_config_dir }}:/etc/headscale:{{ volume_mount_options | defau
 # Environment variables
 Environment="TZ={{ timezone | default('UTC') }}"
 
+# Headscale command
+Exec=serve
+
 # Security settings
 SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}
 NoNewPrivileges={{ container_no_new_privileges | default('true') | lower }}
