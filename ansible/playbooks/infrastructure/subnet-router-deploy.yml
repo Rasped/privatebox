@@ -203,14 +203,14 @@
         timeout: 180
 
     - name: Test SSH connection with password
-      command: sshpass -p alpine ssh -o StrictHostKeyChecking=no alpine@{{ services_ip }} "hostname"
+      command: sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }} "hostname"
       register: ssh_test
       changed_when: false
 
     # Generate SSH key on Alpine VM
     - name: Generate SSH key pair on Alpine VM
       command: >
-        sshpass -p alpine ssh -o StrictHostKeyChecking=no alpine@{{ services_ip }}
+        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
         "mkdir -p /home/alpine/.ssh &&
         ssh-keygen -t ed25519 -f /home/alpine/.ssh/id_ed25519 -N '' -C 'subnet-router@privatebox' &&
         cat /home/alpine/.ssh/id_ed25519.pub >> /home/alpine/.ssh/authorized_keys &&
@@ -220,12 +220,12 @@
       changed_when: true
 
     - name: Retrieve private key from Alpine VM
-      command: sshpass -p alpine ssh -o StrictHostKeyChecking=no alpine@{{ services_ip }} "cat /home/alpine/.ssh/id_ed25519"
+      command: sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }} "cat /home/alpine/.ssh/id_ed25519"
       register: private_key_content
       changed_when: false
 
     - name: Retrieve public key from Alpine VM
-      command: sshpass -p alpine ssh -o StrictHostKeyChecking=no alpine@{{ services_ip }} "cat /home/alpine/.ssh/id_ed25519.pub"
+      command: sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }} "cat /home/alpine/.ssh/id_ed25519.pub"
       register: public_key_content
       changed_when: false
 
