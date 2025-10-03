@@ -298,8 +298,8 @@
           {
             "name": "{{ inventory_name }}",
             "type": "static",
-            "project_id": {{ project_id }},
-            "inventory": {{ inventory_yaml | to_json }},
+            "project_id": {{ project_id | int }},
+            "inventory": {{ inventory_yaml | to_json | string }},
             "ssh_key_id": {{ ssh_key_id | int }}
           }
         status_code: [201, 204]
@@ -317,8 +317,8 @@
           {
             "name": "{{ inventory_name }}",
             "type": "static",
-            "project_id": {{ project_id }},
-            "inventory": {{ inventory_yaml | to_json }},
+            "project_id": {{ project_id | int }},
+            "inventory": {{ inventory_yaml | to_json | string }},
             "ssh_key_id": {{ ssh_key_id | int }}
           }
         status_code: [200, 204]
