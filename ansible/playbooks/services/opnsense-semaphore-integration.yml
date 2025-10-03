@@ -223,15 +223,13 @@
         method: POST
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-        body: |
-          {
-            "name": "{{ key_name }}",
-            "type": "ssh",
-            "project_id": {{ project_id | int }},
-            "ssh": {
-              "private_key": {{ ssh_private_key_content.content | b64decode | to_json }}
-            }
-          }
+        body_format: json
+        body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id | int }}"
+          ssh:
+            private_key: "{{ ssh_private_key_content.content | b64decode | community.general.from_yaml }}"
         status_code: [201, 204]
       register: create_key_result
       when: not existing_key
@@ -242,15 +240,13 @@
         method: PUT
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-        body: |
-          {
-            "name": "{{ key_name }}",
-            "type": "ssh",
-            "project_id": {{ project_id | int }},
-            "ssh": {
-              "private_key": {{ ssh_private_key_content.content | b64decode | to_json }}
-            }
-          }
+        body_format: json
+        body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id | int }}"
+          ssh:
+            private_key: "{{ ssh_private_key_content.content | b64decode | community.general.from_yaml }}"
         status_code: [200, 204]
       register: update_key_result
       when: existing_key
