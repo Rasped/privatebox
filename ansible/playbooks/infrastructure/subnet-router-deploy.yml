@@ -22,8 +22,8 @@
 
     # Alpine Linux cloud image
     alpine_version: "3.19"
-    alpine_image_url: "https://dl-cdn.alpinelinux.org/alpine/v{{ alpine_version }}/releases/cloud/alpine-virt-{{ alpine_version }}.2-x86_64.qcow2"
-    alpine_image_name: "alpine-virt-{{ alpine_version }}.2-x86_64.qcow2"
+    alpine_image_url: "https://dl-cdn.alpinelinux.org/alpine/v{{ alpine_version }}/releases/cloud/nocloud_alpine-{{ alpine_version }}.0-x86_64-bios-cloudinit-r0.qcow2"
+    alpine_image_name: "nocloud_alpine-{{ alpine_version }}.0-x86_64-bios-cloudinit-r0.qcow2"
     image_cache_dir: "/var/lib/vz/template/cache"
 
     # Headscale configuration
