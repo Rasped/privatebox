@@ -219,17 +219,16 @@
         method: POST
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-          Content-Type: "application/json"
-        body: |
-          {
-            "name": "{{ key_name }}",
-            "type": "ssh",
-            "project_id": {{ project_id | int }},
-            "ssh": {
-              "private_key": {{ ssh_private_key_content.content | b64decode | to_json }}
-            }
-          }
+        body_format: json
+        body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id | int }}"
+          ssh:
+            private_key: "{{ ssh_private_key_content.content | b64decode | string }}"
         status_code: [201, 204]
+      environment:
+        ANSIBLE_JINJA2_NATIVE: "True"
       register: create_key_result
       when: not existing_key
 
@@ -239,17 +238,16 @@
         method: PUT
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-          Content-Type: "application/json"
-        body: |
-          {
-            "name": "{{ key_name }}",
-            "type": "ssh",
-            "project_id": {{ project_id | int }},
-            "ssh": {
-              "private_key": {{ ssh_private_key_content.content | b64decode | to_json }}
-            }
-          }
+        body_format: json
+        body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id | int }}"
+          ssh:
+            private_key: "{{ ssh_private_key_content.content | b64decode | string }}"
         status_code: [200, 204]
+      environment:
+        ANSIBLE_JINJA2_NATIVE: "True"
       register: update_key_result
       when: existing_key
 
@@ -297,16 +295,16 @@
         method: POST
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-          Content-Type: "application/json"
-        body: |
-          {
-            "name": "{{ inventory_name }}",
-            "type": "static",
-            "project_id": {{ project_id | int }},
-            "inventory": {{ inventory_yaml | to_json | string }},
-            "ssh_key_id": {{ ssh_key_id | int }}
-          }
+        body_format: json
+        body:
+          name: "{{ inventory_name }}"
+          type: "static"
+          project_id: "{{ project_id | int }}"
+          inventory: "{{ inventory_yaml }}"
+          ssh_key_id: "{{ ssh_key_id | int }}"
         status_code: [201, 204]
+      environment:
+        ANSIBLE_JINJA2_NATIVE: "True"
       register: create_inventory_result
       when: not existing_inventory
 
@@ -316,16 +314,16 @@
         method: PUT
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-          Content-Type: "application/json"
-        body: |
-          {
-            "name": "{{ inventory_name }}",
-            "type": "static",
-            "project_id": {{ project_id | int }},
-            "inventory": {{ inventory_yaml | to_json | string }},
-            "ssh_key_id": {{ ssh_key_id | int }}
-          }
+        body_format: json
+        body:
+          name: "{{ inventory_name }}"
+          type: "static"
+          project_id: "{{ project_id | int }}"
+          inventory: "{{ inventory_yaml }}"
+          ssh_key_id: "{{ ssh_key_id | int }}"
         status_code: [200, 204]
+      environment:
+        ANSIBLE_JINJA2_NATIVE: "True"
       register: update_inventory_result
       when: existing_inventory
 

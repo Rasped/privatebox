@@ -161,6 +161,261 @@ If any test fails:
 4. Unit remains on build port for debugging
 ```
 
+## Quality Control & Burn-In Testing
+
+### Overview
+
+After successful bootstrap deployment, each unit undergoes 22-hour automated burn-in testing. Tests run unattended, results POST to production server, no manual intervention required.
+
+**Why 22 hours:**
+- Catches thermal issues (temperature cycling overnight)
+- RAM stress testing (most failures <8 hours, 22h for confidence)
+- SSD thermal stability validation (cold vs warm testing)
+- Professional standard ("24-hour burn-in tested")
+- Time available at current scale (3 batches/month = 60 units)
+
+**Automated workflow:**
+- Units test overnight
+- Dashboard shows pass/fail status
+- Failed units flagged for RMA
+- Passed units ready to ship
+- Zero manual monitoring
+
+### Testing Strategy
+
+**Focus: SSD quality > RAM quality**
+
+Modern DDR5 RAM is highly reliable (<0.1% failure rate). Budget SSDs have higher failure rates (1-3%) and quality variance.
+
+**SSD risks:**
+- Used drives sold as new (check Data Units Written)
+- Component lottery (UMIS vs Samsung quality difference)
+- Thermal throttling (controller overheats under load)
+- Silent corruption (bad sectors accumulate)
+- Fake capacity drives
+
+**RAM risks:**
+- Catastrophic failure (rare, caught immediately)
+- Subtle bit flips (very rare with modern DDR5)
+
+### Phase 7: Extended Burn-In Testing
+
+```
+15. Bootstrap complete, begin 22-hour burn-in:
+
+    Hour 0 - Initial SSD Test (Cold):
+    ├── Check Data Units Written (<100GB = new)
+    ├── SMART health check (no errors/warnings)
+    ├── Write performance test (~10GB write)
+    ├── Read back + checksum verify
+    ├── Document: brand, model, serial, performance
+    └── POST baseline metrics to server
+
+    Hour 0-22 - Continuous RAM Stress:
+    ├── RAM stress test (stress-ng --vm, 90% memory)
+    ├── CPU load (4 cores active)
+    ├── VMs + containers remain running
+    ├── Thermal monitoring (CPU, SSD temps)
+    └── Heartbeat every 60 seconds
+
+    Hour 16 - Warm SSD Test:
+    ├── System running hot (8+ hours under load)
+    ├── Repeat performance test (~10GB write)
+    ├── Compare to hour 0 baseline
+    ├── Check for thermal throttling (>20% slowdown)
+    ├── SMART check (any new errors?)
+    └── POST comparison metrics
+
+    Hour 22 - Final Validation:
+    ├── RAM stress complete (0 errors = pass)
+    ├── All services still responding
+    ├── System stable under prolonged load
+    ├── Thermal performance acceptable
+    └── Ready for final reporting
+
+Total SSD writes during testing:
+- Bootstrap deployment: ~50GB
+- Hour 0 test: ~10GB
+- Hour 16 test: ~10GB
+- Monitoring/logs: ~10GB
+- Total: ~80GB (still "new" drive, <100GB acceptable)
+```
+
+### Component Validation
+
+**Every unit documents:**
+- RAM: Brand, part number, capacity, speed
+- SSD: Brand, model, serial, Data Units Written
+- NIC: Intel i226-V revision (must be rev 03+)
+- Performance baselines (cold/warm comparison)
+
+**Consistency checking:**
+- Units 1-10 should have same component brands
+- Component lottery = quality variance
+- Flag mismatches for supplier discussion
+
+**Supplier negotiation leverage:**
+- "Units 1-5 had Crucial RAM, units 6-10 had no-name brand"
+- "Lock in component brands for future orders"
+- "I'll pay €10 more for Crucial SSDs vs UMIS"
+
+### Test Results POST Format
+
+```json
+POST https://192.168.100.250/api/units
+{
+  "mac_wan": "aa:bb:cc:dd:ee:ff",
+  "serial": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+  "status": "burn_in_complete",
+  "build_time": "2025-09-29T12:45:23Z",
+  "burn_in_duration_hours": 22,
+
+  "components": {
+    "ram_manufacturer": "Crucial Technology",
+    "ram_part_number": "CT8G48C40S5.M4A1",
+    "ram_capacity_gb": 16,
+    "ssd_model": "Samsung 980 PRO",
+    "ssd_serial": "S5GXNX0T123456",
+    "ssd_initial_writes_gb": 45,
+    "nic_model": "Intel i226-V",
+    "nic_revision": "04"
+  },
+
+  "test_results": {
+    "bootstrap": "pass",
+    "services": "pass",
+
+    "ssd_cold_test": {
+      "status": "pass",
+      "write_iops": 35240,
+      "write_mbps": 1820,
+      "smart_status": "PASSED",
+      "critical_warning": 0,
+      "available_spare": 100,
+      "temperature_c": 42
+    },
+
+    "ram_stress_test": {
+      "status": "pass",
+      "duration_hours": 22,
+      "errors": 0,
+      "max_temperature_c": 68
+    },
+
+    "ssd_warm_test": {
+      "status": "pass",
+      "write_iops": 33180,
+      "write_mbps": 1750,
+      "performance_drop_percent": 6,
+      "temperature_c": 58,
+      "throttling_detected": false
+    },
+
+    "thermal_stability": "pass",
+    "overall": "pass"
+  }
+}
+```
+
+### Failure Scenarios
+
+**RAM stress test failure:**
+```
+Status: "burn_in_failed"
+Failed test: "ram_stress_test"
+Error: "Memory errors detected after 8 hours"
+Action: RMA unit, bad RAM
+```
+
+**SSD thermal throttling:**
+```
+Status: "burn_in_failed"
+Failed test: "ssd_warm_test"
+Error: "Performance drop 35% (cold: 1800 MB/s, warm: 1170 MB/s)"
+Action: Investigate cooling, possible RMA
+```
+
+**SSD used/fake:**
+```
+Status: "burn_in_failed"
+Failed test: "ssd_cold_test"
+Error: "Data Units Written: 2.4TB (not new)"
+Action: RMA unit, supplier sent used drive
+```
+
+**System instability:**
+```
+Status: "burn_in_failed"
+Failed test: "thermal_stability"
+Error: "System crashed after 14 hours under load"
+Action: Check logs, investigate root cause, likely RMA
+```
+
+### DIY User Considerations
+
+**Burn-in tests are optional for DIY users:**
+
+Environment variable controls testing:
+- `SKIP_BURN_IN=1` → Skip 22-hour tests
+- `BURN_IN_HOURS=4` → Shorter test (4 hours)
+- Default (no variable) → Full 22-hour test
+
+**Why skip for DIY:**
+- They want faster deployment (not QC)
+- They'll discover issues in their own usage
+- Production server not reachable (tests fail gracefully)
+
+**Test behavior when production server unreachable:**
+- Tests run normally
+- Results logged locally: `/var/log/privatebox-burn-in.log`
+- POST attempts fail silently (no error to user)
+- Unit still fully functional
+
+### Production Dashboard
+
+**Real-time burn-in monitoring:**
+
+```
+Burn-In Testing Dashboard (http://192.168.100.250/burn-in)
+
+Active Tests (10 units):
+├── Port 1: Hour 18/22 (RAM: pass, awaiting warm SSD test)
+├── Port 2: Hour 22/22 (Complete ✓, ready to ship)
+├── Port 3: Hour 4/22 (RAM: testing, SSD cold: pass)
+├── Port 4: FAILED (SSD thermal throttling detected)
+└── Ports 5-10: Testing...
+
+Completed Today: 3 units
+Failed Today: 1 unit (thermal issue)
+Success Rate This Batch: 75% (processing)
+
+Component Consistency:
+├── RAM: All units Crucial CT8G48C40S5.M4A1 ✓
+├── SSD: Units 1-5 Samsung, Units 6-10 UMIS ⚠️ (inconsistent)
+└── NIC: All units i226-V rev 04 ✓
+```
+
+### Quality Metrics to Track
+
+**Per batch (10-20 units):**
+- Burn-in failure rate
+- Most common failure type
+- Component brand consistency
+- Average burn-in duration
+- SSD thermal performance (cold vs warm)
+
+**Supplier quality trends:**
+- DOA rate over time
+- Component lottery frequency
+- Used drive incidents
+- Warranty claim rate (first 90 days)
+
+**Decision triggers:**
+- Failure rate >10% → Full batch inspection
+- Failure rate >20% → Reject batch, demand replacement
+- Used drives detected → Stop orders, investigate supplier
+- Component inconsistency → Lock in brands with supplier
+
 ## Production Server
 
 ### Hardware: PrivateBox Unit (Dogfooding)
@@ -200,6 +455,8 @@ If production server fails, we know there's a hardware issue before it ships to 
 2. **CDN for offline assets** - Serve Debian images, containers, templates
 3. **Print server** - Monitor labeling port, trigger label printing
 4. **Heartbeat monitoring** - Detect stuck builds
+5. **Remote unit monitoring** - SSH to stuck units, auto-collect diagnostics
+6. **PXE boot server** - Network boot Proxmox installer (eliminates USB sticks)
 
 ### API Endpoints
 
@@ -229,19 +486,48 @@ CREATE TABLE units (
   serial VARCHAR(36) NOT NULL,
   admin_password VARCHAR(128),
   services_password VARCHAR(128),
-  status ENUM('building', 'ready', 'failed') NOT NULL,
+  status ENUM('building', 'testing', 'burn_in', 'ready', 'failed') NOT NULL,
   build_time TIMESTAMP,
   build_duration_seconds INT,
+  burn_in_start TIMESTAMP,
+  burn_in_duration_hours INT,
   test_results JSON,
   error_log TEXT,
   last_heartbeat TIMESTAMP,
+
+  -- Component information
+  ram_manufacturer VARCHAR(64),
+  ram_part_number VARCHAR(64),
+  ram_capacity_gb INT,
+  ssd_model VARCHAR(128),
+  ssd_serial VARCHAR(128),
+  ssd_initial_writes_gb INT,
+  nic_model VARCHAR(64),
+  nic_revision VARCHAR(16),
+
+  -- Burn-in test results
+  ssd_cold_write_mbps INT,
+  ssd_cold_temp_c INT,
+  ssd_warm_write_mbps INT,
+  ssd_warm_temp_c INT,
+  ssd_throttling_detected BOOLEAN,
+  ram_stress_errors INT,
+  ram_max_temp_c INT,
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_status (status),
-  INDEX idx_last_heartbeat (last_heartbeat)
+  INDEX idx_last_heartbeat (last_heartbeat),
+  INDEX idx_ram_manufacturer (ram_manufacturer),
+  INDEX idx_ssd_model (ssd_model)
 );
 
 -- Records deleted after successful labeling
 -- Only 'failed' units remain for analysis
+
+-- Query component consistency
+-- SELECT ram_manufacturer, COUNT(*) FROM units
+-- WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+-- GROUP BY ram_manufacturer;
 ```
 
 ### CDN Asset Storage
@@ -263,6 +549,83 @@ Production server serves locally:
 
 Bootstrap checks local CDN first, falls back to internet if missing
 Speeds up builds and reduces internet dependency
+```
+
+### PXE Boot Server
+
+**Purpose:** Eliminate USB stick requirement - units boot Proxmox installer over network
+
+```
+/pxe/
+├── pxelinux.0 (TFTP bootloader)
+├── proxmox-ve_*.iso (Proxmox installer ISO)
+├── answer.toml (automated installation configuration)
+└── post-install.sh (calls quickstart.sh after Proxmox install)
+```
+
+**How it works:**
+
+1. **DHCP Configuration:**
+   - Production server runs DHCP on factory network
+   - Offers IP to booting units (192.168.100.10-230)
+   - Points to PXE boot server: `next-server 192.168.100.250`
+
+2. **PXE Boot Process:**
+   - Unit powers on, requests DHCP
+   - Gets IP + PXE server address
+   - TFTP downloads pxelinux.0 bootloader
+   - Bootloader downloads Proxmox installer
+   - Installer uses answer.toml for automated installation
+
+3. **Answer File (answer.toml):**
+```toml
+[global]
+keyboard = "dk"
+country = "dk"
+fqdn = "privatebox.local"
+mailto = ""
+timezone = "Europe/Copenhagen"
+root_password = "changeme"  # Changed by customer
+
+[network]
+source = "from-dhcp"  # Uses factory DHCP
+
+[disk-setup]
+filesystem = "zfs"
+disk_list = ["sda"]
+zfs_opts = "compress=on"
+
+[post-install]
+# Run quickstart after installation completes
+run = "curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash"
+```
+
+4. **Post-Install Hook:**
+   - Proxmox installs automatically
+   - Post-install hook runs quickstart.sh
+   - Bootstrap begins immediately
+   - Zero human intervention from power-on to self-test
+
+**Benefits:**
+- No USB sticks to manage (lose, corrupt, wear out)
+- Faster deployment (network boot faster than USB)
+- Consistent installation (same answer file every time)
+- Easy updates (change answer.toml once, affects all units)
+- True zero-touch (power on → built → labeled)
+
+**ProCurve DHCP Configuration:**
+```
+# DHCP server on production VM (192.168.100.250)
+# ProCurve forwards DHCP requests
+ip helper-address 192.168.100.250
+```
+
+**Production Server DHCP (dnsmasq):**
+```
+dhcp-range=192.168.100.10,192.168.100.230,12h
+dhcp-boot=pxelinux.0,192.168.100.250
+enable-tftp
+tftp-root=/srv/tftp
 ```
 
 ## Labeling Station (Port 21)
@@ -428,18 +791,73 @@ Last 10 Completed:
 ...
 ```
 
-## Stuck Build Detection
+## Stuck Build Detection & Remote Diagnostics
 
+### Detection
 ```
 Server-side monitoring:
 - If heartbeat stops for >5 minutes without success/failure POST
 - Mark unit as "stuck"
-- Alert operator to check physical unit on that port
-- Common causes:
+- Automatically SSH to unit and collect diagnostics
+- Alert operator with debug data
+
+Common causes:
   * Network cable unplugged
   * Power loss
   * Proxmox installer hung
   * Bootstrap script error
+  * Out of memory/disk space
+  * CDN download timeout
+```
+
+### Automatic Diagnostic Collection
+
+When a unit is stuck, production server automatically collects diagnostics via SSH:
+
+```python
+def debug_stuck_unit(mac_wan, proxmox_ip):
+    """SSH to stuck unit and collect logs automatically"""
+
+    diagnostics = {}
+
+    # Bootstrap log (where did it fail?)
+    diagnostics['bootstrap_log'] = ssh_exec(
+        f"root@{proxmox_ip}",
+        "tail -100 /tmp/privatebox-bootstrap.log"
+    )
+
+    # Guest setup log (if VM exists)
+    diagnostics['guest_log'] = ssh_exec(
+        f"root@{proxmox_ip}",
+        "ssh debian@10.10.20.10 'tail -100 /var/log/privatebox-guest-setup.log' 2>/dev/null"
+    )
+
+    # System status
+    diagnostics['vms'] = ssh_exec(f"root@{proxmox_ip}", "qm list")
+    diagnostics['disk'] = ssh_exec(f"root@{proxmox_ip}", "df -h")
+    diagnostics['memory'] = ssh_exec(f"root@{proxmox_ip}", "free -h")
+
+    # Store for operator review
+    save_debug_data(mac_wan, diagnostics)
+
+    return diagnostics
+```
+
+**Security:** Only works during build phase (Proxmox has WAN IP). After self-test, Proxmox WAN removed - SSH no longer possible.
+
+### Enhanced Heartbeat
+
+Include Proxmox IP in heartbeat to enable SSH access:
+
+```bash
+POST /api/heartbeat
+{
+  "mac_wan": "aa:bb:cc:dd:ee:ff",
+  "proxmox_ip": "192.168.100.17",  # For SSH debugging
+  "status": "building",
+  "stage": "deploying_services",
+  "timestamp": "2025-09-29T12:34:56Z"
+}
 ```
 
 ## Quality Control Metrics
@@ -486,18 +904,31 @@ ORDER BY date DESC;
 - [ ] Label template design
 - [ ] DELETE record after confirmation
 
-### Phase 4: Debug Support
+### Phase 4: Burn-In Testing
+- [ ] SSD cold test script (hour 0)
+- [ ] RAM stress test script (22 hours continuous)
+- [ ] SSD warm test script (hour 16)
+- [ ] Component documentation script
+- [ ] Test results POST to production API
+- [ ] Burn-in dashboard (real-time monitoring)
+- [ ] DIY skip option (SKIP_BURN_IN environment variable)
+
+### Phase 5: Debug Support
 - [ ] Debug station monitors port 22
 - [ ] Automated log collection script
 - [ ] Debug log storage endpoint
 - [ ] Failure analysis queries
+- [ ] Component consistency tracking
+- [ ] SSD quality metrics (thermal throttling detection)
 
-### Phase 5: Testing & Refinement
+### Phase 6: Testing & Refinement
 - [ ] Test with 5 units (find edge cases)
-- [ ] Measure actual build times
+- [ ] Measure actual build times + burn-in duration
 - [ ] Refine self-tests based on real failures
 - [ ] Optimize operator workflow at label station
 - [ ] Document common failure modes
+- [ ] Track component lottery patterns
+- [ ] Establish acceptable SSD thermal performance baselines
 
 ## Operating Procedures
 

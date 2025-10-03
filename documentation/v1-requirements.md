@@ -132,16 +132,15 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 7. Deploy Dashboard
 8. Configure VPNs
 9. Setup encrypted backup partition
-10. Configure update schedules
-11. Run initial backups
-12. Display access information
+10. Run initial backups
+11. Display access information
 
 ### Post-Bootstrap State
 - All services running and accessible
 - DNS filtering active (AdGuard → Unbound)
 - VPNs ready for client connections
 - Backups scheduled
-- Updates configured (on/off per user preference)
+- Update tools available (user-controlled via Semaphore)
 - Dashboard showing all services
 
 ## Critical Decisions - ANSWERED
@@ -150,17 +149,17 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 1. **AdGuard blocklists**: OISD and Steven Black hosts
 2. **Dashboard choice**: Homer (static, simple, YAML config)
 3. **Backup encryption password**: Use the generated long password from config.env
-4. **Update default state**: ON by default, weekly at 2 AM
+4. **Update default state**: Manual updates only (via Semaphore playbooks)
 5. **VPN DNS**: Route through AdGuard for filtering
 6. **Backup partition timing**: Create right after OPNsense creation (critical restore point)
 7. **TLS/HTTPS**: Implement where possible
-8. **Update reboots**: Auto-reboot at scheduled time (2:30 AM, 30 min after updates)
+8. **Update approach**: User-initiated only (respects equipment ownership)
 
 ### Implementation Details Confirmed:
 1. VPN ports (use defaults - OpenVPN 1194, WireGuard 51820)
 2. Backup partition size (start with 5GB)
-3. Update intervals (weekly 2 AM default, user can modify)
-4. Container update mechanism (Podman auto-update with systemd timers)
+3. Update intervals (manual execution via Semaphore only)
+4. Container update mechanism (manual image pulls via Portainer/Semaphore)
 
 ## Implementation Priority Order
 
@@ -178,17 +177,21 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - DNS filtering functional (ads blocked)
 - VPN access working
 - Configs backed up automatically
-- Update mechanism in place (even if disabled by default)
+- Manual update playbooks available via Semaphore
 
-## Update Reboot Best Practices (Research Summary)
+## Update Philosophy (Manual Only)
 
-Common practice for production servers:
-- **Default behavior**: Most systems do NOT auto-reboot by default
-- **Recommended**: Schedule reboots during maintenance windows
-- **Best practice**: Auto-reboot with scheduled time (like 2:30 AM) rather than immediate
-- **Key requirement**: Need "update-notifier-common" package for auto-reboot to work
+**Decision**: No automatic updates except Homer dashboard
 
-For PrivateBox v1: **Auto-reboot at 2:30 AM** (30 min after updates at 2 AM) to ensure clean state.
+**Rationale**:
+- **User agency**: Respects ownership and control over equipment
+- **System stability**: Prevents unexpected breakage from automatic updates
+- **Predictability**: No surprise reboots or service disruptions
+- **Reduced liability**: User controls when/if updates occur
+
+**Exception**: Homer dashboard auto-updates (display-only, minimal risk)
+
+**Available Tools**: Semaphore playbooks for manual updates of all components
 
 ## Ready for Implementation
 
@@ -198,4 +201,4 @@ All critical decisions have been made. The system can now be implemented with 10
 2. **Homer dashboard** deployment
 3. **Encrypted backup partition** (LUKS, using generated password)
 4. **VPN services** (OpenVPN + WireGuard with AdGuard DNS)
-5. **Update playbooks** (weekly 2 AM, auto-reboot 2:30 AM)
+5. **Manual update playbooks** (user-initiated via Semaphore)
