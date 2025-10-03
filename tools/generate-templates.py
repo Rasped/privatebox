@@ -195,15 +195,21 @@ def get_view_id(base_url, api_token, project_id):
 
 
 def discover_playbooks(base_dir):
-    """Discover all playbook files in the services directory."""
-    playbook_dir = Path(base_dir) / 'ansible' / 'playbooks' / 'services'
-    if not playbook_dir.exists():
-        print(f"✗ Playbook directory not found: {playbook_dir}")
-        return []
-    
-    playbooks = list(playbook_dir.glob('*.yml'))
-    # Exclude template files
-    playbooks = [p for p in playbooks if not p.name.startswith('_')]
+    """Discover all playbook files in services and infrastructure directories."""
+    playbook_base = Path(base_dir) / 'ansible' / 'playbooks'
+    playbooks = []
+
+    # Scan both services and infrastructure directories
+    for subdir in ['services', 'infrastructure']:
+        playbook_dir = playbook_base / subdir
+        if playbook_dir.exists():
+            found = list(playbook_dir.glob('*.yml'))
+            # Exclude template files
+            found = [p for p in found if not p.name.startswith('_')]
+            playbooks.extend(found)
+        else:
+            print(f"⚠ Playbook directory not found: {playbook_dir}")
+
     return sorted(playbooks)
 
 
@@ -333,10 +339,13 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
     
     # Use play name as template name
     template_name = playbook_info.get('name', playbook_path.stem)
-    
+
     # Convert variables to survey format
     survey_vars = convert_to_survey_vars(playbook_info['vars'])
-    
+
+    # Determine playbook subdirectory (services or infrastructure)
+    playbook_subdir = playbook_path.parent.name
+
     # Build template data
     template_data = {
         'name': template_name,
@@ -344,7 +353,7 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
         'inventory_id': resource_ids['inventory_id'],
         'repository_id': resource_ids['repository_id'],
         'environment_id': resource_ids.get('environment_id'),
-        'playbook': f"ansible/playbooks/services/{playbook_path.name}",
+        'playbook': f"ansible/playbooks/{playbook_subdir}/{playbook_path.name}",
         'arguments': '[]',
         'description': f"Generated from {playbook_path.name}",
         'allow_override_args_in_task': False,
