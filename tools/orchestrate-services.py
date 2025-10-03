@@ -45,6 +45,7 @@ class SemaphoreOrchestrator:
 
         # Define the template sequence
         self.template_sequence = [
+            "Subnet Router: Create Alpine VM",
             "OPNsense 1: Establish Secure Access",
             "OPNsense 2: Semaphore Integration",
             "OPNsense 3: Post-Configuration",
@@ -305,6 +306,7 @@ class SemaphoreOrchestrator:
         else:
             print("\n✅ All templates completed successfully!")
             print("\nServices deployed:")
+            print("  - Subnet Router VM at 10.10.10.10 (LAN) / 10.10.20.11 (Services)")
             print("  - OPNsense firewall configured at 10.10.20.1")
             print("  - AdGuard DNS service running at 10.10.20.10:53")
             print("  - AdGuard web interface at http://10.10.20.10:8080")
