@@ -252,9 +252,10 @@ create_vm() {
     qm set $VMID --onboot 1 || error_exit "Failed to enable auto-start"
     
     # Configure cloud-init with custom user-data snippet
+    # Use Quad9 DNS initially (will switch to AdGuard after deployment)
     qm set $VMID \
         --ipconfig0 ip=${STATIC_IP}/${SERVICES_NETMASK},gw=${SERVICES_GATEWAY} \
-        --nameserver ${SERVICES_GATEWAY} \
+        --nameserver 9.9.9.9 \
         --cicustom "user=local:snippets/privatebox-${VMID}.yml" \
         || error_exit "Failed to configure cloud-init"
     

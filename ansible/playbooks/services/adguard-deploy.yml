@@ -566,8 +566,57 @@
                   - "Queries blocked: {{ stats_result.json.num_blocked_filtering | default('N/A') }}"
                   - "=========================================="
 
-            # Note: System DNS configuration moved to activate-adguard-dns.yml
-            # This keeps deployment independent of DNS changes
+    # Switch system DNS to AdGuard
+    - name: "{{ service_name }} - Activate as system DNS"
+      when: confirm_deploy | bool
+      tags: [adguard, dns-switch]
+      block:
+        - name: Update systemd-resolved to use AdGuard DNS
+          copy:
+            content: |
+              [Resolve]
+              DNS=127.0.0.1
+              FallbackDNS=9.9.9.9
+              Domains=~.
+            dest: /etc/systemd/resolved.conf.d/adguard.conf
+            mode: '0644'
+          register: resolved_config
+
+        - name: Create resolved.conf.d directory if needed
+          file:
+            path: /etc/systemd/resolved.conf.d
+            state: directory
+            mode: '0755'
+          when: resolved_config.failed is defined and resolved_config.failed
+
+        - name: Update systemd-resolved to use AdGuard DNS (retry)
+          copy:
+            content: |
+              [Resolve]
+              DNS=127.0.0.1
+              FallbackDNS=9.9.9.9
+              Domains=~.
+            dest: /etc/systemd/resolved.conf.d/adguard.conf
+            mode: '0644'
+          when: resolved_config.failed is defined and resolved_config.failed
+
+        - name: Restart systemd-resolved
+          systemd:
+            name: systemd-resolved
+            state: restarted
+
+        - name: Wait for DNS to stabilize
+          wait_for:
+            timeout: 5
+
+        - name: Test DNS resolution through AdGuard
+          command: dig +short @127.0.0.1 google.com
+          register: dns_test
+          changed_when: false
+
+        - name: Display DNS switch result
+          debug:
+            msg: "✓ System DNS switched to AdGuard at 127.0.0.1 (resolves: {{ dns_test.stdout_lines | join(', ') }})"
 
   handlers:
     - name: restart adguard
