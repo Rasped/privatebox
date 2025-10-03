@@ -301,7 +301,12 @@
         body:
           name: "subnet-router"
           project_id: "{{ project_id }}"
-          inventory: "subnet-router ansible_host={{ services_ip }} ansible_user=alpine"
+          inventory: |
+            all:
+              hosts:
+                subnet-router:
+                  ansible_host: {{ services_ip }}
+                  ansible_user: alpine
           ssh_key_id: "{{ ssh_key_id }}"
           type: "static"
         status_code: [201, 204]
