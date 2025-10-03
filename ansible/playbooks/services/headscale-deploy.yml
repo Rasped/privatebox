@@ -425,29 +425,32 @@
               - "  - Create preauth key: podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user }}"
               - "=========================================="
 
-        - name: Save deployment info
-          copy:
-            content: |
-              {{ service_name }} Deployment Information
-              =====================================
-              Deployed: {{ ansible_date_time.iso8601 }}
-              Host: {{ inventory_hostname }}
+    # Save deployment documentation (independent task to ensure it always runs)
+    - name: Save deployment info
+      when: confirm_deploy | bool
+      tags: [headscale, info]
+      copy:
+        content: |
+          Headscale Deployment Information
+          =====================================
+          Deployed: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
 
-              Access URLs:
-              - Web Interface: {{ service_info.web_url }}
-              - Server URL: {{ service_info.server_url }}
-              - gRPC API: {{ service_info.grpc_url }}
+          Access URLs:
+          - Web Interface: http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}
+          - Server URL: {{ headscale_server_url }}
+          - gRPC API: {{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}
 
-              Service: {{ service_name }}.service
-              Container: {{ service_name }}
+          Service: {{ service_name }}.service
+          Container: {{ service_name }}
 
-              Data Directory: {{ headscale_data_dir }}
-              Config Directory: {{ headscale_config_dir }}
+          Data Directory: {{ headscale_data_dir }}
+          Config Directory: {{ headscale_config_dir }}
 
-              Default User: {{ headscale_admin_user }}
-              Pre-Auth Key: /opt/privatebox/headscale-preauth-key.txt
-            dest: "/opt/privatebox/deployment-info-headscale.txt"
-            mode: '0644'
+          Default User: {{ headscale_admin_user }}
+          Pre-Auth Key: /opt/privatebox/headscale-preauth-key.txt
+        dest: "/opt/privatebox/deployment-info-headscale.txt"
+        mode: '0644'
 
   handlers:
     - name: restart headscale
