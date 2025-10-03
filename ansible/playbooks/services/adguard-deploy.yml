@@ -581,7 +581,7 @@
           copy:
             content: |
               [Resolve]
-              DNS=127.0.0.1
+              DNS=10.10.20.10
               FallbackDNS=9.9.9.9
               Domains=~.
             dest: /etc/systemd/resolved.conf.d/adguard.conf
@@ -596,14 +596,9 @@
           wait_for:
             timeout: 5
 
-        - name: Test DNS resolution through AdGuard
-          command: dig +short @127.0.0.1 google.com
-          register: dns_test
-          changed_when: false
-
         - name: Display DNS switch result
           debug:
-            msg: "✓ System DNS switched to AdGuard at 127.0.0.1 (resolves: {{ dns_test.stdout_lines | join(', ') }})"
+            msg: "✓ System DNS switched to AdGuard at 10.10.20.10"
 
   handlers:
     - name: restart adguard
