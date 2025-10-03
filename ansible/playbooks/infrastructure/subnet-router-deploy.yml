@@ -3,6 +3,11 @@
   hosts: proxmox
   gather_facts: true
 
+  # Enable native Jinja2 types to preserve integer types in uri module
+  # This ensures ssh_key_id is sent as integer (not string) to Semaphore API
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
   vars:
     # VM configuration
     vmid: 101
@@ -265,7 +270,7 @@
         body:
           name: "subnet-router"
           type: "ssh"
-          project_id: "{{ project_id }}"
+          project_id: "{{ project_id | int }}"
           ssh:
             private_key: "{{ private_key_file.content | b64decode }}"
         status_code: [201, 204]
@@ -306,14 +311,13 @@
         headers:
           Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
           Content-Type: "application/json"
-        body: |
-          {
-            "name": "subnet-router",
-            "type": "static",
-            "project_id": {{ project_id }},
-            "inventory": {{ inventory_yaml | to_json }},
-            "ssh_key_id": {{ ssh_key_id | int }}
-          }
+        body_format: json
+        body:
+          name: "subnet-router"
+          type: "static"
+          project_id: "{{ project_id | int }}"
+          inventory: "{{ inventory_yaml }}"
+          ssh_key_id: "{{ ssh_key_id | int }}"
         status_code: [201, 204]
       register: inventory_response
       when: existing_inventory_id | int == 0
