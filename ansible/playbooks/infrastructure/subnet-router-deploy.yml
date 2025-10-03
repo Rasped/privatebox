@@ -1,5 +1,5 @@
 ---
-- name: "Subnet Router: Create Alpine VM"
+- name: "Subnet Router 1: Create Alpine VM"
   hosts: proxmox
   gather_facts: true
 
