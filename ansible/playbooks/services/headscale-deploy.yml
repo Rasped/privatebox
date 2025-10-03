@@ -173,9 +173,10 @@
                 private_key_path: /var/lib/headscale/noise_private.key
 
               # IP prefixes for clients
-              ip_prefixes:
-                - fd7a:115c:a1e0::/48
-                - 100.64.0.0/10
+              prefixes:
+                v4: 100.64.0.0/10
+                v6: fd7a:115c:a1e0::/48
+                allocation: sequential
 
               # DERP configuration - use default Tailscale DERP servers
               derp:
