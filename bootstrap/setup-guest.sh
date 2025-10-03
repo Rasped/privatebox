@@ -97,6 +97,12 @@ podman build -t localhost/semaphore-proxmox:latest /opt/semaphore || error_exit 
 log "Pre-installing Ansible collections for reliable orchestration..."
 echo "PROGRESS:Pre-installing Ansible collections" >> /etc/privatebox-install-complete
 
+# Clone repository to access collection requirements
+if [ ! -d /opt/privatebox ]; then
+  log "Cloning PrivateBox repository for collection requirements..."
+  git clone https://github.com/Rasped/privatebox.git /opt/privatebox || error_exit "Failed to clone repository"
+fi
+
 # Install collections to the Semaphore ansible directory (will be mounted into container)
 ANSIBLE_COLLECTIONS_PATH=/opt/semaphore/ansible/collections \
   ansible-galaxy collection install -r /opt/privatebox/collections/requirements.yml \
