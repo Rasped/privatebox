@@ -266,7 +266,8 @@
           name: "subnet-router"
           type: "ssh"
           project_id: "{{ project_id }}"
-          private_key: "{{ private_key_file.content | b64decode }}"
+          ssh:
+            private_key: "{{ private_key_file.content | b64decode }}"
         status_code: [201, 204]
       register: ssh_key_response
       when: existing_key_id | int == 0
