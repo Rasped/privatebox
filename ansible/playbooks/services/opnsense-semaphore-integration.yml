@@ -227,8 +227,6 @@
           ssh:
             private_key: "{{ ssh_private_key_content.content | b64decode | string }}"
         status_code: [201, 204]
-      environment:
-        ANSIBLE_JINJA2_NATIVE: "True"
       register: create_key_result
       when: not existing_key
 
@@ -246,8 +244,6 @@
           ssh:
             private_key: "{{ ssh_private_key_content.content | b64decode | string }}"
         status_code: [200, 204]
-      environment:
-        ANSIBLE_JINJA2_NATIVE: "True"
       register: update_key_result
       when: existing_key
 
@@ -303,8 +299,6 @@
           inventory: "{{ inventory_yaml }}"
           ssh_key_id: "{{ ssh_key_id | int }}"
         status_code: [201, 204]
-      environment:
-        ANSIBLE_JINJA2_NATIVE: "True"
       register: create_inventory_result
       when: not existing_inventory
 
@@ -322,8 +316,6 @@
           inventory: "{{ inventory_yaml }}"
           ssh_key_id: "{{ ssh_key_id | int }}"
         status_code: [200, 204]
-      environment:
-        ANSIBLE_JINJA2_NATIVE: "True"
       register: update_inventory_result
       when: existing_inventory
 
