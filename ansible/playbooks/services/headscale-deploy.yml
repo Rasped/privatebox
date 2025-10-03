@@ -300,17 +300,18 @@
       when: confirm_deploy | bool
       tags: [headscale, validate]
       block:
-        - name: Check service status
+        - name: Wait for service to become active
           systemd:
             name: "{{ service_name }}.service"
             scope: "{{ 'system' if use_system_quadlet else 'user' }}"
           register: service_status
+          until: service_status.status.ActiveState == "active"
+          retries: 100
+          delay: 1
 
-        - name: Verify service is active
-          assert:
-            that:
-              - service_status.status.ActiveState == "active"
-            fail_msg: "Headscale service is not active"
+        - name: Display service activation result
+          debug:
+            msg: "✓ Headscale service is active after {{ service_status.attempts | default(1) }} attempt(s)"
 
         - name: Check container status
           command: podman ps --filter "name=headscale" --format json
