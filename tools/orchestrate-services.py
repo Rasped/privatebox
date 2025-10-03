@@ -45,7 +45,7 @@ class SemaphoreOrchestrator:
 
         # Define the template sequence
         self.template_sequence = [
-            "Subnet Router: Create Alpine VM",
+            "Subnet Router 1: Create Alpine VM",
             "OPNsense 1: Establish Secure Access",
             "OPNsense 2: Semaphore Integration",
             "OPNsense 3: Post-Configuration",
