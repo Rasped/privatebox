@@ -11,7 +11,7 @@
 
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "ServicePasswords"
+      semaphore_environment: "SemaphoreAPI"
 
     # Headscale default configuration - can be overridden by group_vars
     headscale_image: "headscale/headscale"
@@ -29,11 +29,8 @@
     # Headscale server URL (for client configuration)
     headscale_server_url: "http://{{ ansible_default_ipv4.address }}:{{ headscale_web_port }}"
 
-    # Headscale admin credentials
+    # Headscale admin user (no password - uses API keys and CLI)
     headscale_admin_user: "admin"
-    # Use SERVICES_PASSWORD from Semaphore environment
-    # Semaphore passes environment secrets as Ansible extra vars
-    headscale_admin_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
 
     # Quadlet configuration
     use_system_quadlet: true
