@@ -1,0 +1,441 @@
+---
+- name: "Headscale: Deploy VPN Control Server"
+  hosts: container-host
+  become: true
+  gather_facts: true
+
+  vars:
+    service_name: "Headscale"
+    service_description: "Open source Tailscale control server for self-hosted VPN mesh network"
+    service_tag: "headscale"
+
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "ServicePasswords"
+
+    # Headscale default configuration - can be overridden by group_vars
+    headscale_image: "headscale/headscale"
+    headscale_version: "latest"
+    headscale_web_port: 8082        # Web interface port (8080 taken by AdGuard)
+    headscale_grpc_port: 50443      # gRPC API port
+    headscale_metrics_port: 9090    # Prometheus metrics port (optional)
+    headscale_data_dir: "/opt/privatebox/data/headscale"
+    headscale_config_dir: "/opt/privatebox/config/headscale"
+
+    # Default values for hands-off deployment (no prompts)
+    confirm_deploy: true
+    custom_web_port: "{{ headscale_web_port }}"
+
+    # Headscale server URL (for client configuration)
+    headscale_server_url: "http://{{ ansible_default_ipv4.address }}:{{ headscale_web_port }}"
+
+    # Headscale admin credentials
+    headscale_admin_user: "admin"
+    # Use SERVICES_PASSWORD from Semaphore environment
+    # Semaphore passes environment secrets as Ansible extra vars
+    headscale_admin_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
+
+    # Quadlet configuration
+    use_system_quadlet: true
+    quadlet_system_path: "/etc/containers/systemd"
+    quadlet_user_path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+
+    # Container runtime configuration
+    container_image_registry: "docker.io"
+    volume_mount_options: "Z"
+    timezone: "UTC"
+    container_security_label_disable: false
+    container_no_new_privileges: true
+    container_drop_capabilities: []
+
+    # Health check configuration
+    health_check_interval: "30s"
+    health_check_retries: 3
+    health_check_start_period: "60s"
+    health_check_timeout: "10s"
+
+    # Container management configuration
+    container_log_driver: "journald"
+    container_pull_policy: "missing"
+    container_restart_policy: "always"
+    container_restart_sec: 30
+
+    # Systemd configuration
+    systemd_timeout_start_sec: 900
+    systemd_timeout_stop_sec: 90
+
+  tasks:
+    # Pre-deployment validation
+    - name: "{{ service_name }} - Pre-deployment checks"
+      when: confirm_deploy | bool
+      tags: [headscale, preflight]
+      block:
+        - name: Check system requirements
+          assert:
+            that:
+              - ansible_distribution in ["Ubuntu", "Debian"]
+              - >
+                (ansible_distribution == "Ubuntu" and ansible_distribution_version is version('22.04', '>=')) or
+                (ansible_distribution == "Debian" and ansible_distribution_version is version('12', '>='))
+            fail_msg: "This playbook requires Ubuntu 22.04+ or Debian 12+"
+
+        - name: Check if Podman is installed
+          command: which podman
+          register: podman_check
+          changed_when: false
+          failed_when: false
+
+        - name: Install Podman if not present
+          when: podman_check.rc != 0
+          block:
+            - name: Update apt cache
+              apt:
+                update_cache: yes
+                cache_valid_time: 3600
+
+            - name: Install Podman
+              apt:
+                name:
+                  - podman
+                  - podman-compose
+                  - containernetworking-plugins
+                state: present
+
+        - name: Check Podman version
+          command: podman --version
+          register: podman_version
+          changed_when: false
+
+        - name: Display Podman version
+          debug:
+            msg: "Podman version: {{ podman_version.stdout }}"
+
+        - name: Check for port conflicts
+          wait_for:
+            port: "{{ item }}"
+            state: stopped
+            timeout: 1
+          loop:
+            - "{{ custom_web_port }}"
+            - "{{ headscale_grpc_port }}"
+          ignore_errors: true
+          register: port_check
+
+        - name: Warn about port conflicts
+          debug:
+            msg: "WARNING: Port {{ item.item }} appears to be in use. Service may fail to start."
+          loop: "{{ port_check.results }}"
+          when: item.failed is defined and not item.failed
+
+    # Main deployment
+    - name: "{{ service_name }} - Deployment"
+      when: confirm_deploy | bool
+      tags: [headscale, deploy]
+      block:
+        - name: Create directory structure
+          file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner | default(ansible_user) }}"
+            group: "{{ item.group | default(ansible_user) }}"
+            mode: "{{ item.mode | default('0755') }}"
+          loop:
+            - { path: "{{ headscale_data_dir }}" }
+            - { path: "{{ headscale_config_dir }}" }
+            - { path: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}" }
+
+        - name: Set SELinux context for data directories
+          when: ansible_selinux.status is defined and ansible_selinux.status == "enabled"
+          command: |
+            chcon -R -t container_file_t {{ item }}
+          loop:
+            - "{{ headscale_data_dir }}"
+            - "{{ headscale_config_dir }}"
+          changed_when: true
+
+        - name: Generate Headscale configuration file
+          copy:
+            content: |
+              ---
+              server_url: {{ headscale_server_url }}
+              listen_addr: 0.0.0.0:8080
+              metrics_listen_addr: 0.0.0.0:9090
+              grpc_listen_addr: 0.0.0.0:50443
+              grpc_allow_insecure: false
+
+              # Use sqlite for simplicity
+              db_type: sqlite3
+              db_path: /var/lib/headscale/db.sqlite
+
+              # Private key for signing
+              private_key_path: /var/lib/headscale/private.key
+              noise:
+                private_key_path: /var/lib/headscale/noise_private.key
+
+              # IP prefixes for clients
+              ip_prefixes:
+                - fd7a:115c:a1e0::/48
+                - 100.64.0.0/10
+
+              # DERP configuration - use default Tailscale DERP servers
+              derp:
+                server:
+                  enabled: false
+                urls:
+                  - https://controlplane.tailscale.com/derpmap/default
+                auto_update_enabled: true
+                update_frequency: 24h
+
+              # DNS configuration
+              dns_config:
+                nameservers:
+                  - 1.1.1.1
+                  - 8.8.8.8
+                magic_dns: true
+                base_domain: headscale.local
+
+              # Logging
+              log:
+                format: text
+                level: info
+
+              # ACL policy file (optional)
+              acl_policy_path: ""
+
+              # Unix socket
+              unix_socket: /var/run/headscale/headscale.sock
+              unix_socket_permission: "0770"
+            dest: "{{ headscale_config_dir }}/config.yaml"
+            owner: "{{ ansible_user }}"
+            group: "{{ ansible_user }}"
+            mode: '0644'
+          register: config_created
+
+        - name: Deploy Quadlet unit file
+          template:
+            src: ../../files/quadlet/headscale.container.j2
+            dest: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}/headscale.container"
+            owner: root
+            group: root
+            mode: '0644'
+          register: quadlet_deployed
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+          when: quadlet_deployed.changed
+
+        - name: Enable Headscale service
+          systemd:
+            name: headscale.service
+            enabled: true
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+
+        - name: Start Headscale service
+          systemd:
+            name: headscale.service
+            state: started
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_start
+
+        - name: Wait for Headscale to be ready
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/health"
+            status_code: [200]
+            timeout: 10
+          register: headscale_ready
+          until: headscale_ready.status == 200
+          retries: 6
+          delay: 10
+          when: service_start.changed
+
+        - name: Configure firewall for Headscale
+          block:
+            - name: Check if ufw is installed
+              command: which ufw
+              register: ufw_check
+              changed_when: false
+              failed_when: false
+
+            - name: Configure ufw firewall rules
+              when: ufw_check.rc == 0
+              block:
+                - name: Allow Headscale web interface
+                  ufw:
+                    rule: allow
+                    port: "{{ custom_web_port }}"
+                    proto: tcp
+                    comment: "Headscale Web UI"
+
+                - name: Allow Headscale gRPC API
+                  ufw:
+                    rule: allow
+                    port: "{{ headscale_grpc_port }}"
+                    proto: tcp
+                    comment: "Headscale gRPC API"
+
+                - name: Allow Headscale metrics if configured
+                  ufw:
+                    rule: allow
+                    port: "{{ headscale_metrics_port }}"
+                    proto: tcp
+                    comment: "Headscale Metrics"
+                  when: headscale_metrics_port is defined
+
+                - name: Note firewall configuration
+                  debug:
+                    msg: "Firewall rules configured for Headscale services"
+              rescue:
+                - name: Note firewall configuration failure
+                  debug:
+                    msg: "Warning: Failed to configure firewall rules. Please configure manually if needed."
+
+    # Post-deployment validation
+    - name: "{{ service_name }} - Post-deployment validation"
+      when: confirm_deploy | bool
+      tags: [headscale, validate]
+      block:
+        - name: Check service status
+          systemd:
+            name: headscale.service
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_status
+
+        - name: Verify service is active
+          assert:
+            that:
+              - service_status.status.ActiveState == "active"
+            fail_msg: "Headscale service is not active"
+
+        - name: Check container status
+          command: podman ps --filter "name=headscale" --format json
+          register: container_status
+          changed_when: false
+
+        - name: Parse container info
+          set_fact:
+            container_info: "{{ container_status.stdout | from_json | first | default({}) }}"
+          when: container_status.stdout
+
+        - name: Display container status
+          debug:
+            msg:
+              - "Container: {{ container_info.Names | default(['Not found']) | first }}"
+              - "Status: {{ container_info.State | default('Unknown') }}"
+              - "Image: {{ container_info.Image | default('Unknown') }}"
+          when: container_info is defined
+
+    # Headscale initial configuration
+    - name: "{{ service_name }} - Initial configuration"
+      when: confirm_deploy | bool
+      tags: [headscale, configure]
+      block:
+        - name: Create default namespace/user
+          command: >
+            podman exec headscale headscale users create {{ headscale_admin_user }}
+          register: user_create
+          failed_when: false
+          changed_when: "'User created' in user_create.stdout or 'already exists' not in user_create.stderr"
+
+        - name: Display user creation result
+          debug:
+            msg: "{{ user_create.stdout if user_create.rc == 0 else 'User already exists or creation failed' }}"
+
+        - name: Generate pre-authentication key
+          command: >
+            podman exec headscale headscale preauthkeys create --user {{ headscale_admin_user }} --expiration 90d --reusable
+          register: preauth_key
+          changed_when: true
+
+        - name: Save pre-authentication key
+          copy:
+            content: |
+              Headscale Pre-Authentication Key
+              =================================
+              User: {{ headscale_admin_user }}
+              Key: {{ preauth_key.stdout | trim }}
+              Expiration: 90 days
+              Reusable: Yes
+
+              Use this key to register new clients:
+              tailscale up --login-server={{ headscale_server_url }} --authkey={{ preauth_key.stdout | trim }}
+            dest: "/opt/privatebox/headscale-preauth-key.txt"
+            mode: '0600'
+          when: preauth_key.rc == 0
+
+    # Display access information
+    - name: "{{ service_name }} - Access information"
+      when: confirm_deploy | bool
+      tags: [headscale, info]
+      block:
+        - name: Generate service information
+          set_fact:
+            service_info:
+              name: "{{ service_name }}"
+              status: "{{ 'Active' if service_status.status.ActiveState == 'active' else 'Inactive' }}"
+              web_url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
+              server_url: "{{ headscale_server_url }}"
+              grpc_url: "{{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}"
+
+        - name: Display access information
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "Service Status: {{ service_info.status }}"
+              - "Server URL: {{ service_info.server_url }}"
+              - ""
+              - "Web Interface: {{ service_info.web_url }}"
+              - "gRPC API: {{ service_info.grpc_url }}"
+              - ""
+              - "Default User: {{ headscale_admin_user }}"
+              - "Pre-Auth Key: Saved to /opt/privatebox/headscale-preauth-key.txt"
+              - ""
+              - "Client Setup:"
+              - "  1. Install Tailscale on client device"
+              - "  2. Run: tailscale up --login-server={{ service_info.server_url }} --authkey=<KEY>"
+              - "  3. Check connected nodes: podman exec headscale headscale nodes list"
+              - ""
+              - "Service Management:"
+              - "  - Status: sudo systemctl status headscale.service"
+              - "  - Logs: sudo podman logs headscale"
+              - "  - Restart: sudo systemctl restart headscale.service"
+              - ""
+              - "Headscale CLI Commands (via podman exec):"
+              - "  - List users: podman exec headscale headscale users list"
+              - "  - List nodes: podman exec headscale headscale nodes list"
+              - "  - Create preauth key: podman exec headscale headscale preauthkeys create --user {{ headscale_admin_user }}"
+              - "=========================================="
+
+        - name: Save deployment info
+          copy:
+            content: |
+              {{ service_name }} Deployment Information
+              =====================================
+              Deployed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+
+              Access URLs:
+              - Web Interface: {{ service_info.web_url }}
+              - Server URL: {{ service_info.server_url }}
+              - gRPC API: {{ service_info.grpc_url }}
+
+              Service: headscale.service
+              Container: headscale
+
+              Data Directory: {{ headscale_data_dir }}
+              Config Directory: {{ headscale_config_dir }}
+
+              Default User: {{ headscale_admin_user }}
+              Pre-Auth Key: /opt/privatebox/headscale-preauth-key.txt
+            dest: "/opt/privatebox/deployment-info-headscale.txt"
+            mode: '0644'
+
+  handlers:
+    - name: restart headscale
+      systemd:
+        name: headscale.service
+        state: restarted
+        scope: "{{ 'system' if use_system_quadlet else 'user' }}"
