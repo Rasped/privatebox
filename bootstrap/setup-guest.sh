@@ -88,7 +88,7 @@ EOF
 
 log "Building Semaphore image (localhost/semaphore-proxmox:latest)..."
 echo "PROGRESS:Building custom Semaphore image" >> /etc/privatebox-install-complete
-podman build -t localhost/semaphore-proxmox:latest /opt/semaphore || error_exit "Failed to build Semaphore image"
+podman build --dns=10.10.20.1 -t localhost/semaphore-proxmox:latest /opt/semaphore || error_exit "Failed to build Semaphore image"
 
 #==============================#
 # Portainer quadlet
@@ -202,7 +202,7 @@ Description=Rebuild custom Semaphore image (with proxmoxer)
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/semaphore
-ExecStart=/usr/bin/podman build -t localhost/semaphore-proxmox:latest .
+ExecStart=/usr/bin/podman build --dns=10.10.20.1 -t localhost/semaphore-proxmox:latest .
 EOF
 
 cat > /etc/systemd/system/semaphore-image-update.timer <<'EOF'
