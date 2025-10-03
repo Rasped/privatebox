@@ -80,10 +80,9 @@
 
     # Generate Headscale preauth key
     - name: Get Headscale preauth key from Management VM
-      delegate_to: container-host
       block:
         - name: Get user list from Headscale
-          command: podman exec headscale headscale users list -o json
+          command: ssh debian@10.10.20.10 "podman exec headscale headscale users list -o json"
           register: headscale_users
           changed_when: false
 
@@ -93,10 +92,11 @@
 
         - name: Generate preauth key for subnet router
           command: >
-            podman exec headscale headscale preauthkeys create
+            ssh debian@10.10.20.10
+            "podman exec headscale headscale preauthkeys create
             --user {{ admin_user_id }}
             --expiration 1h
-            --reusable false
+            --reusable false"
           register: preauth_key_output
           changed_when: true
 
@@ -298,8 +298,7 @@
 
     # Approve subnet routes on Headscale
     - name: Get subnet router node ID from Headscale
-      delegate_to: container-host
-      command: podman exec headscale headscale nodes list -o json
+      command: ssh debian@10.10.20.10 "podman exec headscale headscale nodes list -o json"
       register: headscale_nodes
       changed_when: false
 
@@ -308,11 +307,11 @@
         subnet_router_node_id: "{{ (headscale_nodes.stdout | from_json | selectattr('name', 'equalto', vm_name) | first).id }}"
 
     - name: Enable subnet routes on Headscale
-      delegate_to: container-host
       command: >
-        podman exec headscale headscale routes enable
+        ssh debian@10.10.20.10
+        "podman exec headscale headscale routes enable
         -i {{ subnet_router_node_id }}
-        -r {{ lan_ip.rsplit('.', 1)[0] }}.0/24
+        -r {{ lan_ip.rsplit('.', 1)[0] }}.0/24"
       register: route_enabled
       changed_when: true
 
