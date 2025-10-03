@@ -3,6 +3,9 @@
   hosts: proxmox
   gather_facts: true
 
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
   vars:
     # VM configuration
     vmid: 101
@@ -268,8 +271,6 @@
           ssh:
             private_key: "{{ private_key_file.content | b64decode | string }}"
         status_code: [201, 204]
-      environment:
-        ANSIBLE_JINJA2_NATIVE: "True"
       register: ssh_key_response
       when: existing_key_id | int == 0
 
@@ -314,8 +315,6 @@
           inventory: "{{ inventory_yaml }}"
           ssh_key_id: "{{ ssh_key_id | int }}"
         status_code: [201, 204]
-      environment:
-        ANSIBLE_JINJA2_NATIVE: "True"
       register: inventory_response
       when: existing_inventory_id | int == 0
 
