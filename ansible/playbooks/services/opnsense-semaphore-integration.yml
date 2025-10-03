@@ -217,19 +217,28 @@
       set_fact:
         existing_key: "{{ existing_keys.json | selectattr('name', 'equalto', key_name) | list | first | default(false) }}"
 
+    - name: Decode SSH private key to string
+      ansible.builtin.shell: "echo '{{ ssh_private_key_content.content }}' | base64 -d"
+      register: decoded_private_key
+      changed_when: false
+      check_mode: false
+      no_log: true
+
     - name: Create SSH key in Semaphore
       uri:
         url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
         method: POST
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-        body_format: json
-        body:
-          name: "{{ key_name }}"
-          type: "ssh"
-          project_id: "{{ project_id | int }}"
-          ssh:
-            private_key: "{{ ssh_private_key_content.content | b64decode | community.general.from_yaml }}"
+        body: |
+          {
+            "name": "{{ key_name }}",
+            "type": "ssh",
+            "project_id": {{ project_id | int }},
+            "ssh": {
+              "private_key": {{ decoded_private_key.stdout | to_json }}
+            }
+          }
         status_code: [201, 204]
       register: create_key_result
       when: not existing_key
@@ -240,13 +249,15 @@
         method: PUT
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
-        body_format: json
-        body:
-          name: "{{ key_name }}"
-          type: "ssh"
-          project_id: "{{ project_id | int }}"
-          ssh:
-            private_key: "{{ ssh_private_key_content.content | b64decode | community.general.from_yaml }}"
+        body: |
+          {
+            "name": "{{ key_name }}",
+            "type": "ssh",
+            "project_id": {{ project_id | int }},
+            "ssh": {
+              "private_key": {{ decoded_private_key.stdout | to_json }}
+            }
+          }
         status_code: [200, 204]
       register: update_key_result
       when: existing_key
