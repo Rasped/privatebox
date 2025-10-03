@@ -174,3 +174,22 @@
           - "Container Logs:"
           - "  journalctl -u {{ deployment_info.service }} -f"
           - ""
+
+    - name: Save deployment info
+      copy:
+        content: |
+          Homer Deployment Information
+          =====================================
+          Deployed: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
+
+          Access URLs:
+          - Web Interface: http://{{ ansible_default_ipv4.address }}:{{ homer_port }}
+
+          Service: {{ service_name }}.service
+          Container: {{ service_name }}
+
+          Config Directory: {{ config_dir }}
+          Config File: {{ config_dir }}/config.yml
+        dest: "/opt/privatebox/deployment-info-homer.txt"
+        mode: '0644'
