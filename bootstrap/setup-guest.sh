@@ -44,7 +44,7 @@ DEBIAN_FRONTEND=noninteractive apt-get upgrade -y || error_exit "Failed to upgra
 log "Installing required packages..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   curl wget ca-certificates gnupg lsb-release jq git \
-  podman buildah skopeo openssh-client ansible-core || error_exit "Failed to install required packages"
+  podman buildah skopeo openssh-client || error_exit "Failed to install required packages"
 
 #==============================#
 # Podman socket & auto-update
@@ -79,10 +79,10 @@ cat > /opt/semaphore/Containerfile <<'EOF'
 FROM docker.io/semaphoreui/semaphore:latest
 # Switch to root to install packages and create directories
 USER root
-# Add proxmoxer + requests for PVE modules, and community.general collection system-wide
+# Add proxmoxer + requests for PVE modules, and community.general collection (pinned version)
 RUN pip3 install --no-cache-dir proxmoxer requests \
  && mkdir -p /usr/share/ansible/collections \
- && ansible-galaxy collection install -p /usr/share/ansible/collections community.general
+ && ansible-galaxy collection install -p /usr/share/ansible/collections community.general:11.3.0
 # Switch back to semaphore user
 USER semaphore
 EOF
@@ -90,25 +90,6 @@ EOF
 log "Building Semaphore image (localhost/semaphore-proxmox:latest)..."
 echo "PROGRESS:Building custom Semaphore image" >> /etc/privatebox-install-complete
 podman build -t localhost/semaphore-proxmox:latest /opt/semaphore || error_exit "Failed to build Semaphore image"
-
-#==============================#
-# Pre-install Ansible collections
-#==============================#
-log "Pre-installing Ansible collections for reliable orchestration..."
-echo "PROGRESS:Pre-installing Ansible collections" >> /etc/privatebox-install-complete
-
-# Clone repository to access collection requirements
-if [ ! -d /opt/privatebox ]; then
-  log "Cloning PrivateBox repository for collection requirements..."
-  git clone https://github.com/Rasped/privatebox.git /opt/privatebox || error_exit "Failed to clone repository"
-fi
-
-# Install collections to the Semaphore ansible directory (will be mounted into container)
-ANSIBLE_COLLECTIONS_PATH=/opt/semaphore/ansible/collections \
-  ansible-galaxy collection install -r /opt/privatebox/collections/requirements.yml \
-  || error_exit "Failed to pre-install Ansible collections"
-
-log "Ansible collections pre-installed successfully"
 
 #==============================#
 # Portainer quadlet
