@@ -1,5 +1,5 @@
 ---
-- name: "Subnet Router: Deploy Headscale VPN Gateway"
+- name: "Subnet Router: Create Alpine VM"
   hosts: proxmox
   gather_facts: true
 
@@ -18,17 +18,12 @@
     lan_gateway: "10.10.10.1"
     services_ip: "10.10.20.11"
     services_netmask: "24"
-    services_gateway: "10.10.20.1"
 
     # Alpine Linux cloud image
     alpine_version: "3.19"
     alpine_image_url: "https://dl-cdn.alpinelinux.org/alpine/v{{ alpine_version }}/releases/cloud/nocloud_alpine-{{ alpine_version }}.0-x86_64-bios-cloudinit-r0.qcow2"
     alpine_image_name: "nocloud_alpine-{{ alpine_version }}.0-x86_64-bios-cloudinit-r0.qcow2"
     image_cache_dir: "/var/lib/vz/template/cache"
-
-    # Headscale configuration
-    headscale_server_url: "http://10.10.20.10:8082"
-    headscale_admin_user: "admin"
 
     # Template configuration for Semaphore
     template_config:
@@ -40,12 +35,11 @@
       debug:
         msg:
           - "=========================================="
-          - "   SUBNET ROUTER DEPLOYMENT"
+          - "   SUBNET ROUTER VM CREATION"
           - "=========================================="
           - "VMID: {{ vmid }}"
           - "LAN IP: {{ lan_ip }}"
           - "Services IP: {{ services_ip }}"
-          - "Headscale: {{ headscale_server_url }}"
 
     # Pre-flight checks
     - name: Check if VM already exists
@@ -78,32 +72,6 @@
         mode: '0644'
       when: not alpine_image_stat.stat.exists
 
-    # Generate Headscale preauth key
-    - name: Get Headscale preauth key from Management VM
-      block:
-        - name: Get user list from Headscale
-          command: ssh debian@10.10.20.10 "podman exec headscale headscale users list -o json"
-          register: headscale_users
-          changed_when: false
-
-        - name: Parse admin user ID
-          set_fact:
-            admin_user_id: "{{ (headscale_users.stdout | from_json | selectattr('name', 'equalto', headscale_admin_user) | first).id }}"
-
-        - name: Generate preauth key for subnet router
-          command: >
-            ssh debian@10.10.20.10
-            "podman exec headscale headscale preauthkeys create
-            --user {{ admin_user_id }}
-            --expiration 1h
-            --reusable false"
-          register: preauth_key_output
-          changed_when: true
-
-        - name: Extract preauth key
-          set_fact:
-            headscale_preauth_key: "{{ preauth_key_output.stdout | trim }}"
-
     # Create cloud-init configuration
     - name: Enable snippets on local storage
       command: pvesm set local --content vztmpl,iso,backup,snippets
@@ -132,9 +100,9 @@
           manage_etc_hosts: true
 
           users:
-            - name: debian
+            - name: alpine
               sudo: ALL=(ALL) NOPASSWD:ALL
-              shell: /bin/bash
+              shell: /bin/sh
               lock_passwd: false
               passwd: {{ SERVICES_PASSWORD | password_hash('sha512') }}
               ssh_authorized_keys:
@@ -146,7 +114,6 @@
           package_upgrade: true
 
           packages:
-            - iptables
             - curl
             - ca-certificates
 
@@ -167,50 +134,10 @@
                 iface eth1 inet static
                     address {{ services_ip }}/{{ services_netmask }}
 
-            - path: /etc/sysctl.d/99-ip-forward.conf
-              permissions: '0644'
-              content: |
-                net.ipv4.ip_forward=1
-                net.ipv6.conf.all.forwarding=1
-
-            - path: /usr/local/bin/setup-tailscale.sh
-              permissions: '0755'
-              content: |
-                #!/bin/sh
-                set -e
-
-                echo "Installing Tailscale..."
-
-                # Enable community repository
-                echo "http://dl-cdn.alpinelinux.org/alpine/v{{ alpine_version }}/community" >> /etc/apk/repositories
-                apk update
-
-                # Install Tailscale
-                apk add tailscale
-
-                # Enable and start tailscaled
-                rc-update add tailscale default
-                rc-service tailscale start
-
-                # Wait for tailscaled to be ready
-                sleep 5
-
-                # Connect to Headscale and advertise LAN subnet
-                tailscale up \
-                  --login-server={{ headscale_server_url }} \
-                  --authkey={{ headscale_preauth_key }} \
-                  --advertise-routes={{ lan_ip.rsplit('.', 1)[0] }}.0/24 \
-                  --accept-routes \
-                  --hostname={{ vm_name }}
-
-                echo "Tailscale configured successfully"
-                echo "Subnet router advertising: {{ lan_ip.rsplit('.', 1)[0] }}.0/24"
-
           runcmd:
-            - sysctl -p /etc/sysctl.d/99-ip-forward.conf
-            - /usr/local/bin/setup-tailscale.sh
+            - echo "Subnet router VM ready"
 
-          final_message: "Subnet router deployment complete after $UPTIME seconds"
+          final_message: "Alpine subnet router VM deployed after $UPTIME seconds"
 
     # Create VM
     - name: Create VM {{ vmid }}
@@ -277,63 +204,28 @@
         host: "{{ services_ip }}"
         port: 22
         delay: 10
-        timeout: 300
+        timeout: 180
 
-    # Verify Tailscale setup
-    - name: Wait for Tailscale setup to complete
-      pause:
-        seconds: 30
-        prompt: "Waiting for cloud-init to complete Tailscale setup..."
-
-    - name: Check Tailscale status on subnet router
-      command: ssh -o StrictHostKeyChecking=no debian@{{ services_ip }} "tailscale status"
-      register: tailscale_status
+    - name: Test SSH connection
+      command: ssh -o StrictHostKeyChecking=no alpine@{{ services_ip }} "hostname"
+      register: ssh_test
       changed_when: false
-      failed_when: false
-
-    - name: Display Tailscale status
-      debug:
-        msg: "{{ tailscale_status.stdout_lines }}"
-      when: tailscale_status.rc == 0
-
-    # Approve subnet routes on Headscale
-    - name: Get subnet router node ID from Headscale
-      command: ssh debian@10.10.20.10 "podman exec headscale headscale nodes list -o json"
-      register: headscale_nodes
-      changed_when: false
-
-    - name: Parse subnet router node ID
-      set_fact:
-        subnet_router_node_id: "{{ (headscale_nodes.stdout | from_json | selectattr('name', 'equalto', vm_name) | first).id }}"
-
-    - name: Enable subnet routes on Headscale
-      command: >
-        ssh debian@10.10.20.10
-        "podman exec headscale headscale routes enable
-        -i {{ subnet_router_node_id }}
-        -r {{ lan_ip.rsplit('.', 1)[0] }}.0/24"
-      register: route_enabled
-      changed_when: true
 
     - name: Display deployment summary
       debug:
         msg:
           - ""
           - "=========================================="
-          - "   DEPLOYMENT COMPLETE"
+          - "   VM CREATION COMPLETE"
           - "=========================================="
           - ""
           - "VM ID: {{ vmid }}"
           - "VM Name: {{ vm_name }}"
           - "LAN IP: {{ lan_ip }}"
           - "Services IP (management): {{ services_ip }}"
-          - ""
-          - "Tailscale Status: Connected to {{ headscale_server_url }}"
-          - "Advertised Route: {{ lan_ip.rsplit('.', 1)[0] }}.0/24"
-          - "Route Status: {{ 'Enabled' if route_enabled.rc == 0 else 'Failed' }}"
+          - "SSH Test: {{ ssh_test.stdout }}"
           - ""
           - "Next Steps:"
-          - "  1. Add subnet-router to Semaphore inventory (IP: {{ services_ip }})"
-          - "  2. Add WAN → Headscale firewall rule for remote access"
-          - "  3. Test VPN connection from remote device"
+          - "  1. Add to Semaphore inventory as 'subnet-router' ({{ services_ip }})"
+          - "  2. Run subnet router configuration playbook"
           - ""
