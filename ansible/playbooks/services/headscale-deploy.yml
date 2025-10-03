@@ -163,9 +163,11 @@
               grpc_listen_addr: 0.0.0.0:50443
               grpc_allow_insecure: false
 
-              # Use sqlite for simplicity
-              db_type: sqlite3
-              db_path: /var/lib/headscale/db.sqlite
+              # Database configuration
+              database:
+                type: sqlite
+                sqlite:
+                  path: /var/lib/headscale/db.sqlite
 
               # Private key for signing
               private_key_path: /var/lib/headscale/private.key
