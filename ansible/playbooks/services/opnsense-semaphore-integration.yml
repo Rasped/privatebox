@@ -2,6 +2,10 @@
 - name: "OPNsense 2: Semaphore Integration"
   hosts: proxmox
   gather_facts: yes
+
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
   vars:
     # Template configuration for Semaphore
     template_config:
