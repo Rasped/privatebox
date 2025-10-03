@@ -79,10 +79,9 @@ cat > /opt/semaphore/Containerfile <<'EOF'
 FROM docker.io/semaphoreui/semaphore:latest
 # Switch to root to install packages and create directories
 USER root
-# Add proxmoxer + requests for PVE modules, and community.general collection (pinned version)
+# Add proxmoxer + requests for PVE modules, and upgrade community.general in venv
 RUN pip3 install --no-cache-dir proxmoxer requests \
- && mkdir -p /usr/share/ansible/collections \
- && ansible-galaxy collection install -p /usr/share/ansible/collections community.general:11.3.0
+ && ansible-galaxy collection install --upgrade community.general:11.3.0
 # Switch back to semaphore user
 USER semaphore
 EOF
