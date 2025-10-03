@@ -5,7 +5,7 @@
   gather_facts: true
 
   vars:
-    service_name: "Headscale"
+    service_name: "headscale"
     service_description: "Open source Tailscale control server for self-hosted VPN mesh network"
     service_tag: "headscale"
 
@@ -214,7 +214,7 @@
         - name: Deploy Quadlet unit file
           template:
             src: ../../files/quadlet/headscale.container.j2
-            dest: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}/headscale.container"
+            dest: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}/{{ service_name }}.container"
             owner: root
             group: root
             mode: '0644'
@@ -227,13 +227,13 @@
 
         - name: Enable Headscale service
           systemd:
-            name: headscale.service
+            name: "{{ service_name }}.service"
             enabled: true
             scope: "{{ 'system' if use_system_quadlet else 'user' }}"
 
         - name: Start Headscale service
           systemd:
-            name: headscale.service
+            name: "{{ service_name }}.service"
             state: started
             scope: "{{ 'system' if use_system_quadlet else 'user' }}"
           register: service_start
@@ -297,7 +297,7 @@
       block:
         - name: Check service status
           systemd:
-            name: headscale.service
+            name: "{{ service_name }}.service"
             scope: "{{ 'system' if use_system_quadlet else 'user' }}"
           register: service_status
 
@@ -332,7 +332,7 @@
       block:
         - name: Create default namespace/user
           command: >
-            podman exec headscale headscale users create {{ headscale_admin_user }}
+            podman exec {{ service_name }} headscale users create {{ headscale_admin_user }}
           register: user_create
           failed_when: false
           changed_when: "'User created' in user_create.stdout or 'already exists' not in user_create.stderr"
@@ -343,7 +343,7 @@
 
         - name: Generate pre-authentication key
           command: >
-            podman exec headscale headscale preauthkeys create --user {{ headscale_admin_user }} --expiration 90d --reusable
+            podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user }} --expiration 90d --reusable
           register: preauth_key
           changed_when: true
 
@@ -396,17 +396,17 @@
               - "Client Setup:"
               - "  1. Install Tailscale on client device"
               - "  2. Run: tailscale up --login-server={{ service_info.server_url }} --authkey=<KEY>"
-              - "  3. Check connected nodes: podman exec headscale headscale nodes list"
+              - "  3. Check connected nodes: podman exec {{ service_name }} headscale nodes list"
               - ""
               - "Service Management:"
-              - "  - Status: sudo systemctl status headscale.service"
-              - "  - Logs: sudo podman logs headscale"
-              - "  - Restart: sudo systemctl restart headscale.service"
+              - "  - Status: sudo systemctl status {{ service_name }}.service"
+              - "  - Logs: sudo podman logs {{ service_name }}"
+              - "  - Restart: sudo systemctl restart {{ service_name }}.service"
               - ""
               - "Headscale CLI Commands (via podman exec):"
-              - "  - List users: podman exec headscale headscale users list"
-              - "  - List nodes: podman exec headscale headscale nodes list"
-              - "  - Create preauth key: podman exec headscale headscale preauthkeys create --user {{ headscale_admin_user }}"
+              - "  - List users: podman exec {{ service_name }} headscale users list"
+              - "  - List nodes: podman exec {{ service_name }} headscale nodes list"
+              - "  - Create preauth key: podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user }}"
               - "=========================================="
 
         - name: Save deployment info
@@ -422,8 +422,8 @@
               - Server URL: {{ service_info.server_url }}
               - gRPC API: {{ service_info.grpc_url }}
 
-              Service: headscale.service
-              Container: headscale
+              Service: {{ service_name }}.service
+              Container: {{ service_name }}
 
               Data Directory: {{ headscale_data_dir }}
               Config Directory: {{ headscale_config_dir }}
@@ -436,6 +436,6 @@
   handlers:
     - name: restart headscale
       systemd:
-        name: headscale.service
+        name: "{{ service_name }}.service"
         state: restarted
         scope: "{{ 'system' if use_system_quadlet else 'user' }}"
