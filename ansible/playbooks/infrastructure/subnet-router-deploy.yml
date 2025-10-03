@@ -1,0 +1,340 @@
+---
+- name: "Subnet Router: Deploy Headscale VPN Gateway"
+  hosts: proxmox
+  gather_facts: true
+
+  vars:
+    # VM configuration
+    vmid: 101
+    vm_name: "privatebox-subnet-router"
+    vm_memory: 256
+    vm_cores: 1
+    vm_disk_size: "2G"
+    vm_storage: "local-lvm"
+
+    # Network configuration - Dual IPs
+    lan_ip: "10.10.10.10"
+    lan_netmask: "24"
+    lan_gateway: "10.10.10.1"
+    services_ip: "10.10.20.11"
+    services_netmask: "24"
+    services_gateway: "10.10.20.1"
+
+    # Alpine Linux cloud image
+    alpine_version: "3.19"
+    alpine_image_url: "https://dl-cdn.alpinelinux.org/alpine/v{{ alpine_version }}/releases/cloud/alpine-virt-{{ alpine_version }}.2-x86_64.qcow2"
+    alpine_image_name: "alpine-virt-{{ alpine_version }}.2-x86_64.qcow2"
+    image_cache_dir: "/var/lib/vz/template/cache"
+
+    # Headscale configuration
+    headscale_server_url: "http://10.10.20.10:8082"
+    headscale_admin_user: "admin"
+
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "ServicePasswords"
+      semaphore_inventory: "proxmox"
+
+  tasks:
+    - name: Display deployment header
+      debug:
+        msg:
+          - "=========================================="
+          - "   SUBNET ROUTER DEPLOYMENT"
+          - "=========================================="
+          - "VMID: {{ vmid }}"
+          - "LAN IP: {{ lan_ip }}"
+          - "Services IP: {{ services_ip }}"
+          - "Headscale: {{ headscale_server_url }}"
+
+    # Pre-flight checks
+    - name: Check if VM already exists
+      command: qm status {{ vmid }}
+      register: vm_exists
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if VM already exists
+      fail:
+        msg: "VM {{ vmid }} already exists. Delete it first or choose a different VMID."
+      when: vm_exists.rc == 0
+
+    - name: Create image cache directory
+      file:
+        path: "{{ image_cache_dir }}"
+        state: directory
+        mode: '0755'
+
+    # Download Alpine cloud image
+    - name: Check if Alpine image exists
+      stat:
+        path: "{{ image_cache_dir }}/{{ alpine_image_name }}"
+      register: alpine_image_stat
+
+    - name: Download Alpine cloud image
+      get_url:
+        url: "{{ alpine_image_url }}"
+        dest: "{{ image_cache_dir }}/{{ alpine_image_name }}"
+        mode: '0644'
+      when: not alpine_image_stat.stat.exists
+
+    # Generate Headscale preauth key
+    - name: Get Headscale preauth key from Management VM
+      delegate_to: container-host
+      block:
+        - name: Get user list from Headscale
+          command: podman exec headscale headscale users list -o json
+          register: headscale_users
+          changed_when: false
+
+        - name: Parse admin user ID
+          set_fact:
+            admin_user_id: "{{ (headscale_users.stdout | from_json | selectattr('name', 'equalto', headscale_admin_user) | first).id }}"
+
+        - name: Generate preauth key for subnet router
+          command: >
+            podman exec headscale headscale preauthkeys create
+            --user {{ admin_user_id }}
+            --expiration 1h
+            --reusable false
+          register: preauth_key_output
+          changed_when: true
+
+        - name: Extract preauth key
+          set_fact:
+            headscale_preauth_key: "{{ preauth_key_output.stdout | trim }}"
+
+    # Create cloud-init configuration
+    - name: Enable snippets on local storage
+      command: pvesm set local --content vztmpl,iso,backup,snippets
+      failed_when: false
+      changed_when: false
+
+    - name: Create snippets directory
+      file:
+        path: /var/lib/vz/snippets
+        state: directory
+        mode: '0755'
+
+    - name: Get Proxmox SSH public key
+      slurp:
+        src: /root/.ssh/id_rsa.pub
+      register: proxmox_ssh_key
+      failed_when: false
+
+    - name: Generate cloud-init user-data
+      copy:
+        dest: "/var/lib/vz/snippets/subnet-router-{{ vmid }}.yml"
+        mode: '0644'
+        content: |
+          #cloud-config
+          hostname: {{ vm_name }}
+          manage_etc_hosts: true
+
+          users:
+            - name: debian
+              sudo: ALL=(ALL) NOPASSWD:ALL
+              shell: /bin/bash
+              lock_passwd: false
+              passwd: {{ SERVICES_PASSWORD | password_hash('sha512') }}
+              ssh_authorized_keys:
+                - {{ (proxmox_ssh_key.content | b64decode).strip() }}
+
+          ssh_pwauth: true
+
+          package_update: true
+          package_upgrade: true
+
+          packages:
+            - iptables
+            - curl
+            - ca-certificates
+
+          write_files:
+            - path: /etc/network/interfaces
+              permissions: '0644'
+              content: |
+                auto lo
+                iface lo inet loopback
+
+                auto eth0
+                iface eth0 inet static
+                    address {{ lan_ip }}/{{ lan_netmask }}
+                    gateway {{ lan_gateway }}
+                    dns-nameservers {{ lan_gateway }}
+
+                auto eth1
+                iface eth1 inet static
+                    address {{ services_ip }}/{{ services_netmask }}
+
+            - path: /etc/sysctl.d/99-ip-forward.conf
+              permissions: '0644'
+              content: |
+                net.ipv4.ip_forward=1
+                net.ipv6.conf.all.forwarding=1
+
+            - path: /usr/local/bin/setup-tailscale.sh
+              permissions: '0755'
+              content: |
+                #!/bin/sh
+                set -e
+
+                echo "Installing Tailscale..."
+
+                # Enable community repository
+                echo "http://dl-cdn.alpinelinux.org/alpine/v{{ alpine_version }}/community" >> /etc/apk/repositories
+                apk update
+
+                # Install Tailscale
+                apk add tailscale
+
+                # Enable and start tailscaled
+                rc-update add tailscale default
+                rc-service tailscale start
+
+                # Wait for tailscaled to be ready
+                sleep 5
+
+                # Connect to Headscale and advertise LAN subnet
+                tailscale up \
+                  --login-server={{ headscale_server_url }} \
+                  --authkey={{ headscale_preauth_key }} \
+                  --advertise-routes={{ lan_ip.rsplit('.', 1)[0] }}.0/24 \
+                  --accept-routes \
+                  --hostname={{ vm_name }}
+
+                echo "Tailscale configured successfully"
+                echo "Subnet router advertising: {{ lan_ip.rsplit('.', 1)[0] }}.0/24"
+
+          runcmd:
+            - sysctl -p /etc/sysctl.d/99-ip-forward.conf
+            - /usr/local/bin/setup-tailscale.sh
+
+          final_message: "Subnet router deployment complete after $UPTIME seconds"
+
+    # Create VM
+    - name: Create VM {{ vmid }}
+      command: >
+        qm create {{ vmid }}
+        --name {{ vm_name }}
+        --memory {{ vm_memory }}
+        --cores {{ vm_cores }}
+        --cpu host
+        --net0 virtio,bridge=vmbr1,tag=10
+        --net1 virtio,bridge=vmbr1,tag=20
+        --serial0 socket
+        --vga serial0
+        --agent enabled=1
+      register: vm_created
+
+    - name: Import disk image
+      command: qm importdisk {{ vmid }} {{ image_cache_dir }}/{{ alpine_image_name }} {{ vm_storage }}
+      when: vm_created is succeeded
+
+    - name: Attach and configure disk
+      command: >
+        qm set {{ vmid }}
+        --scsihw virtio-scsi-pci
+        --scsi0 {{ vm_storage }}:vm-{{ vmid }}-disk-0
+        --boot c
+        --bootdisk scsi0
+      when: vm_created is succeeded
+
+    - name: Resize disk
+      command: qm resize {{ vmid }} scsi0 {{ vm_disk_size }}
+      when: vm_created is succeeded
+
+    - name: Add cloud-init drive
+      command: qm set {{ vmid }} --ide2 {{ vm_storage }}:cloudinit
+      when: vm_created is succeeded
+
+    - name: Enable auto-start
+      command: qm set {{ vmid }} --onboot 1
+      when: vm_created is succeeded
+
+    - name: Configure cloud-init network
+      command: >
+        qm set {{ vmid }}
+        --ipconfig0 ip={{ lan_ip }}/{{ lan_netmask }},gw={{ lan_gateway }}
+        --ipconfig1 ip={{ services_ip }}/{{ services_netmask }}
+        --nameserver {{ lan_gateway }}
+        --cicustom "user=local:snippets/subnet-router-{{ vmid }}.yml"
+      when: vm_created is succeeded
+
+    - name: Start VM
+      command: qm start {{ vmid }}
+      when: vm_created is succeeded
+
+    - name: Wait for VM to be running
+      command: qm status {{ vmid }}
+      register: vm_status
+      until: vm_status.stdout.find('running') != -1
+      retries: 30
+      delay: 2
+
+    - name: Wait for SSH to be available on Services IP
+      wait_for:
+        host: "{{ services_ip }}"
+        port: 22
+        delay: 10
+        timeout: 300
+
+    # Verify Tailscale setup
+    - name: Wait for Tailscale setup to complete
+      pause:
+        seconds: 30
+        prompt: "Waiting for cloud-init to complete Tailscale setup..."
+
+    - name: Check Tailscale status on subnet router
+      command: ssh -o StrictHostKeyChecking=no debian@{{ services_ip }} "tailscale status"
+      register: tailscale_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display Tailscale status
+      debug:
+        msg: "{{ tailscale_status.stdout_lines }}"
+      when: tailscale_status.rc == 0
+
+    # Approve subnet routes on Headscale
+    - name: Get subnet router node ID from Headscale
+      delegate_to: container-host
+      command: podman exec headscale headscale nodes list -o json
+      register: headscale_nodes
+      changed_when: false
+
+    - name: Parse subnet router node ID
+      set_fact:
+        subnet_router_node_id: "{{ (headscale_nodes.stdout | from_json | selectattr('name', 'equalto', vm_name) | first).id }}"
+
+    - name: Enable subnet routes on Headscale
+      delegate_to: container-host
+      command: >
+        podman exec headscale headscale routes enable
+        -i {{ subnet_router_node_id }}
+        -r {{ lan_ip.rsplit('.', 1)[0] }}.0/24
+      register: route_enabled
+      changed_when: true
+
+    - name: Display deployment summary
+      debug:
+        msg:
+          - ""
+          - "=========================================="
+          - "   DEPLOYMENT COMPLETE"
+          - "=========================================="
+          - ""
+          - "VM ID: {{ vmid }}"
+          - "VM Name: {{ vm_name }}"
+          - "LAN IP: {{ lan_ip }}"
+          - "Services IP (management): {{ services_ip }}"
+          - ""
+          - "Tailscale Status: Connected to {{ headscale_server_url }}"
+          - "Advertised Route: {{ lan_ip.rsplit('.', 1)[0] }}.0/24"
+          - "Route Status: {{ 'Enabled' if route_enabled.rc == 0 else 'Failed' }}"
+          - ""
+          - "Next Steps:"
+          - "  1. Add subnet-router to Semaphore inventory (IP: {{ services_ip }})"
+          - "  2. Add WAN → Headscale firewall rule for remote access"
+          - "  3. Test VPN connection from remote device"
+          - ""
