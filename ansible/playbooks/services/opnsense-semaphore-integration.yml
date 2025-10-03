@@ -296,43 +296,45 @@
       set_fact:
         existing_inventory: "{{ existing_inventories.json | selectattr('name', 'equalto', inventory_name) | list | first | default(false) }}"
 
-    - name: Create inventory in Semaphore
-      uri:
-        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
-        method: POST
-        headers:
-          Authorization: "Bearer {{ semaphore_token }}"
-        body_format: json
-        body:
-          name: "{{ inventory_name }}"
-          type: "static"
-          project_id: "{{ project_id | int }}"
-          inventory: "{{ inventory_yaml }}"
-          ssh_key_id: "{{ ssh_key_id | int }}"
-        status_code: [201, 204]
+    - name: Create inventory in Semaphore (using jq for proper JSON types)
+      shell: |
+        jq -n \
+          --arg name "{{ inventory_name }}" \
+          --arg type "static" \
+          --argjson pid {{ project_id }} \
+          --arg inv "{{ inventory_yaml }}" \
+          --argjson keyid {{ ssh_key_id }} \
+          '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $keyid}' | \
+        curl -sS -f \
+          -H "Authorization: Bearer {{ semaphore_token }}" \
+          -H "Content-Type: application/json" \
+          -d @- \
+          "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
       register: create_inventory_result
       when: not existing_inventory
+      changed_when: true
 
-    - name: Update existing inventory in Semaphore
-      uri:
-        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory/{{ existing_inventory.id }}"
-        method: PUT
-        headers:
-          Authorization: "Bearer {{ semaphore_token }}"
-        body_format: json
-        body:
-          name: "{{ inventory_name }}"
-          type: "static"
-          project_id: "{{ project_id | int }}"
-          inventory: "{{ inventory_yaml }}"
-          ssh_key_id: "{{ ssh_key_id | int }}"
-        status_code: [200, 204]
+    - name: Update existing inventory in Semaphore (using jq for proper JSON types)
+      shell: |
+        jq -n \
+          --arg name "{{ inventory_name }}" \
+          --arg type "static" \
+          --argjson pid {{ project_id }} \
+          --arg inv "{{ inventory_yaml }}" \
+          --argjson keyid {{ ssh_key_id }} \
+          '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $keyid}' | \
+        curl -sS -f -X PUT \
+          -H "Authorization: Bearer {{ semaphore_token }}" \
+          -H "Content-Type: application/json" \
+          -d @- \
+          "{{ semaphore_url }}/api/project/{{ project_id }}/inventory/{{ existing_inventory.id }}"
       register: update_inventory_result
       when: existing_inventory
+      changed_when: true
 
     - name: Get final inventory ID
       set_fact:
-        inventory_id: "{{ create_inventory_result.json.id if not existing_inventory else existing_inventory.id }}"
+        inventory_id: "{{ ((create_inventory_result.stdout | from_json).id if not existing_inventory else existing_inventory.id) | int }}"
 
     - name: Report inventory status
       debug:
