@@ -299,6 +299,14 @@
                 ansible_host: {{ services_ip }}
                 ansible_user: alpine
 
+    - name: Debug SSH key ID and inventory
+      debug:
+        msg:
+          - "SSH Key ID: {{ ssh_key_id }}"
+          - "SSH Key ID type: {{ ssh_key_id | type_debug }}"
+          - "Project ID: {{ project_id }}"
+          - "Inventory YAML: {{ inventory_yaml }}"
+
     - name: Create subnet-router inventory in Semaphore
       uri:
         url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
