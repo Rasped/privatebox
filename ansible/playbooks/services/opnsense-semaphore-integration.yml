@@ -229,7 +229,7 @@
             "type": "ssh",
             "project_id": {{ project_id | int }},
             "ssh": {
-              "private_key": {{ (ssh_private_key_content.content | b64decode).decode('utf-8') | to_json }}
+              "private_key": {{ ssh_private_key_content.content | b64decode | to_json }}
             }
           }
         status_code: [201, 204]
@@ -248,7 +248,7 @@
             "type": "ssh",
             "project_id": {{ project_id | int }},
             "ssh": {
-              "private_key": {{ (ssh_private_key_content.content | b64decode).decode('utf-8') | to_json }}
+              "private_key": {{ ssh_private_key_content.content | b64decode | to_json }}
             }
           }
         status_code: [200, 204]
