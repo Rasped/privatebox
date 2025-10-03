@@ -274,7 +274,7 @@
 
     - name: Set SSH key ID
       set_fact:
-        ssh_key_id: "{{ ssh_key_response.json.id if existing_key_id | int == 0 else existing_key_id }}"
+        ssh_key_id: "{{ (ssh_key_response.json.id if existing_key_id | int == 0 else existing_key_id) | int }}"
 
     # Create inventory in Semaphore
     - name: Check if inventory already exists
