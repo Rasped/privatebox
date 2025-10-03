@@ -347,9 +347,19 @@
           debug:
             msg: "{{ user_create.stdout if user_create.rc == 0 else 'User already exists or creation failed' }}"
 
+        - name: Get user ID for admin user
+          command: >
+            podman exec {{ service_name }} headscale users list -o json
+          register: user_list
+          changed_when: false
+
+        - name: Parse admin user ID
+          set_fact:
+            headscale_admin_user_id: "{{ (user_list.stdout | from_json | selectattr('name', 'equalto', headscale_admin_user) | first).id }}"
+
         - name: Generate pre-authentication key
           command: >
-            podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user }} --expiration 90d --reusable
+            podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user_id }} --expiration 90d --reusable
           register: preauth_key
           changed_when: true
 
