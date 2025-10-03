@@ -90,6 +90,11 @@
       register: proxmox_ssh_key
       failed_when: false
 
+    - name: Hash password for cloud-init
+      command: openssl passwd -6 "{{ SERVICES_PASSWORD }}"
+      register: hashed_password
+      changed_when: false
+
     - name: Generate cloud-init user-data
       copy:
         dest: "/var/lib/vz/snippets/subnet-router-{{ vmid }}.yml"
@@ -104,7 +109,7 @@
               sudo: ALL=(ALL) NOPASSWD:ALL
               shell: /bin/sh
               lock_passwd: false
-              passwd: {{ SERVICES_PASSWORD | password_hash('sha512') }}
+              passwd: {{ hashed_password.stdout }}
               ssh_authorized_keys:
                 - {{ (proxmox_ssh_key.content | b64decode).strip() }}
 
