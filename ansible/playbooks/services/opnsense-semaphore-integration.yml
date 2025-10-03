@@ -224,6 +224,15 @@
       check_mode: false
       no_log: true
 
+    - name: Prepare SSH key request body
+      set_fact:
+        ssh_key_body:
+          name: "{{ key_name }}"
+          type: "ssh"
+          project_id: "{{ project_id | int }}"
+          ssh:
+            private_key: "{{ decoded_private_key.stdout }}"
+
     - name: Create SSH key in Semaphore
       uri:
         url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
@@ -231,12 +240,7 @@
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
         body_format: json
-        body:
-          name: "{{ key_name }}"
-          type: "ssh"
-          project_id: {{ project_id | int }}
-          ssh:
-            private_key: "{{ decoded_private_key.stdout }}"
+        body: "{{ ssh_key_body }}"
         status_code: [201, 204]
       register: create_key_result
       when: not existing_key
@@ -248,12 +252,7 @@
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
         body_format: json
-        body:
-          name: "{{ key_name }}"
-          type: "ssh"
-          project_id: {{ project_id | int }}
-          ssh:
-            private_key: "{{ decoded_private_key.stdout }}"
+        body: "{{ ssh_key_body }}"
         status_code: [200, 204]
       register: update_key_result
       when: existing_key
