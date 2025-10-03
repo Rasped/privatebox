@@ -187,10 +187,11 @@
                 update_frequency: 24h
 
               # DNS configuration
-              dns_config:
+              dns:
                 nameservers:
-                  - 1.1.1.1
-                  - 8.8.8.8
+                  global:
+                    - 1.1.1.1
+                    - 8.8.8.8
                 magic_dns: true
                 base_domain: headscale.local
 
@@ -200,7 +201,8 @@
                 level: info
 
               # ACL policy file (optional)
-              acl_policy_path: ""
+              policy:
+                path: ""
 
               # Unix socket
               unix_socket: /var/run/headscale/headscale.sock
