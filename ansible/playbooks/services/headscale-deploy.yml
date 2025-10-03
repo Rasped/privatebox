@@ -1,5 +1,5 @@
 ---
-- name: "Headscale: Deploy VPN Control Server"
+- name: "Headscale 1: Deploy VPN Control Server"
   hosts: container-host
   become: true
   gather_facts: true
