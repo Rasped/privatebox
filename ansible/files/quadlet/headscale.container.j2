@@ -1,0 +1,89 @@
+[Unit]
+Description=Headscale - Open source Tailscale control server
+Documentation=https://github.com/juanfont/headscale
+Documentation=https://headscale.net/
+Wants=network-online.target
+After=network-online.target
+{% if use_system_quadlet | default(true) %}
+Before=multi-user.target
+{% endif %}
+
+[Container]
+# Container image
+Image={{ container_image_registry | default('docker.io') }}/{{ headscale_image }}:{{ headscale_version }}
+ContainerName=headscale
+
+# Network configuration
+PublishPort={{ ansible_default_ipv4.address }}:{{ headscale_web_port }}:8080
+PublishPort={{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}:50443
+{% if headscale_metrics_port is defined %}
+PublishPort={{ ansible_default_ipv4.address }}:{{ headscale_metrics_port }}:9090
+{% endif %}
+
+# Volume mounts
+Volume={{ headscale_data_dir }}:/var/lib/headscale:{{ volume_mount_options | default('Z') }}
+Volume={{ headscale_config_dir }}:/etc/headscale:{{ volume_mount_options | default('Z') }}
+
+# Environment variables
+Environment="TZ={{ timezone | default('UTC') }}"
+
+# Headscale command - serve with config
+Exec=headscale serve
+
+# Security settings
+SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}
+NoNewPrivileges={{ container_no_new_privileges | default('true') | lower }}
+{% if container_drop_capabilities is defined %}
+{% for cap in container_drop_capabilities %}
+DropCapability={{ cap }}
+{% endfor %}
+{% endif %}
+
+# Resource limits
+{% if headscale_memory_limit is defined %}
+MemoryLimit={{ headscale_memory_limit }}
+{% endif %}
+{% if headscale_cpu_quota is defined %}
+CPUQuota={{ headscale_cpu_quota }}
+{% endif %}
+
+# User namespace
+{% if container_user_namespace is defined %}
+UserNS={{ container_user_namespace }}
+{% endif %}
+
+# Health check
+HealthCmd=/bin/sh -c "wget -q --spider http://localhost:8080/health || exit 1"
+HealthInterval={{ health_check_interval | default('30s') }}
+HealthRetries={{ health_check_retries | default(3) }}
+HealthStartPeriod={{ health_check_start_period | default('60s') }}
+HealthTimeout={{ health_check_timeout | default('10s') }}
+
+# Logging
+{% if container_log_driver is defined %}
+LogDriver={{ container_log_driver }}
+{% endif %}
+
+# Pull policy
+Pull={{ container_pull_policy | default('missing') }}
+
+# Auto-update disabled - manual updates only via Semaphore
+
+[Service]
+# Restart policy
+Restart={{ container_restart_policy | default('always') }}
+RestartSec={{ container_restart_sec | default(30) }}
+
+# Systemd service settings
+TimeoutStartSec={{ systemd_timeout_start_sec | default(900) }}
+TimeoutStopSec={{ systemd_timeout_stop_sec | default(90) }}
+
+# Run pre-start commands if needed
+{% if headscale_data_dir is defined %}
+ExecStartPre=/bin/mkdir -p {{ headscale_data_dir }}
+ExecStartPre=/bin/mkdir -p {{ headscale_config_dir }}
+{% endif %}
+
+[Install]
+# Enable service at boot
+WantedBy=multi-user.target default.target
