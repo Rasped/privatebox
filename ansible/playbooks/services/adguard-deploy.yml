@@ -571,6 +571,12 @@
       when: confirm_deploy | bool
       tags: [adguard, dns-switch]
       block:
+        - name: Create resolved.conf.d directory
+          file:
+            path: /etc/systemd/resolved.conf.d
+            state: directory
+            mode: '0755'
+
         - name: Update systemd-resolved to use AdGuard DNS
           copy:
             content: |
@@ -580,25 +586,6 @@
               Domains=~.
             dest: /etc/systemd/resolved.conf.d/adguard.conf
             mode: '0644'
-          register: resolved_config
-
-        - name: Create resolved.conf.d directory if needed
-          file:
-            path: /etc/systemd/resolved.conf.d
-            state: directory
-            mode: '0755'
-          when: resolved_config.failed is defined and resolved_config.failed
-
-        - name: Update systemd-resolved to use AdGuard DNS (retry)
-          copy:
-            content: |
-              [Resolve]
-              DNS=127.0.0.1
-              FallbackDNS=9.9.9.9
-              Domains=~.
-            dest: /etc/systemd/resolved.conf.d/adguard.conf
-            mode: '0644'
-          when: resolved_config.failed is defined and resolved_config.failed
 
         - name: Restart systemd-resolved
           systemd:
