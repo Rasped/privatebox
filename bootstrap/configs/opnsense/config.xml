@@ -370,6 +370,42 @@
         <port>80</port>
       </destination>
     </rule>
+    <rule uuid="0597b4c0-ee15-45b9-b80a-98cd97521ee3">
+      <type>pass</type>
+      <interface>wan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <statetype>keep state</statetype>
+      <descr>Allow Headscale VPN Control from Internet</descr>
+      <direction>in</direction>
+      <log>0</log>
+      <quick>1</quick>
+      <protocol>tcp</protocol>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <address>(self)</address>
+        <port>8082</port>
+      </destination>
+    </rule>
+    <rule uuid="fa566202-410f-4baf-a726-38f589304fe4">
+      <type>pass</type>
+      <interface>wan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <statetype>keep state</statetype>
+      <descr>Allow WireGuard to Subnet Router from Internet</descr>
+      <direction>in</direction>
+      <log>0</log>
+      <quick>1</quick>
+      <protocol>udp</protocol>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <address>(self)</address>
+        <port>41641</port>
+      </destination>
+    </rule>
     <rule uuid="ssh-lan-access-001">
       <type>pass</type>
       <interface>lan</interface>
@@ -1543,6 +1579,36 @@
     <outbound>
       <mode>automatic</mode>
     </outbound>
+    <rule>
+      <uuid>81f771af-b2fa-4e0f-9ba6-5b04955b76da</uuid>
+      <interface>wan</interface>
+      <protocol>tcp</protocol>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <address>(self)</address>
+        <port>8082</port>
+      </destination>
+      <target>10.10.20.10</target>
+      <local-port>8082</local-port>
+      <descr>Headscale VPN Control Server</descr>
+    </rule>
+    <rule>
+      <uuid>87a3793d-e8db-4e2a-bb44-00454fb388e2</uuid>
+      <interface>wan</interface>
+      <protocol>udp</protocol>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <address>(self)</address>
+        <port>41641</port>
+      </destination>
+      <target>10.10.10.10</target>
+      <local-port>41641</local-port>
+      <descr>Subnet Router WireGuard Tunnel</descr>
+    </rule>
   </nat>
   <syslog/>
   <unbound>
