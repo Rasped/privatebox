@@ -32,6 +32,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Idempotent and deterministic; add retries/timeouts; write logs and markers.
 - Never commit plaintext secrets. Use Ansible Vault and Semaphore environments.
 - **Always commit and push changes immediately** - Semaphore pulls from GitHub; uncommitted code won't deploy.
+- **On errors: investigate only** - Present problem clearly, ask for guidance. Don't attempt fixes without direction.
 
 ## Target End State
 - One command on Proxmox boots a Debian 13 management VM.
