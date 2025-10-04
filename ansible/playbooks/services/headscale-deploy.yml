@@ -356,7 +356,7 @@
 
         - name: Generate pre-authentication key
           command: >
-            podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user_id }} --expiration 90d --reusable
+            podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user_id }} --expiration 30m --reusable
           register: preauth_key
           changed_when: true
 
@@ -367,7 +367,7 @@
               =================================
               User: {{ headscale_admin_user }}
               Key: {{ preauth_key.stdout | trim }}
-              Expiration: 90 days
+              Expiration: 30 minutes
               Reusable: Yes
 
               Use this key to register new clients:
