@@ -116,12 +116,26 @@ class SemaphoreOrchestrator:
             print(f"✗ Error getting templates: {e}")
             return None
 
-    def find_template_by_name(self, templates, name):
-        """Find a template by its name."""
-        for template in templates:
-            if template.get('name') == name:
-                return template
-        return None
+    def find_template_by_name(self, name):
+        """Find a template by its name with a fresh API call."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/project/{self.project_id}/templates",
+                headers=self.headers,
+                timeout=10
+            )
+            if response.status_code == 200:
+                templates = response.json()
+                for template in templates:
+                    if template.get('name') == name:
+                        return template
+                return None
+            else:
+                print(f"✗ Failed to get templates: {response.status_code}")
+                return None
+        except requests.exceptions.RequestException as e:
+            print(f"✗ Error getting templates: {e}")
+            return None
 
     def execute_template(self, template_id, template_name):
         """Execute a template and return the task ID."""
@@ -233,15 +247,6 @@ class SemaphoreOrchestrator:
         if not self.test_authentication():
             return False
 
-        # Get all templates
-        print("\n=== Getting Available Templates ===")
-        templates = self.get_templates()
-        if not templates:
-            print("✗ Failed to retrieve templates")
-            return False
-
-        print(f"✓ Found {len(templates)} templates")
-
         # Execute templates in sequence
         print(f"\n=== Executing Templates in Sequence ===")
         print(f"Sequence: {' → '.join(self.template_sequence)}")
@@ -250,13 +255,12 @@ class SemaphoreOrchestrator:
         failed_template = None
 
         for template_name in self.template_sequence:
-            # Find template by name
-            template = self.find_template_by_name(templates, template_name)
+            # Find template by name (fresh lookup each time)
+            template = self.find_template_by_name(template_name)
             if not template:
                 print(f"\n✗ Template not found: {template_name}")
-                print("  Available templates:")
-                for t in templates:
-                    print(f"    - {t.get('name')}")
+                print("  Note: This lookup is done just-in-time")
+                print("  If this template should exist, check Semaphore UI")
                 failed_template = template_name
                 break
 
