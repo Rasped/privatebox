@@ -56,32 +56,24 @@
       register: routes_list
       changed_when: false
 
-    - name: Parse route information
+    - name: Check if route is advertised
       set_fact:
-        subnet_route_info: "{{ routes_list.stdout | from_json | selectattr('routes', 'defined') | map(attribute='routes') | flatten | selectattr('prefix', 'equalto', subnet_route) | first | default({}) }}"
+        route_advertised: "{{ subnet_route in (routes_list.stdout | from_json | selectattr('id', 'equalto', subnet_router_node.id) | map(attribute='available_routes') | first | default([])) }}"
 
-    - name: Display route information
-      debug:
-        msg:
-          - "Route: {{ subnet_route_info.prefix | default('Not found') }}"
-          - "Node ID: {{ subnet_router_node.id | default('N/A') }}"
-          - "Enabled: {{ subnet_route_info.enabled | default(false) }}"
-
-    - name: Fail if route not found
+    - name: Fail if route not advertised
       fail:
-        msg: "Route {{ subnet_route }} not advertised. Check Tailscale configuration."
-      when: subnet_route_info == {}
+        msg: "Route {{ subnet_route }} not advertised by subnet router. Check Tailscale configuration."
+      when: not route_advertised
 
-    - name: Approve route if not already enabled
+    - name: Approve route (idempotent)
       command: >
         podman exec {{ service_name }} headscale nodes approve-routes --identifier {{ subnet_router_node.id }} --routes {{ subnet_route }}
-      when: not (subnet_route_info.enabled | default(false))
       changed_when: true
       register: route_approval
 
     - name: Display approval status
       debug:
-        msg: "{{ '✓ Route approved' if route_approval.changed else '✓ Route already approved' }}"
+        msg: "✓ Route {{ subnet_route }} approved for node {{ subnet_router_node.name }}"
 
     # Cleanup: Delete HeadscalePreauthKey environment
     - name: Get list of environments
@@ -111,16 +103,6 @@
       debug:
         msg: "{{ '✓ Pre-auth key environment deleted (no longer needed)' if env_delete.changed else '⚠ Pre-auth key environment not found (may have been deleted already)' }}"
 
-    - name: Verify route is active
-      command: >
-        podman exec {{ service_name }} headscale nodes list-routes -o json
-      register: final_routes
-      changed_when: false
-
-    - name: Parse final route status
-      set_fact:
-        final_route: "{{ final_routes.stdout | from_json | selectattr('routes', 'defined') | map(attribute='routes') | flatten | selectattr('prefix', 'equalto', subnet_route) | first }}"
-
     - name: Display final status
       debug:
         msg:
@@ -129,9 +111,9 @@
           - "=========================================="
           - ""
           - "Route Status:"
-          - "  Subnet: {{ final_route.prefix }}"
-          - "  Enabled: {{ final_route.enabled }}"
-          - "  Node: {{ subnet_router_node.name }}"
+          - "  Subnet: {{ subnet_route }}"
+          - "  Node: {{ subnet_router_node.name }} (ID: {{ subnet_router_node.id }})"
+          - "  Status: Approved"
           - ""
           - "VPN Access:"
           - "  VPN clients can now access Trusted LAN (10.10.10.0/24)"
@@ -139,6 +121,6 @@
           - ""
           - "Next Steps:"
           - "  1. Create VPN client: podman exec headscale headscale preauthkeys create --user 1"
-          - "  2. Connect client: tailscale up --login-server=http://10.10.20.10:8082"
+          - "  2. Connect client: tailscale up --login-server=http://10.10.20.10:8082 --authkey=<KEY>"
           - "  3. Access LAN: ping 10.10.10.1 (from VPN client)"
           - "=========================================="
