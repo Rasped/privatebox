@@ -146,7 +146,7 @@
         --memory {{ vm_memory }}
         --cores {{ vm_cores }}
         --cpu host
-        --net0 virtio,bridge=vmbr1,tag=10
+        --net0 virtio,bridge=vmbr1
         --net1 virtio,bridge=vmbr1,tag=20
         --serial0 socket
         --vga serial0
