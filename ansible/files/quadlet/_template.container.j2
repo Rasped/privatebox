@@ -73,7 +73,7 @@ UserNS={{ container_user_namespace }}
 # Group=1000
 
 # Health check
-HealthCmd=/bin/sh -c "wget -q --spider http://localhost:HEALTH_PORT/health || exit 1"
+HealthCmd=/bin/sh -c 'wget -q --spider http://localhost:HEALTH_PORT/health || exit 1'
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}
@@ -81,7 +81,7 @@ HealthTimeout={{ health_check_timeout | default('10s') }}
 
 # Alternative health check examples:
 # HealthCmd=/usr/bin/curl -f http://localhost:HEALTH_PORT/ || exit 1
-# HealthCmd=/bin/sh -c "nc -z localhost SERVICE_PORT || exit 1"
+# HealthCmd=/bin/sh -c 'nc -z localhost SERVICE_PORT || exit 1'
 
 # Logging
 {% if container_log_driver is defined %}

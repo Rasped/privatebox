@@ -23,7 +23,7 @@ SecurityLabelDisable={{ container_security_label_disable | default('false') | lo
 NoNewPrivileges={{ container_no_new_privileges | default('true') | lower }}
 
 # Health check
-HealthCmd=/bin/sh -c "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"
+HealthCmd=/bin/sh -c 'wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1'
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}
