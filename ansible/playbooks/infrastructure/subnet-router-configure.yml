@@ -58,7 +58,6 @@
         --authkey={{ preauth_key }}
         --advertise-routes={{ advertise_routes }}
         --accept-dns=false
-        --port=41641
       register: tailscale_up
       changed_when: true
       when: not (already_connected | default(false))
