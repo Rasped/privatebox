@@ -264,7 +264,7 @@
         src: "/tmp/subnet-router-{{ vmid }}-private-key"
       register: private_key_file
 
-    # Register SSH key in Semaphore (delete+create pattern to ensure fresh key)
+    # Register SSH key in Semaphore
     - name: Check if SSH key already exists in Semaphore
       uri:
         url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
@@ -278,16 +278,7 @@
       set_fact:
         existing_key_id: "{{ (existing_keys.json | selectattr('name', 'equalto', 'subnet-router') | first).id | default(0) }}"
 
-    - name: Delete existing SSH key if present
-      uri:
-        url: "{{ semaphore_url }}/api/project/{{ project_id }}/keys/{{ existing_key_id }}"
-        method: DELETE
-        headers:
-          Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
-        status_code: [204]
-      when: existing_key_id | int != 0
-
-    - name: Register new SSH key in Semaphore (using jq for proper JSON types)
+    - name: Register SSH key in Semaphore (using jq for proper JSON types)
       shell: |
         jq -n \
           --arg name "subnet-router" \
@@ -301,13 +292,14 @@
           -d @- \
           "{{ semaphore_url }}/api/project/{{ project_id }}/keys"
       register: ssh_key_response
+      when: existing_key_id | int == 0
       changed_when: true
 
     - name: Set SSH key ID
       set_fact:
-        ssh_key_id: "{{ (ssh_key_response.stdout | from_json).id | int }}"
+        ssh_key_id: "{{ ((ssh_key_response.stdout | from_json).id if existing_key_id | int == 0 else existing_key_id) | int }}"
 
-    # Create inventory in Semaphore (delete+create pattern to ensure fresh SSH key reference)
+    # Create inventory in Semaphore
     - name: Check if inventory already exists
       uri:
         url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
@@ -320,15 +312,6 @@
     - name: Parse existing inventory ID
       set_fact:
         existing_inventory_id: "{{ (existing_inventories.json | selectattr('name', 'equalto', 'subnet-router') | first).id | default(0) }}"
-
-    - name: Delete existing inventory if present
-      uri:
-        url: "{{ semaphore_url }}/api/project/{{ project_id }}/inventory/{{ existing_inventory_id }}"
-        method: DELETE
-        headers:
-          Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
-        status_code: [204]
-      when: existing_inventory_id | int != 0
 
     - name: Build inventory YAML
       set_fact:
@@ -354,6 +337,7 @@
           -d @- \
           "{{ semaphore_url }}/api/project/{{ project_id }}/inventory"
       register: inventory_response
+      when: existing_inventory_id | int == 0
       changed_when: true
 
     - name: Remove temporary private key file
