@@ -1443,7 +1443,7 @@
         <from>10.10.10.100</from>
         <to>10.10.10.200</to>
       </range>
-      <dnsserver>10.10.20.1</dnsserver>
+      <dnsserver>10.10.20.10</dnsserver>
       <gateway>10.10.10.1</gateway>
       <domain>privatebox.local</domain>
     </lan>
@@ -1453,7 +1453,7 @@
         <from>10.10.30.100</from>
         <to>10.10.30.120</to>
       </range>
-      <dnsserver>10.10.20.1</dnsserver>
+      <dnsserver>10.10.20.10</dnsserver>
       <gateway>10.10.30.1</gateway>
       <domain>privatebox.local</domain>
     </opt2>
@@ -1463,7 +1463,7 @@
         <from>10.10.40.100</from>
         <to>10.10.40.200</to>
       </range>
-      <dnsserver>10.10.20.1</dnsserver>
+      <dnsserver>10.10.20.10</dnsserver>
       <gateway>10.10.40.1</gateway>
       <domain>privatebox.local</domain>
     </opt3>
@@ -1473,7 +1473,7 @@
         <from>10.10.50.100</from>
         <to>10.10.50.200</to>
       </range>
-      <dnsserver>10.10.20.1</dnsserver>
+      <dnsserver>10.10.20.10</dnsserver>
       <gateway>10.10.50.1</gateway>
       <domain>privatebox.local</domain>
     </opt4>
@@ -1483,7 +1483,7 @@
         <from>10.10.60.100</from>
         <to>10.10.60.150</to>
       </range>
-      <dnsserver>10.10.20.1</dnsserver>
+      <dnsserver>10.10.20.10</dnsserver>
       <gateway>10.10.60.1</gateway>
       <domain>privatebox.local</domain>
     </opt5>
@@ -1493,7 +1493,7 @@
         <from>10.10.70.100</from>
         <to>10.10.70.150</to>
       </range>
-      <dnsserver>10.10.20.1</dnsserver>
+      <dnsserver>10.10.20.10</dnsserver>
       <gateway>10.10.70.1</gateway>
       <domain>privatebox.local</domain>
     </opt6>
