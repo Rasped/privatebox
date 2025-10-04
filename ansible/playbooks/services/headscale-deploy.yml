@@ -376,6 +376,50 @@
             mode: '0600'
           when: preauth_key.rc == 0
 
+        - name: Check if HeadscalePreauthKey environment exists in Semaphore
+          uri:
+            url: "http://localhost:3000/api/project/1/environment"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
+            status_code: [200]
+          register: preauth_env_list
+          when: preauth_key.rc == 0
+
+        - name: Parse existing preauth environment ID
+          set_fact:
+            preauth_env_id: "{{ (preauth_env_list.json | selectattr('name', 'equalto', 'HeadscalePreauthKey') | first).id | default(0) }}"
+          when: preauth_key.rc == 0
+
+        - name: Create HeadscalePreauthKey environment in Semaphore
+          shell: |
+            jq -n \
+              --arg name "HeadscalePreauthKey" \
+              --argjson pid 1 \
+              --arg preauth_key "{{ preauth_key.stdout | trim }}" \
+              '{
+                name: $name,
+                project_id: $pid,
+                json: "{}",
+                env: "{}",
+                secrets: [
+                  {type: "var", name: "HEADSCALE_PREAUTH_KEY", secret: $preauth_key, operation: "create"}
+                ]
+              }' | \
+            curl -sS -f \
+              -H "Authorization: Bearer {{ SEMAPHORE_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "http://localhost:3000/api/project/1/environment"
+          register: preauth_env_create
+          when: preauth_key.rc == 0 and preauth_env_id | int == 0
+          changed_when: true
+
+        - name: Display preauth key registration result
+          debug:
+            msg: "✓ Headscale pre-auth key registered in Semaphore environment 'HeadscalePreauthKey'"
+          when: preauth_key.rc == 0
+
         - name: Generate API key for Headplane
           command: >
             podman exec {{ service_name }} headscale apikeys create --expiration 999d

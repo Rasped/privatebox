@@ -1,0 +1,144 @@
+---
+- name: "Subnet Router 3: Approve Routes"
+  hosts: container-host
+  become: true
+  gather_facts: true
+
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
+  vars:
+    service_name: "headscale"
+    subnet_route: "10.10.10.0/24"
+    semaphore_url: "http://localhost:3000"
+    project_id: 1
+
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "SemaphoreAPI"
+
+  tasks:
+    - name: Display approval header
+      debug:
+        msg:
+          - "=========================================="
+          - "   SUBNET ROUTER ROUTE APPROVAL"
+          - "=========================================="
+          - "Subnet: {{ subnet_route }}"
+
+    - name: Wait for node to register in Headscale
+      command: >
+        podman exec {{ service_name }} headscale nodes list -o json
+      register: nodes_list
+      until: nodes_list.stdout | from_json | length > 0
+      retries: 12
+      delay: 5
+      changed_when: false
+
+    - name: Parse node information
+      set_fact:
+        subnet_router_node: "{{ nodes_list.stdout | from_json | selectattr('name', 'contains', 'subnet-router') | first | default({}) }}"
+
+    - name: Display node information
+      debug:
+        msg:
+          - "Node found: {{ subnet_router_node.name | default('Not found') }}"
+          - "Node ID: {{ subnet_router_node.id | default('N/A') }}"
+
+    - name: Fail if node not found
+      fail:
+        msg: "Subnet router node not found in Headscale. Check that 'Subnet Router 2: Configure VPN Connection' completed successfully."
+      when: subnet_router_node == {}
+
+    - name: List advertised routes
+      command: >
+        podman exec {{ service_name }} headscale routes list -o json
+      register: routes_list
+      changed_when: false
+
+    - name: Parse route information
+      set_fact:
+        subnet_route_info: "{{ routes_list.stdout | from_json | json_query('routes[?prefix==`' + subnet_route + '`]') | first | default({}) }}"
+
+    - name: Display route information
+      debug:
+        msg:
+          - "Route: {{ subnet_route_info.prefix | default('Not found') }}"
+          - "Route ID: {{ subnet_route_info.id | default('N/A') }}"
+          - "Enabled: {{ subnet_route_info.enabled | default(false) }}"
+
+    - name: Fail if route not found
+      fail:
+        msg: "Route {{ subnet_route }} not advertised. Check Tailscale configuration."
+      when: subnet_route_info == {}
+
+    - name: Approve route if not already enabled
+      command: >
+        podman exec {{ service_name }} headscale routes enable {{ subnet_route_info.id }}
+      when: not (subnet_route_info.enabled | default(false))
+      changed_when: true
+      register: route_approval
+
+    - name: Display approval status
+      debug:
+        msg: "{{ '✓ Route approved' if route_approval.changed else '✓ Route already approved' }}"
+
+    # Cleanup: Delete HeadscalePreauthKey environment
+    - name: Get list of environments
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
+        status_code: [200]
+      register: environments_list
+
+    - name: Find HeadscalePreauthKey environment
+      set_fact:
+        preauth_env_id: "{{ (environments_list.json | selectattr('name', 'equalto', 'HeadscalePreauthKey') | first).id | default(0) }}"
+
+    - name: Delete HeadscalePreauthKey environment
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment/{{ preauth_env_id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
+        status_code: [204]
+      when: preauth_env_id | int > 0
+      register: env_delete
+
+    - name: Display cleanup result
+      debug:
+        msg: "{{ '✓ Pre-auth key environment deleted (no longer needed)' if env_delete.changed else '⚠ Pre-auth key environment not found (may have been deleted already)' }}"
+
+    - name: Verify route is active
+      command: >
+        podman exec {{ service_name }} headscale routes list -o json
+      register: final_routes
+      changed_when: false
+
+    - name: Parse final route status
+      set_fact:
+        final_route: "{{ final_routes.stdout | from_json | json_query('routes[?prefix==`' + subnet_route + '`]') | first }}"
+
+    - name: Display final status
+      debug:
+        msg:
+          - "=========================================="
+          - "   SUBNET ROUTER DEPLOYMENT COMPLETE"
+          - "=========================================="
+          - ""
+          - "Route Status:"
+          - "  Subnet: {{ final_route.prefix }}"
+          - "  Enabled: {{ final_route.enabled }}"
+          - "  Node: {{ subnet_router_node.name }}"
+          - ""
+          - "VPN Access:"
+          - "  VPN clients can now access Trusted LAN (10.10.10.0/24)"
+          - "  All traffic routes through subnet router node"
+          - ""
+          - "Next Steps:"
+          - "  1. Create VPN client: podman exec headscale headscale preauthkeys create --user 1"
+          - "  2. Connect client: tailscale up --login-server=http://10.10.20.10:8082"
+          - "  3. Access LAN: ping 10.10.10.1 (from VPN client)"
+          - "=========================================="

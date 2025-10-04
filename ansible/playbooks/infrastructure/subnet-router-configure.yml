@@ -1,0 +1,86 @@
+---
+- name: "Subnet Router 2: Configure VPN Connection"
+  hosts: subnet-router
+  gather_facts: false
+
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
+  vars:
+    headscale_server_url: "http://10.10.20.10:8082"
+    advertise_routes: "10.10.10.0/24"
+
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "HeadscalePreauthKey"
+      semaphore_inventory: "subnet-router"
+
+  tasks:
+    - name: Display configuration header
+      debug:
+        msg:
+          - "=========================================="
+          - "   SUBNET ROUTER VPN CONFIGURATION"
+          - "=========================================="
+          - "Headscale Server: {{ headscale_server_url }}"
+          - "Advertise Routes: {{ advertise_routes }}"
+
+    - name: Verify pre-auth key is available
+      fail:
+        msg: "HEADSCALE_PREAUTH_KEY environment variable not set"
+      when: lookup('env', 'HEADSCALE_PREAUTH_KEY') == ''
+
+    - name: Set pre-auth key fact
+      set_fact:
+        preauth_key: "{{ lookup('env', 'HEADSCALE_PREAUTH_KEY') }}"
+
+    - name: Check if Tailscale is already connected
+      command: tailscale status --json
+      register: tailscale_status
+      changed_when: false
+      failed_when: false
+
+    - name: Parse Tailscale status
+      set_fact:
+        already_connected: "{{ (tailscale_status.stdout | from_json).BackendState == 'Running' if tailscale_status.rc == 0 else false }}"
+      when: tailscale_status.rc == 0
+
+    - name: Display connection status
+      debug:
+        msg: "Tailscale already connected, skipping registration"
+      when: already_connected | default(false)
+
+    - name: Connect to Headscale
+      command: >
+        tailscale up
+        --login-server={{ headscale_server_url }}
+        --authkey={{ preauth_key }}
+        --advertise-routes={{ advertise_routes }}
+        --accept-dns=false
+      register: tailscale_up
+      changed_when: true
+      when: not (already_connected | default(false))
+
+    - name: Wait for connection to establish
+      pause:
+        seconds: 5
+      when: tailscale_up.changed
+
+    - name: Verify Tailscale connection
+      command: tailscale status
+      register: final_status
+      changed_when: false
+
+    - name: Display connection result
+      debug:
+        msg:
+          - "=========================================="
+          - "   SUBNET ROUTER CONFIGURED"
+          - "=========================================="
+          - ""
+          - "Tailscale Status:"
+          - "{{ final_status.stdout_lines }}"
+          - ""
+          - "Next Step:"
+          - "  Run 'Subnet Router 3: Approve Routes' to enable VPN access"
+          - "=========================================="

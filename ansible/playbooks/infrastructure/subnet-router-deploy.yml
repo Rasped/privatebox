@@ -210,6 +210,37 @@
       register: ssh_test
       changed_when: false
 
+    # Install Tailscale and configure system
+    - name: Install Tailscale and dependencies
+      command: >
+        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
+        "doas apk add tailscale iptables"
+      register: install_result
+      changed_when: true
+
+    - name: Enable IP forwarding
+      command: >
+        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
+        "echo 'net.ipv4.ip_forward=1' | doas tee /etc/sysctl.d/ip_forward.conf &&
+        doas sysctl -p /etc/sysctl.d/ip_forward.conf"
+      register: ipforward_result
+      changed_when: true
+
+    - name: Enable Tailscale service
+      command: >
+        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
+        "doas rc-update add tailscale default &&
+        doas rc-service tailscale start"
+      register: service_result
+      changed_when: true
+
+    - name: Display installation result
+      debug:
+        msg:
+          - "✓ Tailscale installed"
+          - "✓ IP forwarding enabled"
+          - "✓ Tailscale service enabled"
+
     # Generate SSH key on Alpine VM
     - name: Generate SSH key pair on Alpine VM
       command: >
