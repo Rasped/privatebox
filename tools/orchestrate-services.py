@@ -49,8 +49,11 @@ class SemaphoreOrchestrator:
             "OPNsense 1: Establish Secure Access",
             "OPNsense 2: Semaphore Integration",
             "OPNsense 3: Post-Configuration",
-            "Subnet Router 1: Create Alpine VM",
             "Headscale 1: Deploy VPN Control Server",
+            "Subnet Router 1: Create Alpine VM",
+            "Generate Templates",
+            "Subnet Router 2: Configure VPN Connection",
+            "Subnet Router 3: Approve Routes",
             "Homer 1: Deploy Dashboard Service"
         ]
 
