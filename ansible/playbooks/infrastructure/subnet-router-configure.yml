@@ -27,12 +27,12 @@
 
     - name: Verify pre-auth key is available
       fail:
-        msg: "HEADSCALE_PREAUTH_KEY environment variable not set"
-      when: lookup('env', 'HEADSCALE_PREAUTH_KEY') == ''
+        msg: "HEADSCALE_PREAUTH_KEY variable not set"
+      when: HEADSCALE_PREAUTH_KEY is not defined or HEADSCALE_PREAUTH_KEY == ''
 
     - name: Set pre-auth key fact
       set_fact:
-        preauth_key: "{{ lookup('env', 'HEADSCALE_PREAUTH_KEY') }}"
+        preauth_key: "{{ HEADSCALE_PREAUTH_KEY }}"
 
     - name: Check if Tailscale is already connected
       command: tailscale status --json
