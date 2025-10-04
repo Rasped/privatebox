@@ -2,7 +2,8 @@
 
 **Status**: Ready for Testing
 **Created**: 2025-10-04
-**Context**: Fresh implementation, needs full end-to-end validation
+**Updated**: 2025-10-04 (Firewall configuration added)
+**Context**: Implementation complete, needs full end-to-end validation including internet access
 
 ---
 
@@ -12,6 +13,19 @@
 - ✅ DNS configuration: Changed from 10.10.20.1 to 10.10.20.10 (AdGuard) in all VLANs
 - ✅ VLAN tagging: Removed tag=10 from subnet router net0 (LAN is untagged)
 - ✅ Verified: Subnet router has internet access, can reach LAN gateway
+
+### 1.5. Firewall Configuration (Committed, NOT Tested)
+**Added to `/bootstrap/configs/opnsense/config.xml`:**
+
+**NAT Port Forwards:**
+- ✅ WAN:8082/TCP → 10.10.20.10:8082 (Headscale control server)
+- ✅ WAN:41641/UDP → 10.10.10.10:41641 (Subnet router WireGuard)
+
+**WAN Firewall Rules:**
+- ✅ Allow inbound TCP on 8082 (Headscale control from internet)
+- ✅ Allow inbound UDP on 41641 (WireGuard tunnels from internet)
+
+**Purpose**: Enable VPN clients from internet to access Trusted LAN via direct WireGuard tunnels (Option B - full performance)
 
 ### 2. Headscale Subnet Router Automation (Committed, NOT Tested)
 
@@ -31,8 +45,9 @@
 3. **Subnet Router Configure** (new)
    - Runs on `subnet-router` inventory
    - Uses `HeadscalePreauthKey` environment
-   - Connects: `tailscale up --login-server=http://10.10.20.10:8082 --authkey=$KEY`
+   - Connects: `tailscale up --login-server=http://10.10.20.10:8082 --authkey=$KEY --port=41641`
    - Advertises routes: `10.10.10.0/24`
+   - Fixed port: 41641/UDP (for OPNsense NAT forwarding)
 
 4. **Subnet Router Approve** (new)
    - Runs on `container-host`
@@ -172,7 +187,35 @@ Route        | Node          | Enabled
 
 ---
 
-### Test 6: VPN Client Connection
+### Test 5.5: Firewall Configuration Verification
+**Objective**: Verify NAT and firewall rules are active in OPNsense
+
+**Steps**:
+```bash
+# From workstation (via Proxmox to OPNsense)
+# Check NAT rules
+ssh root@192.168.1.10 "ssh root@10.10.20.1 'cat /conf/config.xml | grep -A10 \"<nat>\"'"
+
+# Verify port forwards exist
+ssh root@192.168.1.10 "ssh root@10.10.20.1 'cat /conf/config.xml | grep -E \"8082|41641\"'"
+```
+
+**Expected Results**:
+- ✅ NAT rule for 8082/TCP → 10.10.20.10
+- ✅ NAT rule for 41641/UDP → 10.10.10.10
+- ✅ WAN firewall rule allowing 8082/TCP
+- ✅ WAN firewall rule allowing 41641/UDP
+
+**Check OPNsense GUI** (optional):
+1. Login to https://10.10.20.1
+2. Navigate to Firewall → NAT → Port Forward
+3. Verify two rules: Headscale (8082) and Subnet Router (41641)
+4. Navigate to Firewall → Rules → WAN
+5. Verify allow rules for both ports
+
+---
+
+### Test 6: VPN Client Connection (Local Network First)
 **Objective**: Verify VPN client can connect and access LAN
 
 **Prerequisites**:
@@ -216,7 +259,69 @@ curl http://10.10.20.10:8080  # AdGuard web UI
 
 ---
 
-### Test 7: Environment Cleanup
+### Test 7: VPN Client Connection (From Internet)
+**Objective**: Verify VPN works from external network (the real test!)
+
+**Prerequisites**:
+- Test device with Tailscale installed
+- Device on **different network** (mobile data, coffee shop WiFi, etc.)
+- Your public IP address known
+
+**Steps**:
+
+1. **Get your public IP** (from Proxmox):
+```bash
+ssh root@192.168.1.10 "curl -s https://ifconfig.me"
+```
+
+2. **Generate client pre-auth key** (from Proxmox):
+```bash
+ssh root@192.168.1.10 "ssh -o StrictHostKeyChecking=no debian@10.10.20.10 'sudo podman exec headscale headscale preauthkeys create --user 1 --expiration 1h' | tail -1"
+```
+
+3. **Connect client using public IP**:
+```bash
+# On external device
+tailscale up --login-server=http://<YOUR_PUBLIC_IP>:8082 --authkey=<KEY>
+```
+
+4. **Verify connection**:
+```bash
+# On external device
+tailscale status
+# Should show: Connected to Headscale, subnet-router peer listed
+```
+
+5. **Test WireGuard tunnel** (check if direct connection established):
+```bash
+# On external device
+tailscale netcheck
+# Look for: "DERP latency" vs "Direct connection"
+# Direct connection = firewall working! ✅
+```
+
+6. **Test LAN access** (from external device):
+```bash
+ping 10.10.10.10          # Subnet router LAN IP
+ping 10.10.20.10          # Management VM
+curl http://10.10.20.10:8080  # AdGuard web UI
+```
+
+**Expected Results**:
+- ✅ Client connects via public IP:8082
+- ✅ WireGuard establishes **direct tunnel** (not DERP relay) on port 41641
+- ✅ All pings succeed
+- ✅ Can access AdGuard web UI from internet
+- ✅ Low latency (<50ms typically, vs 100-200ms on DERP)
+
+**Troubleshooting**:
+- If client connects but uses DERP: Firewall port 41641/UDP not open correctly
+- If client can't connect at all: Port 8082/TCP not forwarded
+- If connection works but no LAN access: Route not approved in Headscale
+
+---
+
+### Test 8: Environment Cleanup
 **Objective**: Verify HeadscalePreauthKey deleted after approval
 
 **Steps**:

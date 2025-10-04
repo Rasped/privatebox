@@ -1,8 +1,14 @@
 # VPN Implementation Plan - WireGuard Only
 
-**Status**: Planning
+**Status**: Alternative/Future Approach
 **Last Updated**: 2025-10-01
-**Target Implementation**: v1.0
+**Target Implementation**: Post v1.0
+
+> **NOTE**: This document describes traditional WireGuard VPN via OPNsense.
+> **Current implementation uses Headscale mesh VPN** (see `subnet-router-implementation.md`).
+> This plan is kept for reference as an alternative/additional VPN option.
+
+---
 
 ---
 

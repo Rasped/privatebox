@@ -2,15 +2,18 @@
 
 **Status**: Ready for Implementation
 **Created**: 2025-10-03
-**Prerequisites**: ✅ Completed (Headscale API key generation added)
+**Updated**: 2025-10-04
+**Prerequisites**: ✅ Completed (Headscale API key generation added, port 8083 confirmed)
 
 ## Overview
 
 Deploy Headplane web UI for Headscale VPN control server. Headplane provides a modern, feature-complete web interface for managing Headscale nodes, users, routes, and ACLs.
 
 **Container Image**: `ghcr.io/tale/headplane:latest`
-**Port**: 8083 (internal 3000)
+**Deployment Host**: 10.10.20.10 (Management VM)
+**Port**: 8083 (internal 3000) - ✅ Confirmed available
 **Integration Mode**: Docker (recommended)
+**Access**: Internal only (LAN/Services VLAN) - no internet exposure needed
 
 ---
 
