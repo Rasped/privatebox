@@ -86,6 +86,33 @@ RUN pip3 install --no-cache-dir proxmoxer requests \
 USER semaphore
 EOF
 
+#==============================#
+# Wait for DNS to be ready
+#==============================#
+log "Waiting for DNS to be ready before building image..."
+DNS_READY=false
+MAX_WAIT=180  # 3 minutes max
+ELAPSED=0
+
+while [[ $ELAPSED -lt $MAX_WAIT ]]; do
+  if host galaxy.ansible.com >/dev/null 2>&1; then
+    DNS_READY=true
+    log "DNS is ready (galaxy.ansible.com resolved successfully)"
+    break
+  fi
+
+  if [[ $((ELAPSED % 10)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+    log "Waiting for DNS... (${ELAPSED}s elapsed)"
+  fi
+
+  sleep 2
+  ELAPSED=$((ELAPSED + 2))
+done
+
+if [[ "$DNS_READY" != "true" ]]; then
+  error_exit "DNS not ready after ${MAX_WAIT} seconds - cannot build Semaphore image"
+fi
+
 log "Building Semaphore image (localhost/semaphore-proxmox:latest)..."
 echo "PROGRESS:Building custom Semaphore image" >> /etc/privatebox-install-complete
 podman build --network=host -t localhost/semaphore-proxmox:latest /opt/semaphore || error_exit "Failed to build Semaphore image"
