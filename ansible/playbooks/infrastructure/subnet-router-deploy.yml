@@ -10,7 +10,7 @@
     # VM configuration
     vmid: 101
     vm_name: "privatebox-subnet-router"
-    vm_memory: 512
+    vm_memory: 384
     vm_cores: 1
     vm_disk_size: "4G"
     vm_storage: "local-lvm"
