@@ -115,6 +115,8 @@
           packages:
             - curl
             - ca-certificates
+            - tailscale
+            - iptables
 
           write_files:
             - path: /etc/network/interfaces
@@ -133,7 +135,21 @@
                 iface eth1 inet static
                     address {{ services_ip }}/{{ services_netmask }}
 
+            - path: /etc/sysctl.d/ip_forward.conf
+              permissions: '0644'
+              content: |
+                net.ipv4.ip_forward=1
+
           runcmd:
+            - sysctl -p /etc/sysctl.d/ip_forward.conf
+            - rc-update add tailscale default
+            - rc-service tailscale start
+            - mkdir -p /home/alpine/.ssh
+            - ssh-keygen -t ed25519 -f /home/alpine/.ssh/id_ed25519 -N '' -C 'subnet-router@privatebox'
+            - cat /home/alpine/.ssh/id_ed25519.pub >> /home/alpine/.ssh/authorized_keys
+            - chmod 700 /home/alpine/.ssh
+            - chmod 600 /home/alpine/.ssh/authorized_keys /home/alpine/.ssh/id_ed25519
+            - chown -R alpine:alpine /home/alpine/.ssh
             - echo "Subnet router VM ready"
 
           final_message: "Alpine subnet router VM deployed after $UPTIME seconds"
@@ -205,53 +221,29 @@
         delay: 10
         timeout: 180
 
-    - name: Test SSH connection with password
-      command: sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }} "hostname"
-      register: ssh_test
+    - name: Wait for cloud-init to complete
+      command: >
+        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
+        "cloud-init status --wait"
+      register: cloudinit_wait
+      changed_when: false
+      timeout: 300
+
+    - name: Verify cloud-init status
+      command: >
+        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
+        "cloud-init status --long"
+      register: cloudinit_status
       changed_when: false
 
-    # Install Tailscale and configure system
-    - name: Install Tailscale and dependencies
-      command: >
-        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
-        "doas apk add tailscale iptables"
-      register: install_result
-      changed_when: true
-
-    - name: Enable IP forwarding
-      command: >
-        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
-        "echo 'net.ipv4.ip_forward=1' | doas tee /etc/sysctl.d/ip_forward.conf &&
-        doas sysctl -p /etc/sysctl.d/ip_forward.conf"
-      register: ipforward_result
-      changed_when: true
-
-    - name: Enable Tailscale service
-      command: >
-        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
-        "doas rc-update add tailscale default &&
-        doas rc-service tailscale start"
-      register: service_result
-      changed_when: true
-
-    - name: Display installation result
+    - name: Display cloud-init result
       debug:
         msg:
+          - "✓ Cloud-init completed"
           - "✓ Tailscale installed"
           - "✓ IP forwarding enabled"
           - "✓ Tailscale service enabled"
-
-    # Generate SSH key on Alpine VM
-    - name: Generate SSH key pair on Alpine VM
-      command: >
-        sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }}
-        "mkdir -p /home/alpine/.ssh &&
-        ssh-keygen -t ed25519 -f /home/alpine/.ssh/id_ed25519 -N '' -C 'subnet-router@privatebox' &&
-        cat /home/alpine/.ssh/id_ed25519.pub >> /home/alpine/.ssh/authorized_keys &&
-        chmod 700 /home/alpine/.ssh &&
-        chmod 600 /home/alpine/.ssh/authorized_keys /home/alpine/.ssh/id_ed25519"
-      register: keygen_result
-      changed_when: true
+          - "✓ SSH key generated"
 
     - name: Retrieve private key from Alpine VM
       command: sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null alpine@{{ services_ip }} "cat /home/alpine/.ssh/id_ed25519"
@@ -368,7 +360,11 @@
           - "  VM Name: {{ vm_name }}"
           - "  LAN IP: {{ lan_ip }}"
           - "  Services IP: {{ services_ip }}"
-          - "  SSH Test: {{ ssh_test.stdout }}"
+          - "  Cloud-init: Completed successfully"
+          - ""
+          - "Installed Services:"
+          - "  Tailscale: Installed and enabled"
+          - "  IP Forwarding: Enabled"
           - ""
           - "Semaphore Integration:"
           - "  SSH Key: Registered as 'subnet-router'"
