@@ -115,8 +115,8 @@
           packages:
             - curl
             - ca-certificates
-            - tailscale
             - iptables
+            - gnupg
 
           write_files:
             - path: /etc/resolv.conf
@@ -131,6 +131,15 @@
 
           runcmd:
             - sysctl -p /etc/sysctl.d/99-ip_forward.conf
+            # Wait for network and DNS
+            - timeout 30 sh -c 'until ping -c1 8.8.8.8 >/dev/null 2>&1; do sleep 1; done'
+            - timeout 30 sh -c 'until ping -c1 pkgs.tailscale.com >/dev/null 2>&1; do sleep 1; done'
+            # Add Tailscale repository
+            - curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+            - echo "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian bookworm main" | tee /etc/apt/sources.list.d/tailscale.list
+            - apt-get update
+            - apt-get install -y tailscale
+            # Enable and start Tailscale
             - systemctl enable tailscaled
             - systemctl start tailscaled
             - mkdir -p /home/debian/.ssh
