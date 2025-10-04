@@ -129,11 +129,15 @@
                 iface eth0 inet static
                     address {{ lan_ip }}/{{ lan_netmask }}
                     gateway {{ lan_gateway }}
-                    dns-nameservers {{ lan_gateway }}
 
                 auto eth1
                 iface eth1 inet static
                     address {{ services_ip }}/{{ services_netmask }}
+
+            - path: /etc/resolv.conf
+              permissions: '0644'
+              content: |
+                nameserver 10.10.20.10
 
             - path: /etc/sysctl.d/ip_forward.conf
               permissions: '0644'
