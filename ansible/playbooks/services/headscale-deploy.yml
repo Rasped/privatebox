@@ -355,8 +355,8 @@
             headscale_admin_user_id: "{{ (user_list.stdout | from_json | selectattr('name', 'equalto', headscale_admin_user) | first).id }}"
 
         - name: Generate pre-authentication key
-          command: >
-            podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user_id }} --expiration 30m --reusable
+          shell: >
+            podman exec {{ service_name }} headscale preauthkeys create --user {{ headscale_admin_user_id }} --expiration 30m --reusable | head -1
           register: preauth_key
           changed_when: true
 
