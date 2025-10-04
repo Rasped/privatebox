@@ -75,34 +75,6 @@
       debug:
         msg: "✓ Route {{ subnet_route }} approved for node {{ subnet_router_node.name }}"
 
-    # Cleanup: Delete HeadscalePreauthKey environment
-    - name: Get list of environments
-      uri:
-        url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
-        status_code: [200]
-      register: environments_list
-
-    - name: Find HeadscalePreauthKey environment
-      set_fact:
-        preauth_env_id: "{{ (environments_list.json | selectattr('name', 'equalto', 'HeadscalePreauthKey') | first).id | default(0) }}"
-
-    - name: Delete HeadscalePreauthKey environment
-      uri:
-        url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment/{{ preauth_env_id }}"
-        method: DELETE
-        headers:
-          Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
-        status_code: [204]
-      when: preauth_env_id | int > 0
-      register: env_delete
-
-    - name: Display cleanup result
-      debug:
-        msg: "{{ '✓ Pre-auth key environment deleted (no longer needed)' if env_delete.changed else '⚠ Pre-auth key environment not found (may have been deleted already)' }}"
-
     - name: Display final status
       debug:
         msg:
