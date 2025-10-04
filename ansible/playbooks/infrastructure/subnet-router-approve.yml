@@ -52,19 +52,19 @@
 
     - name: List advertised routes
       command: >
-        podman exec {{ service_name }} headscale routes list -o json
+        podman exec {{ service_name }} headscale nodes list-routes -o json
       register: routes_list
       changed_when: false
 
     - name: Parse route information
       set_fact:
-        subnet_route_info: "{{ routes_list.stdout | from_json | json_query('routes[?prefix==`' + subnet_route + '`]') | first | default({}) }}"
+        subnet_route_info: "{{ routes_list.stdout | from_json | selectattr('routes', 'defined') | map(attribute='routes') | flatten | selectattr('prefix', 'equalto', subnet_route) | first | default({}) }}"
 
     - name: Display route information
       debug:
         msg:
           - "Route: {{ subnet_route_info.prefix | default('Not found') }}"
-          - "Route ID: {{ subnet_route_info.id | default('N/A') }}"
+          - "Node ID: {{ subnet_router_node.id | default('N/A') }}"
           - "Enabled: {{ subnet_route_info.enabled | default(false) }}"
 
     - name: Fail if route not found
@@ -74,7 +74,7 @@
 
     - name: Approve route if not already enabled
       command: >
-        podman exec {{ service_name }} headscale routes enable {{ subnet_route_info.id }}
+        podman exec {{ service_name }} headscale nodes approve-routes --identifier {{ subnet_router_node.id }} --routes {{ subnet_route }}
       when: not (subnet_route_info.enabled | default(false))
       changed_when: true
       register: route_approval
@@ -113,13 +113,13 @@
 
     - name: Verify route is active
       command: >
-        podman exec {{ service_name }} headscale routes list -o json
+        podman exec {{ service_name }} headscale nodes list-routes -o json
       register: final_routes
       changed_when: false
 
     - name: Parse final route status
       set_fact:
-        final_route: "{{ final_routes.stdout | from_json | json_query('routes[?prefix==`' + subnet_route + '`]') | first }}"
+        final_route: "{{ final_routes.stdout | from_json | selectattr('routes', 'defined') | map(attribute='routes') | flatten | selectattr('prefix', 'equalto', subnet_route) | first }}"
 
     - name: Display final status
       debug:
