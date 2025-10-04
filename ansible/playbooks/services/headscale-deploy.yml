@@ -409,7 +409,15 @@
               --argjson pid 1 \
               --arg api_key "{{ headscale_api_key }}" \
               --arg grpc_url "{{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}" \
-              '{name: $name, project_id: $pid, json: "{}", env: "{\"HEADSCALE_API_KEY\": \"" + $api_key + "\", \"HEADSCALE_GRPC_URL\": \"" + $grpc_url + "\"}"}' | \
+              '{
+                name: $name,
+                project_id: $pid,
+                json: ({HEADSCALE_GRPC_URL: $grpc_url} | tojson),
+                env: "{}",
+                secrets: [
+                  {type: "var", name: "HEADSCALE_API_KEY", secret: $api_key, operation: "create"}
+                ]
+              }' | \
             curl -sS -f \
               -H "Authorization: Bearer {{ SEMAPHORE_API_TOKEN }}" \
               -H "Content-Type: application/json" \
