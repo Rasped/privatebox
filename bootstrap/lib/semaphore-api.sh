@@ -134,11 +134,11 @@ create_semaphore_api_environment() {
     fi
     
     log_info "Creating SemaphoreAPI environment for project $project_id..."
-    
+
     local env_payload=$(jq -n \
         --arg name "SemaphoreAPI" \
         --argjson pid "$project_id" \
-        --arg url "http://${vm_ip}:3000" \
+        --arg url "https://${vm_ip}:2443" \
         --arg token "$api_token" \
         '{
             name: $name,
