@@ -148,8 +148,8 @@ check_services() {
     log "Checking service health..."
     
     # Check Portainer
-    if curl -sf "http://${vm_ip}:9000" > /dev/null 2>&1; then
-        display "  ✅ Portainer is accessible at http://${vm_ip}:9000"
+    if curl -sfk "https://${vm_ip}:1443/api/status" > /dev/null 2>&1; then
+        display "  ✅ Portainer is accessible at https://${vm_ip}:1443"
         log "Portainer health check passed"
     else
         display "  ⚠️  Portainer is not accessible"
@@ -158,8 +158,8 @@ check_services() {
     fi
     
     # Check Semaphore
-    if curl -sf "http://${vm_ip}:3000/api/ping" > /dev/null 2>&1; then
-        display "  ✅ Semaphore is accessible at http://${vm_ip}:3000"
+    if curl -sfk "https://${vm_ip}:2443/api/ping" > /dev/null 2>&1; then
+        display "  ✅ Semaphore is accessible at https://${vm_ip}:2443"
         log "Semaphore health check passed"
     else
         display "  ⚠️  Semaphore is not accessible"
@@ -182,17 +182,17 @@ check_services() {
     log "Checking Semaphore API configuration..."
     
     # Try to get Semaphore project via API
-    local api_check=$(curl -s -c - -X POST -H "Content-Type: application/json" \
+    local api_check=$(curl -sk -c - -X POST -H "Content-Type: application/json" \
         -d "{\"auth\": \"admin\", \"password\": \"${SERVICES_PASSWORD}\"}" \
-        "http://${vm_ip}:3000/api/auth/login" 2>/dev/null | grep 'semaphore')
+        "https://${vm_ip}:2443/api/auth/login" 2>/dev/null | grep 'semaphore')
     
     if [[ -n "$api_check" ]]; then
         display "  ✅ Semaphore API authentication working"
         
         # Check if PrivateBox project exists
         local cookie=$(echo "$api_check" | tail -1 | awk -F'\t' '{print $7}')
-        local projects=$(curl -s -H "Cookie: semaphore=$cookie" \
-            "http://${vm_ip}:3000/api/projects" 2>/dev/null)
+        local projects=$(curl -sk -H "Cookie: semaphore=$cookie" \
+            "https://${vm_ip}:2443/api/projects" 2>/dev/null)
         
         if echo "$projects" | grep -q "PrivateBox"; then
             display "  ✅ PrivateBox project configured"
@@ -261,13 +261,15 @@ main() {
     display "  SSH: ssh -i $SSH_KEY_PATH ${VM_USERNAME}@${VM_IP}"
     display ""
     display "Services:"
-    display "  Portainer: http://${VM_IP}:9000"
+    display "  Portainer: https://${VM_IP}:1443"
     display "    Username: admin"
     display "    Password: ${SERVICES_PASSWORD}"
     display ""
-    display "  Semaphore: http://${VM_IP}:3000"
+    display "  Semaphore: https://${VM_IP}:2443"
     display "    Username: admin"
     display "    Password: ${SERVICES_PASSWORD}"
+    display ""
+    display "  ⚠️  First visit: Click 'Advanced' → 'Proceed' to trust certificate"
     display ""
     display "Configuration saved to: $CONFIG_FILE"
     display "======================================"
