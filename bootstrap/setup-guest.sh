@@ -151,13 +151,12 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
 {
   "bolt": { "host": "/var/lib/semaphore/database.boltdb" },
   "dialect": "bolt",
-  "port": "3443",
+  "port": ":3443",
   "interface": "",
   "tmp_path": "/tmp/semaphore",
   "cookie_hash": "${COOKIE_HASH}",
   "cookie_encryption": "${COOKIE_ENCRYPTION}",
   "access_key_encryption": "${ACCESS_KEY_ENCRYPTION}",
-  "web": { "listen": "0.0.0.0:3443" },
   "tls": {
     "enabled": true,
     "cert_file": "/certs/privatebox.crt",
