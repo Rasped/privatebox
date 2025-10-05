@@ -12,11 +12,16 @@ from pathlib import Path
 # Auto-install dependencies if not available
 try:
     import requests
+    import urllib3
 except ImportError:
     import subprocess
     print("Installing requests package...")
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'requests'])
     import requests
+    import urllib3
+
+# Disable SSL warnings for self-signed certificates (internal Services VLAN only)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class SemaphoreOrchestrator:
@@ -39,7 +44,7 @@ class SemaphoreOrchestrator:
         if not self.api_token:
             self.api_token = os.environ.get("SEMAPHORE_API_TOKEN")
 
-        self.base_url = "http://localhost:3000"
+        self.base_url = "https://localhost:2443"
         self.project_id = 1
         self.headers = {"Authorization": f"Bearer {self.api_token}"}
 
@@ -67,7 +72,7 @@ class SemaphoreOrchestrator:
         """Test connection to Semaphore API."""
         print("\n=== Testing Semaphore API Connection ===")
         try:
-            response = requests.get(f"{self.base_url}/api/ping", timeout=5)
+            response = requests.get(f"{self.base_url}/api/ping", timeout=5, verify=False)
             if response.status_code == 200:
                 print(f"✓ Connected to Semaphore at {self.base_url}")
                 return True
@@ -85,7 +90,8 @@ class SemaphoreOrchestrator:
             response = requests.get(
                 f"{self.base_url}/api/user",
                 headers=self.headers,
-                timeout=5
+                timeout=5,
+                verify=False
             )
             if response.status_code == 200:
                 user_data = response.json()
@@ -105,7 +111,8 @@ class SemaphoreOrchestrator:
             response = requests.get(
                 f"{self.base_url}/api/project/{self.project_id}/templates",
                 headers=self.headers,
-                timeout=10
+                timeout=10,
+                verify=False
             )
             if response.status_code == 200:
                 return response.json()
@@ -122,7 +129,8 @@ class SemaphoreOrchestrator:
             response = requests.get(
                 f"{self.base_url}/api/project/{self.project_id}/templates",
                 headers=self.headers,
-                timeout=10
+                timeout=10,
+                verify=False
             )
             if response.status_code == 200:
                 templates = response.json()
@@ -150,7 +158,8 @@ class SemaphoreOrchestrator:
                 f"{self.base_url}/api/project/{self.project_id}/tasks",
                 headers=self.headers,
                 json=payload,
-                timeout=10
+                timeout=10,
+                verify=False
             )
             if response.status_code == 201:
                 task_data = response.json()
@@ -177,7 +186,8 @@ class SemaphoreOrchestrator:
                 response = requests.get(
                     f"{self.base_url}/api/project/{self.project_id}/tasks/{task_id}",
                     headers=self.headers,
-                    timeout=5
+                    timeout=5,
+                    verify=False
                 )
                 if response.status_code == 200:
                     task_data = response.json()
@@ -213,7 +223,8 @@ class SemaphoreOrchestrator:
             response = requests.get(
                 f"{self.base_url}/api/project/{self.project_id}/tasks/{task_id}/output",
                 headers=self.headers,
-                timeout=10
+                timeout=10,
+                verify=False
             )
             if response.status_code == 200:
                 output_lines = response.json()
