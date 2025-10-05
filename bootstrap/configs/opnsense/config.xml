@@ -385,7 +385,7 @@
       </source>
       <destination>
         <address>(self)</address>
-        <port>8082</port>
+        <port>4443</port>
       </destination>
     </rule>
     <rule uuid="fa566202-410f-4baf-a726-38f589304fe4">
@@ -1588,10 +1588,10 @@
       </source>
       <destination>
         <address>(self)</address>
-        <port>8082</port>
+        <port>4443</port>
       </destination>
       <target>10.10.20.10</target>
-      <local-port>8082</local-port>
+      <local-port>4443</local-port>
       <descr>Headscale VPN Control Server</descr>
     </rule>
     <rule>
