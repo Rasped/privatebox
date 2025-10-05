@@ -535,24 +535,22 @@ setup_template_synchronization() {
             log_info "Step 7/7: Running service orchestration..."
             if run_service_orchestration "$project_id" "$admin_session"; then
                 log_info "✅ Service orchestration completed successfully"
-                log_info "   Services deployed:"
-                log_info "   - OPNsense firewall at 10.10.20.1"
-                log_info "   - AdGuard DNS at 10.10.20.10:53"
-                log_info "   - AdGuard web interface at http://10.10.20.10:8080"
+                log_info "Template synchronization setup COMPLETED"
+                return 0
             else
                 log_error "❌ Service orchestration FAILED"
-                log_warn "   This is non-fatal - you can run 'Orchestrate Services' manually from Semaphore"
-                log_warn "   Or deploy services individually from their respective templates"
+                log_error "   Bootstrap cannot continue without deployed services"
+                return 1
             fi
         else
-            log_warn "Generate Templates task did not complete successfully, skipping AdGuard deployment"
+            log_error "Generate Templates task failed"
+            log_error "   Cannot proceed with service orchestration"
+            return 1
         fi
     else
-        log_warn "Generate Templates task could not be triggered automatically"
+        log_error "Generate Templates task could not be triggered"
+        return 1
     fi
-
-    log_info "Template synchronization setup COMPLETED"
-    return 0
 }
 
 # Wait for Semaphore API to be ready
@@ -679,7 +677,7 @@ wait_for_task_completion() {
     local task_id="$2"
     local admin_session="$3"
     local task_name="${4:-Task}"
-    local max_wait=120  # Maximum 2 minutes
+    local max_wait="${5:-120}"  # Accept timeout parameter, default 2 minutes
     local elapsed=0
 
     log_info "Waiting for $task_name to complete (task_id=$task_id)..."
@@ -714,6 +712,112 @@ wait_for_task_completion() {
     done
 
     log_warn "$task_name did not complete within ${max_wait} seconds"
+    return 1
+}
+
+# Wait for orchestration with progress streaming
+# This function polls both task status and output to show real-time progress
+wait_for_orchestration_with_progress() {
+    local project_id="$1"
+    local task_id="$2"
+    local admin_session="$3"
+    local max_wait="${4:-1200}"  # Default 20 minutes for full orchestration
+
+    local elapsed=0
+    local last_output_count=0
+
+    log_info "Monitoring service orchestration progress (task_id=$task_id)..."
+
+    while [ $elapsed -lt $max_wait ]; do
+        # Check task status
+        local status_result=$(make_api_request "GET" \
+            "http://localhost:3000/api/project/$project_id/tasks/$task_id" \
+            "" "$admin_session" "Checking orchestration status")
+
+        if [ $? -ne 0 ]; then
+            sleep 10
+            elapsed=$((elapsed + 10))
+            continue
+        fi
+
+        local status_code=$(get_api_status "$status_result")
+        local status_body=$(get_api_body "$status_result")
+
+        if ! is_api_success "$status_code"; then
+            sleep 10
+            elapsed=$((elapsed + 10))
+            continue
+        fi
+
+        local task_status=$(echo "$status_body" | jq -r '.status' 2>/dev/null)
+
+        # Get and parse output for progress markers
+        local output_result=$(make_api_request "GET" \
+            "http://localhost:3000/api/project/$project_id/tasks/$task_id/output" \
+            "" "$admin_session" "Getting orchestration output")
+
+        if [ $? -eq 0 ]; then
+            local output_code=$(get_api_status "$output_result")
+            local output_body=$(get_api_body "$output_result")
+
+            if is_api_success "$output_code"; then
+                local line_count=$(echo "$output_body" | jq 'length' 2>/dev/null || echo "0")
+
+                # Process new lines since last check
+                if [ "$line_count" -gt "$last_output_count" ]; then
+                    for ((i=last_output_count; i<line_count; i++)); do
+                        local output_line=$(echo "$output_body" | jq -r ".[$i].output" 2>/dev/null)
+
+                        # Parse progress markers from orchestrate-services.py
+                        if echo "$output_line" | grep -qE "^→ Executing:"; then
+                            # Extract template name: "→ Executing: AdGuard 1: Deploy..."
+                            local template_name=$(echo "$output_line" | sed 's/^→ Executing: //')
+                            log_info "  → $template_name"
+                            echo "PROGRESS:Deploying $template_name" >> /etc/privatebox-install-complete
+                        elif echo "$output_line" | grep -qE "^\s+✓.*completed successfully"; then
+                            # Completion marker: "  ✓ AdGuard 1: Deploy... completed successfully"
+                            local completed=$(echo "$output_line" | sed -E 's/^\s+✓ ([^c]+) completed.*/\1/')
+                            log_info "  ✓ $completed"
+                        elif echo "$output_line" | grep -qE "^\s+✗"; then
+                            # Error marker from orchestration
+                            log_warn "  $output_line"
+                        fi
+                    done
+
+                    last_output_count=$line_count
+                fi
+            fi
+        fi
+
+        # Check for task completion
+        if [ "$task_status" == "success" ]; then
+            log_info "✅ Service orchestration completed successfully"
+            return 0
+        elif [ "$task_status" == "error" ] || [ "$task_status" == "failed" ]; then
+            log_error "❌ Service orchestration failed with status: $task_status"
+
+            # Show last few output lines for error context
+            if [ "$last_output_count" -gt 0 ]; then
+                log_error "Last output lines:"
+                local start_idx=$((last_output_count - 5))
+                [ $start_idx -lt 0 ] && start_idx=0
+
+                for ((i=start_idx; i<last_output_count; i++)); do
+                    local err_line=$(echo "$output_body" | jq -r ".[$i].output" 2>/dev/null)
+                    if [ -n "$err_line" ] && [ "$err_line" != "null" ]; then
+                        log_error "  $err_line"
+                    fi
+                done
+            fi
+            return 1
+        fi
+
+        # Continue polling
+        sleep 10
+        elapsed=$((elapsed + 10))
+    done
+
+    log_error "Service orchestration timeout after ${max_wait} seconds"
     return 1
 }
 
@@ -754,17 +858,17 @@ run_service_orchestration() {
         if [ -n "$task_id" ] && [ "$task_id" != "null" ]; then
             log_info "Service orchestration started with task ID: $task_id"
 
-            # Wait for orchestration to complete (this runs multiple templates, so may take longer)
-            echo "PROGRESS:Deploying services - OPNsense firewall" >> /etc/privatebox-install-complete
-            if wait_for_task_completion "$project_id" "$task_id" "$admin_session" "Service orchestration" 1200; then
-                echo "PROGRESS:Deploying services - AdGuard DNS" >> /etc/privatebox-install-complete
-                log_info "✓ Service orchestration completed successfully"
-                log_info "   OPNsense configured at 10.10.20.1"
-                log_info "   AdGuard DNS running at 10.10.20.10:53"
-                echo "PROGRESS:Service configuration complete" >> /etc/privatebox-install-complete
+            # Wait for orchestration with real-time progress streaming
+            if wait_for_orchestration_with_progress "$project_id" "$task_id" "$admin_session" 1200; then
+                log_info "✓ All services deployed successfully"
+                log_info "   OPNsense firewall: 10.10.20.1"
+                log_info "   AdGuard DNS: 10.10.20.10:53"
+                log_info "   AdGuard web UI: http://10.10.20.10:8080"
+                log_info "   Homer dashboard: http://10.10.20.10:8081"
+                echo "PROGRESS:All services deployed successfully" >> /etc/privatebox-install-complete
                 return 0
             else
-                log_error "Service orchestration task failed or timed out"
+                log_error "❌ Service orchestration failed or timed out"
                 return 1
             fi
         fi
@@ -1081,10 +1185,13 @@ create_infrastructure_project_with_ssh_key() {
             if ! create_proxmox_api_environment "$project_id" "$admin_session"; then
                 log_error "Failed to create ProxmoxAPI environment"
             fi
-            
-            # Setup template synchronization
-            setup_template_synchronization "$project_id" "$admin_session"
-            
+
+            # Setup template synchronization and run service orchestration
+            if ! setup_template_synchronization "$project_id" "$admin_session"; then
+                log_error "Template synchronization and service orchestration failed"
+                return 1
+            fi
+
             return 0
         else
             log_error "PrivateBox project created but couldn't extract project ID"
@@ -1099,19 +1206,24 @@ create_infrastructure_project_with_ssh_key() {
 # Main entry point
 create_default_projects() {
     log_info "Setting up default projects..."
-    
+
     # Wait for API
     wait_for_semaphore_api || return 1
-    
+
     # Get admin session
     local admin_session=$(get_admin_session "project setup")
     if [ $? -ne 0 ]; then
         log_error "Failed to get admin session for setup"
         return 1
     fi
-    
-    # Create PrivateBox project and add SSH keys
-    create_infrastructure_project_with_ssh_key "$admin_session"
+
+    # Create PrivateBox project, deploy services, and complete setup
+    if ! create_infrastructure_project_with_ssh_key "$admin_session"; then
+        log_error "Failed to complete PrivateBox project setup and service deployment"
+        return 1
+    fi
+
+    return 0
 }
 
 # Generate VM SSH key pair (for use during setup)

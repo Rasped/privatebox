@@ -312,7 +312,10 @@ if [[ -f /usr/local/lib/semaphore-api.sh ]]; then
     fi
     log "VM SSH key retained at /root/.credentials/semaphore_vm_key"
   else
-    log "WARNING: Semaphore API configuration failed - manual setup may be required"
+    log "ERROR: Semaphore API configuration failed"
+    log "Service deployment did not complete successfully"
+    echo "ERROR" >> /etc/privatebox-install-complete
+    exit 1
   fi
 else
   log "Semaphore API library not found - skipping API configuration"
@@ -321,7 +324,7 @@ fi
 #==============================#
 # Success marker & summary
 #==============================#
-echo "SUCCESS" > /etc/privatebox-install-complete
+echo "SUCCESS" >> /etc/privatebox-install-complete
 log "Guest configuration complete!"
 
 cat <<EOF
