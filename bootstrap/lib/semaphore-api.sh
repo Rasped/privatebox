@@ -55,7 +55,7 @@ create_repository() {
         }')
     
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/repositories" \
+        "https://localhost:2443/api/project/$project_id/repositories" \
         "$repo_payload" "$admin_session" "Creating repository $repo_name")
     
     if [ $? -ne 0 ]; then
@@ -92,7 +92,7 @@ create_api_token() {
     
     log_info "Creating API token for template generator..."
     
-    local api_result=$(make_api_request "POST" "http://localhost:3000/api/user/tokens" \
+    local api_result=$(make_api_request "POST" "https://localhost:2443/api/user/tokens" \
         "{\"name\": \"$token_name\"}" "$admin_session" "Creating API token")
     
     if [ $? -ne 0 ]; then
@@ -154,7 +154,7 @@ create_semaphore_api_environment() {
         }')
     
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/environment" \
+        "https://localhost:2443/api/project/$project_id/environment" \
         "$env_payload" "$admin_session" "Creating SemaphoreAPI environment")
     
     if [ $? -ne 0 ]; then
@@ -178,7 +178,7 @@ create_semaphore_api_environment() {
     if echo "$response_body" | grep -q "already exists"; then
         log_info "SemaphoreAPI environment already exists, looking up ID..."
         local existing_env=$(make_api_request "GET" \
-            "http://localhost:3000/api/project/$project_id/environment" \
+            "https://localhost:2443/api/project/$project_id/environment" \
             "" "$admin_session" "Getting existing environments")
         if [ $? -eq 0 ]; then
             local envs=$(echo "$existing_env" | cut -d'|' -f2-)
@@ -231,7 +231,7 @@ create_python_template() {
         }')
 
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/templates" \
+        "https://localhost:2443/api/project/$project_id/templates" \
         "$template_payload" "$admin_session" "Creating $template_name task")
 
     if [ $? -ne 0 ]; then
@@ -367,7 +367,7 @@ create_proxmox_api_environment() {
     echo "=================================" >> /tmp/proxmox-api-debug.log
     
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/environment" \
+        "https://localhost:2443/api/project/$project_id/environment" \
         "$env_payload" "$admin_session" "Creating ProxmoxAPI environment")
     
     if [ $? -ne 0 ]; then
@@ -440,7 +440,7 @@ create_password_environment() {
         }')
     
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/environment" \
+        "https://localhost:2443/api/project/$project_id/environment" \
         "$env_payload" "$admin_session" "Creating ServicePasswords environment")
     
     if [ $? -ne 0 ]; then
@@ -558,7 +558,7 @@ wait_for_semaphore_api() {
     log_info "Waiting for Semaphore API to be ready..."
     local attempt=1
     local max_attempts=30
-    while ! curl -sSf http://localhost:3000/api/ping >/dev/null 2>&1; do
+    while ! curl -sSfk https://localhost:2443/api/ping >/dev/null 2>&1; do
         if [ $attempt -ge $max_attempts ]; then
             log_error "Semaphore API failed to start after $((max_attempts*10)) seconds"
             return 1
@@ -584,10 +584,10 @@ get_admin_session() {
         
         local admin_password="${SERVICES_PASSWORD}"
         
-        # Get session cookie using curl -c flag  
-        local cookie_output=$(curl -s -m 30 -c - -X POST -H "Content-Type: application/json" \
+        # Get session cookie using curl -c flag
+        local cookie_output=$(curl -sk -m 30 -c - -X POST -H "Content-Type: application/json" \
             -d "{\"auth\": \"admin\", \"password\": \"$admin_password\"}" \
-            http://localhost:3000/api/auth/login 2>/dev/null)
+            https://localhost:2443/api/auth/login 2>/dev/null)
         
         local session_cookie=$(echo "$cookie_output" | grep 'semaphore' | tail -1 | awk -F'\t' '{print $7}')
         
@@ -617,7 +617,7 @@ get_template_id_by_name() {
     local admin_session="$3"
     
     local api_result=$(make_api_request "GET" \
-        "http://localhost:3000/api/project/$project_id/templates" "" "$admin_session" "Listing templates")
+        "https://localhost:2443/api/project/$project_id/templates" "" "$admin_session" "Listing templates")
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -652,7 +652,7 @@ run_generate_templates_task() {
     log_info "Triggering Generate Templates (template_id=$template_id)"
     local payload=$(jq -n --argjson tid "$template_id" '{template_id: $tid, debug: false, dry_run: false}')
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/tasks" \
+        "https://localhost:2443/api/project/$project_id/tasks" \
         "$payload" "$admin_session" "Running Generate Templates")
     if [ $? -ne 0 ]; then
         return 1
@@ -684,7 +684,7 @@ wait_for_task_completion() {
 
     while [ $elapsed -lt $max_wait ]; do
         local api_result=$(make_api_request "GET" \
-            "http://localhost:3000/api/project/$project_id/tasks/$task_id" \
+            "https://localhost:2443/api/project/$project_id/tasks/$task_id" \
             "" "$admin_session" "Checking task status")
 
         if [ $? -ne 0 ]; then
@@ -731,7 +731,7 @@ wait_for_orchestration_with_progress() {
     while [ $elapsed -lt $max_wait ]; do
         # Check task status
         local status_result=$(make_api_request "GET" \
-            "http://localhost:3000/api/project/$project_id/tasks/$task_id" \
+            "https://localhost:2443/api/project/$project_id/tasks/$task_id" \
             "" "$admin_session" "Checking orchestration status")
 
         if [ $? -ne 0 ]; then
@@ -753,7 +753,7 @@ wait_for_orchestration_with_progress() {
 
         # Get and parse output for progress markers
         local output_result=$(make_api_request "GET" \
-            "http://localhost:3000/api/project/$project_id/tasks/$task_id/output" \
+            "https://localhost:2443/api/project/$project_id/tasks/$task_id/output" \
             "" "$admin_session" "Getting orchestration output")
 
         if [ $? -eq 0 ]; then
@@ -842,7 +842,7 @@ run_service_orchestration() {
     # Run the orchestration
     local payload=$(jq -n --argjson tid "$template_id" '{template_id: $tid, debug: false, dry_run: false}')
     local api_result=$(make_api_request "POST" \
-        "http://localhost:3000/api/project/$project_id/tasks" \
+        "https://localhost:2443/api/project/$project_id/tasks" \
         "$payload" "$admin_session" "Starting service orchestration")
 
     if [ $? -ne 0 ]; then
@@ -891,7 +891,7 @@ make_api_request() {
     while [ $attempt -le $max_attempts ]; do
         log_info "$operation_name (attempt $attempt/$max_attempts)..."
         
-        local response=$(curl -s -m 45 -X "$method" -w "\n%{http_code}" \
+        local response=$(curl -sk -m 45 -X "$method" -w "\n%{http_code}" \
             -H "Cookie: $session_cookie" \
             -H "Content-Type: application/json" \
             -d "$payload" \
@@ -926,7 +926,7 @@ get_ssh_key_id_by_name() {
     log_info "Looking up SSH key '$key_name' in project $project_id..."
     
     local api_result=$(make_api_request "GET" \
-        "http://localhost:3000/api/project/$project_id/keys" "" "$admin_session" "Getting SSH keys")
+        "https://localhost:2443/api/project/$project_id/keys" "" "$admin_session" "Getting SSH keys")
     
     if [ $? -eq 0 ]; then
         local status_code=$(get_api_status "$api_result")
@@ -973,7 +973,7 @@ create_inventory() {
             '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: null}')
     fi
     
-    local api_result=$(make_api_request "POST" "http://localhost:3000/api/project/$project_id/inventory" \
+    local api_result=$(make_api_request "POST" "https://localhost:2443/api/project/$project_id/inventory" \
         "$inventory_payload" "$admin_session" "Creating $inventory_name")
     
     if [ $? -ne 0 ]; then
@@ -1088,7 +1088,7 @@ create_infrastructure_project_with_ssh_key() {
         '{name: $name, description: $desc, git_url: $git, git_branch: "main"}')
     
     # Create project
-    local api_result=$(make_api_request "POST" "http://localhost:3000/api/projects" \
+    local api_result=$(make_api_request "POST" "https://localhost:2443/api/projects" \
         "$project_payload" "$admin_session" "Creating privatebox project")
     
     if [ $? -ne 0 ]; then
@@ -1115,7 +1115,7 @@ create_infrastructure_project_with_ssh_key() {
                     '{name: $name, type: $type, project_id: $pid, ssh: {private_key: $priv}}')
 
                 local api_result=$(make_api_request "POST" \
-                    "http://localhost:3000/api/project/$project_id/keys" \
+                    "https://localhost:2443/api/project/$project_id/keys" \
                     "$ssh_payload" "$admin_session" "Creating Proxmox SSH key")
                 
                 if [ $? -eq 0 ]; then
@@ -1146,7 +1146,7 @@ create_infrastructure_project_with_ssh_key() {
                     '{name: $name, type: $type, project_id: $pid, ssh: {private_key: $priv}}')
                 
                 local api_result=$(make_api_request "POST" \
-                    "http://localhost:3000/api/project/$project_id/keys" \
+                    "https://localhost:2443/api/project/$project_id/keys" \
                     "$ssh_payload" "$admin_session" "Creating VM SSH key")
                 
                 if [ $? -eq 0 ]; then
