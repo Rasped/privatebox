@@ -30,6 +30,7 @@ PublishPort={{ ansible_default_ipv4.address }}:{{ adguard_dns_over_quic }}:784/u
 # Volume mounts
 Volume={{ adguard_data_dir }}:/opt/adguardhome/work:{{ volume_mount_options | default('Z') }}
 Volume={{ adguard_config_dir }}:/opt/adguardhome/conf:{{ volume_mount_options | default('Z') }}
+Volume=/etc/privatebox/certs:/certs:ro
 
 # Environment variables
 Environment="TZ={{ timezone | default('UTC') }}"
