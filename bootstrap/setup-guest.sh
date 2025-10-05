@@ -72,6 +72,25 @@ log "Creating Portainer snippets volume..."
 podman volume create snippets >/dev/null 2>&1 || true
 
 #==============================#
+# Generate HTTPS certificate
+#==============================#
+log "Generating self-signed HTTPS certificate..."
+CERT_DIR="/etc/privatebox/certs"
+mkdir -p "$CERT_DIR"
+
+openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
+  -keyout "$CERT_DIR/privatebox.key" \
+  -out "$CERT_DIR/privatebox.crt" \
+  -subj "/CN=PrivateBox Management/O=SubRosa ApS/C=DK" \
+  -addext "subjectAltName=IP:10.10.20.10,DNS:privatebox.local,DNS:*.privatebox.local" \
+  2>/dev/null || error_exit "Failed to generate certificate"
+
+chmod 600 "$CERT_DIR/privatebox.key"
+chmod 644 "$CERT_DIR/privatebox.crt"
+
+log "✓ HTTPS certificate generated (valid 10 years)"
+
+#==============================#
 # Custom Semaphore image (with proxmoxer)
 #==============================#
 log "Writing Semaphore Containerfile..."
@@ -105,8 +124,10 @@ ContainerName=portainer
 Volume=/run/podman/podman.sock:/var/run/docker.sock:z
 Volume=/opt/portainer/data:/data:z
 Volume=snippets:/snippets:z
-PublishPort=9000:9000
+Volume=/etc/privatebox/certs:/certs:ro
+PublishPort=1443:9443
 Environment=TZ=UTC
+Exec=--ssl --sslcert /certs/privatebox.crt --sslkey /certs/privatebox.key
 # Auto-update disabled - manual updates only
 
 [Service]
@@ -130,13 +151,15 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
 {
   "bolt": { "host": "/var/lib/semaphore/database.boltdb" },
   "dialect": "bolt",
-  "port": "3000",
+  "port": "3443",
   "interface": "",
   "tmp_path": "/tmp/semaphore",
   "cookie_hash": "${COOKIE_HASH}",
   "cookie_encryption": "${COOKIE_ENCRYPTION}",
   "access_key_encryption": "${ACCESS_KEY_ENCRYPTION}",
-  "web": { "listen": "0.0.0.0:3000" },
+  "web": { "listen": "0.0.0.0:3443" },
+  "ssl_cert": "/certs/privatebox.crt",
+  "ssl_key": "/certs/privatebox.key",
   "email": { "alert": false },
   "telegram": { "alert": false },
   "ldap": { "enable": false },
@@ -165,7 +188,9 @@ Volume=/opt/semaphore/config:/etc/semaphore:Z
 # Persistent playbooks/projects and Ansible home (optional but handy)
 Volume=/opt/semaphore/projects:/projects:Z
 Volume=/opt/semaphore/ansible:/home/semaphore/.ansible:Z
-PublishPort=3000:3000
+# HTTPS certificate
+Volume=/etc/privatebox/certs:/certs:ro
+PublishPort=2443:3443
 Environment=SEMAPHORE_DB_DIALECT=bolt
 Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
 Environment=SEMAPHORE_ADMIN=admin
@@ -232,7 +257,7 @@ systemctl start portainer.service || error_exit "Failed to start Portainer"
 
 log "Waiting for Portainer to be ready..."
 for i in {1..30}; do
-  if curl -sf http://localhost:9000/api/status >/dev/null 2>&1; then
+  if curl -sfk https://localhost:1443/api/status >/dev/null 2>&1; then
     log "Portainer is ready"
     break
   fi
@@ -246,7 +271,7 @@ systemctl start semaphore.service || error_exit "Failed to start Semaphore"
 
 log "Waiting for Semaphore API to be ready..."
 for i in {1..60}; do
-  if curl -sf http://localhost:3000/api/ping >/dev/null 2>&1; then
+  if curl -sfk https://localhost:2443/api/ping >/dev/null 2>&1; then
     log "Semaphore is ready"
     break
   fi
@@ -277,7 +302,7 @@ systemctl start semaphore.service
 # Wait for Semaphore to be ready again
 log "Waiting for Semaphore to restart..."
 for i in {1..30}; do
-  if curl -sf http://localhost:3000/api/ping >/dev/null 2>&1; then
+  if curl -sfk https://localhost:2443/api/ping >/dev/null 2>&1; then
     log "Semaphore restarted successfully"
     break
   fi
@@ -332,8 +357,8 @@ cat <<EOF
 ========================================
 PrivateBox Guest Configuration Complete
 ========================================
-Portainer: http://$(hostname -I | awk '{print $1}'):9000
-Semaphore: http://$(hostname -I | awk '{print $1}'):3000
+Portainer: https://$(hostname -I | awk '{print $1}'):1443
+Semaphore: https://$(hostname -I | awk '{print $1}'):2443
 
 Admin user: admin
 Admin password: (from /etc/privatebox/config.env -> SERVICES_PASSWORD)
