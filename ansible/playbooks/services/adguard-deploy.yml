@@ -212,6 +212,7 @@
         - name: Wait for AdGuard Home to be ready
           uri:
             url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/"
+            validate_certs: no
             status_code: [200, 302]  # 302 is expected for initial setup redirect
             follow_redirects: none  # Don't follow to /install.html
             timeout: 10
@@ -377,6 +378,7 @@
         - name: Wait for AdGuard API to be available
           uri:
             url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
+            validate_certs: no
             method: GET
             status_code: [200, 302, 401]  # 401 means configured but needs auth
             follow_redirects: none
@@ -389,6 +391,7 @@
         - name: Check if AdGuard is already configured
           uri:
             url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
+            validate_certs: no
             method: GET
             follow_redirects: none
             status_code: [200, 302, 401]  # Accept all expected statuses
@@ -408,6 +411,7 @@
             - name: Check initial configuration
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/install/check_config"
+                validate_certs: no
                 method: POST
                 body_format: json
                 body:
@@ -425,6 +429,7 @@
             - name: Apply AdGuard configuration
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/install/configure"
+                validate_certs: no
                 method: POST
                 body_format: json
                 body:
@@ -447,6 +452,7 @@
             - name: Verify AdGuard is now configured and running
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/status"
+                validate_certs: no
                 method: GET
                 user: "{{ adguard_admin_username }}"
                 password: "{{ adguard_admin_password }}"
@@ -467,6 +473,7 @@
             - name: Enable protection if not already enabled
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/protection"
+                validate_certs: no
                 method: POST
                 user: "{{ adguard_admin_username }}"
                 password: "{{ adguard_admin_password }}"
@@ -480,6 +487,7 @@
             - name: Configure upstream DNS servers (Quad9 + Unbound fallback)
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/dns_config"
+                validate_certs: no
                 method: POST
                 user: "{{ adguard_admin_username }}"
                 password: "{{ adguard_admin_password }}"
@@ -505,6 +513,7 @@
             - name: Configure DNS blocklists
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/filtering/add_url"
+                validate_certs: no
                 method: POST
                 user: "{{ adguard_admin_username }}"
                 password: "{{ adguard_admin_password }}"
@@ -526,6 +535,7 @@
             - name: Enable and update blocklists
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/filtering/refresh"
+                validate_certs: no
                 method: POST
                 user: "{{ adguard_admin_username }}"
                 password: "{{ adguard_admin_password }}"
@@ -568,6 +578,7 @@
             - name: Get AdGuard statistics
               uri:
                 url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/stats"
+                validate_certs: no
                 method: GET
                 user: "{{ adguard_admin_username }}"
                 password: "{{ adguard_admin_password }}"
