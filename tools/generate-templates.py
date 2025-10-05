@@ -11,11 +11,16 @@ from pathlib import Path
 # Auto-install dependencies if not available
 try:
     import requests
+    import urllib3
 except ImportError:
     import subprocess
     print("Installing requests package...")
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'requests'])
     import requests
+    import urllib3
+
+# Disable SSL warnings for self-signed certificates (internal Services VLAN only)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 try:
     import yaml
@@ -30,7 +35,7 @@ def test_connectivity(base_url):
     """Test basic connectivity to Semaphore API."""
     print("\n=== Stage 1: Testing Basic Connectivity ===")
     try:
-        response = requests.get(f"{base_url}/api/ping", timeout=5)
+        response = requests.get(f"{base_url}/api/ping", timeout=5, verify=False)
         if response.status_code == 200:
             print(f"✓ Successfully connected to Semaphore at {base_url}")
             print(f"  Response: {response.text.strip()}")
@@ -48,9 +53,9 @@ def test_authentication(base_url, api_token):
     """Test API authentication using Bearer token."""
     print("\n=== Stage 2: Testing Authentication ===")
     headers = {"Authorization": f"Bearer {api_token}"}
-    
+
     try:
-        response = requests.get(f"{base_url}/api/user", headers=headers, timeout=5)
+        response = requests.get(f"{base_url}/api/user", headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             user_data = response.json()
             print("✓ Authentication successful!")
@@ -75,9 +80,9 @@ def list_projects(base_url, api_token):
     """List available projects to verify API access."""
     print("\n=== Stage 3: Listing Projects ===")
     headers = {"Authorization": f"Bearer {api_token}"}
-    
+
     try:
-        response = requests.get(f"{base_url}/api/projects", headers=headers, timeout=5)
+        response = requests.get(f"{base_url}/api/projects", headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             projects = response.json()
             print(f"✓ Found {len(projects)} project(s):")
@@ -97,9 +102,9 @@ def list_projects(base_url, api_token):
 def get_inventory_id(base_url, api_token, project_id, inventory_name="Default Inventory"):
     """Get inventory ID by name, with configurable default."""
     headers = {"Authorization": f"Bearer {api_token}"}
-    
+
     try:
-        response = requests.get(f"{base_url}/api/project/{project_id}/inventory", headers=headers, timeout=5)
+        response = requests.get(f"{base_url}/api/project/{project_id}/inventory", headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             inventories = response.json()
             for inventory in inventories:
@@ -122,9 +127,9 @@ def get_inventory_id(base_url, api_token, project_id, inventory_name="Default In
 def get_repository_id(base_url, api_token, project_id, repository_name="PrivateBox"):
     """Get repository ID by name, with configurable default."""
     headers = {"Authorization": f"Bearer {api_token}"}
-    
+
     try:
-        response = requests.get(f"{base_url}/api/project/{project_id}/repositories", headers=headers, timeout=5)
+        response = requests.get(f"{base_url}/api/project/{project_id}/repositories", headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             repositories = response.json()
             for repo in repositories:
@@ -148,11 +153,11 @@ def get_environment_id(base_url, api_token, project_id, environment_name=None):
     """Get environment ID by name. If not specified, looks for 'Empty' environment."""
     if not environment_name:
         environment_name = "Empty"  # Default to "Empty" environment
-    
+
     headers = {"Authorization": f"Bearer {api_token}"}
-    
+
     try:
-        response = requests.get(f"{base_url}/api/project/{project_id}/environment", headers=headers, timeout=5)
+        response = requests.get(f"{base_url}/api/project/{project_id}/environment", headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             environments = response.json()
             for env in environments:
@@ -175,9 +180,9 @@ def get_environment_id(base_url, api_token, project_id, environment_name=None):
 def get_view_id(base_url, api_token, project_id):
     """Get the first available view ID for the project."""
     headers = {"Authorization": f"Bearer {api_token}"}
-    
+
     try:
-        response = requests.get(f"{base_url}/api/project/{project_id}/views", headers=headers, timeout=5)
+        response = requests.get(f"{base_url}/api/project/{project_id}/views", headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             views = response.json()
             if views:
@@ -368,7 +373,7 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
     
     try:
         # Check if template exists
-        response = requests.get(f"{base_url}/api/project/{project_id}/templates", headers=headers, timeout=5)
+        response = requests.get(f"{base_url}/api/project/{project_id}/templates", headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             existing_templates = response.json()
             existing_template = next((t for t in existing_templates if t['name'] == template_name), None)
@@ -382,7 +387,8 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
                     f"{base_url}/api/project/{project_id}/templates/{template_id}",
                     json=template_data,
                     headers=headers,
-                    timeout=10
+                    timeout=10,
+                    verify=False
                 )
                 if response.status_code in [200, 204]:
                     print(f"\n✓ Updated template: {template_name} (ID: {template_id})")
@@ -397,7 +403,8 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
                     f"{base_url}/api/project/{project_id}/templates",
                     json=template_data,
                     headers=headers,
-                    timeout=10
+                    timeout=10,
+                    verify=False
                 )
                 if response.status_code in [200, 201]:
                     new_template = response.json()
