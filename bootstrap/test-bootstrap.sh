@@ -149,13 +149,13 @@ print_status "info" "Checking Semaphore API at ${VM_IP}:3000..."
 AUTH_RESPONSE=$(curl -s -c /tmp/sem-cookie -X POST \
     -H "Content-Type: application/json" \
     -d "{\"auth\": \"admin\", \"password\": \"${SERVICES_PASSWORD}\"}" \
-    "http://${VM_IP}:3000/api/auth/login" 2>/dev/null)
+    "https://${VM_IP}:2443/api/auth/login" 2>/dev/null)
 
 if [[ -f /tmp/sem-cookie ]] && grep -q "semaphore" /tmp/sem-cookie; then
     print_status "success" "Semaphore API authentication successful"
     
     # Check projects
-    PROJECTS=$(curl -s -b /tmp/sem-cookie "http://${VM_IP}:3000/api/projects" 2>/dev/null)
+    PROJECTS=$(curl -s -b /tmp/sem-cookie "https://${VM_IP}:2443/api/projects" 2>/dev/null)
     if echo "$PROJECTS" | grep -q "PrivateBox"; then
         print_status "success" "PrivateBox project found in Semaphore"
     else
@@ -164,7 +164,7 @@ if [[ -f /tmp/sem-cookie ]] && grep -q "semaphore" /tmp/sem-cookie; then
     fi
     
     # Check SSH keys
-    KEYS=$(curl -s -b /tmp/sem-cookie "http://${VM_IP}:3000/api/project/1/keys" 2>/dev/null)
+    KEYS=$(curl -s -b /tmp/sem-cookie "https://${VM_IP}:2443/api/project/1/keys" 2>/dev/null)
     if echo "$KEYS" | grep -q "proxmox\|container-host"; then
         print_status "success" "SSH keys configured in Semaphore"
     else
@@ -173,7 +173,7 @@ if [[ -f /tmp/sem-cookie ]] && grep -q "semaphore" /tmp/sem-cookie; then
     fi
     
     # Check inventories
-    INVENTORIES=$(curl -s -b /tmp/sem-cookie "http://${VM_IP}:3000/api/project/1/inventory" 2>/dev/null)
+    INVENTORIES=$(curl -s -b /tmp/sem-cookie "https://${VM_IP}:2443/api/project/1/inventory" 2>/dev/null)
     if echo "$INVENTORIES" | grep -q "container-host"; then
         print_status "success" "Inventories configured in Semaphore"
     else
@@ -199,8 +199,8 @@ echo "====================================="
 echo "Test Summary"
 echo "====================================="
 print_status "info" "VM IP: ${VM_IP}"
-print_status "info" "Portainer: http://${VM_IP}:9000"
-print_status "info" "Semaphore: http://${VM_IP}:3000"
+print_status "info" "Portainer: https://${VM_IP}:1443"
+print_status "info" "Semaphore: https://${VM_IP}:2443"
 print_status "info" "Username: admin"
 print_status "info" "Password: ${SERVICES_PASSWORD}"
 echo ""
