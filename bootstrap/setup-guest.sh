@@ -158,8 +158,11 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
   "cookie_encryption": "${COOKIE_ENCRYPTION}",
   "access_key_encryption": "${ACCESS_KEY_ENCRYPTION}",
   "web": { "listen": "0.0.0.0:3443" },
-  "ssl_cert": "/certs/privatebox.crt",
-  "ssl_key": "/certs/privatebox.key",
+  "tls": {
+    "enabled": true,
+    "cert_file": "/certs/privatebox.crt",
+    "key_file": "/certs/privatebox.key"
+  },
   "email": { "alert": false },
   "telegram": { "alert": false },
   "ldap": { "enable": false },
