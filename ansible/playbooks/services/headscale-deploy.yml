@@ -16,7 +16,7 @@
     # Headscale default configuration - can be overridden by group_vars
     headscale_image: "headscale/headscale"
     headscale_version: "latest"
-    headscale_web_port: 8082        # Web interface port (8080 taken by AdGuard)
+    headscale_web_port: 4443        # HTTPS API port
     headscale_grpc_port: 50443      # gRPC API port
     headscale_metrics_port: 9090    # Prometheus metrics port (optional)
     headscale_data_dir: "/opt/privatebox/data/headscale"
@@ -27,7 +27,7 @@
     custom_web_port: "{{ headscale_web_port }}"
 
     # Headscale server URL (for client configuration)
-    headscale_server_url: "http://{{ ansible_default_ipv4.address }}:{{ headscale_web_port }}"
+    headscale_server_url: "https://{{ ansible_default_ipv4.address }}:{{ headscale_web_port }}"
 
     # Headscale admin user (no password - uses API keys and CLI)
     headscale_admin_user: "admin"
@@ -160,6 +160,10 @@
               grpc_listen_addr: 0.0.0.0:50443
               grpc_allow_insecure: false
 
+              # TLS configuration for HTTPS
+              tls_cert_path: /certs/privatebox.crt
+              tls_key_path: /certs/privatebox.key
+
               # Database configuration
               database:
                 type: sqlite
@@ -242,7 +246,8 @@
 
         - name: Wait for Headscale to be ready
           uri:
-            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/health"
+            url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/health"
+            validate_certs: no
             status_code: [200]
             timeout: 10
           register: headscale_ready
@@ -378,7 +383,8 @@
 
         - name: Check if HeadscalePreauthKey environment exists in Semaphore
           uri:
-            url: "http://localhost:3000/api/project/1/environment"
+            url: "https://localhost:2443/api/project/1/environment"
+            validate_certs: no
             method: GET
             headers:
               Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
@@ -406,11 +412,11 @@
                   {type: "var", name: "HEADSCALE_PREAUTH_KEY", secret: $preauth_key, operation: "create"}
                 ]
               }' | \
-            curl -sS -f \
+            curl -sSk -f \
               -H "Authorization: Bearer {{ SEMAPHORE_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d @- \
-              "http://localhost:3000/api/project/1/environment"
+              "https://localhost:2443/api/project/1/environment"
           register: preauth_env_create
           when: preauth_key.rc == 0 and preauth_env_id | int == 0
           changed_when: true
@@ -433,7 +439,8 @@
 
         - name: Check if HeadscaleAPI environment exists in Semaphore
           uri:
-            url: "http://localhost:3000/api/project/1/environment"
+            url: "https://localhost:2443/api/project/1/environment"
+            validate_certs: no
             method: GET
             headers:
               Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
@@ -462,11 +469,11 @@
                   {type: "var", name: "HEADSCALE_API_KEY", secret: $api_key, operation: "create"}
                 ]
               }' | \
-            curl -sS -f \
+            curl -sSk -f \
               -H "Authorization: Bearer {{ SEMAPHORE_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d @- \
-              "http://localhost:3000/api/project/1/environment"
+              "https://localhost:2443/api/project/1/environment"
           register: env_create_response
           when: api_key.rc == 0 and existing_env_id | int == 0
           changed_when: true
@@ -486,7 +493,7 @@
             service_info:
               name: "{{ service_name }}"
               status: "{{ 'Active' if service_status.status.ActiveState == 'active' else 'Inactive' }}"
-              web_url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
+              web_url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
               server_url: "{{ headscale_server_url }}"
               grpc_url: "{{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}"
 
@@ -500,7 +507,7 @@
               - "Service Status: {{ service_info.status }}"
               - "Server URL: {{ service_info.server_url }}"
               - ""
-              - "Web Interface: {{ service_info.web_url }}"
+              - "API Endpoint: {{ service_info.web_url }}"
               - "gRPC API: {{ service_info.grpc_url }}"
               - ""
               - "Default User: {{ headscale_admin_user }}"
@@ -535,7 +542,7 @@
           Host: {{ inventory_hostname }}
 
           Access URLs:
-          - Web Interface: http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}
+          - API Endpoint: https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}
           - Server URL: {{ headscale_server_url }}
           - gRPC API: {{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}
 

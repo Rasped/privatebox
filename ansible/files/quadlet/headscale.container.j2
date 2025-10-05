@@ -23,6 +23,7 @@ PublishPort={{ ansible_default_ipv4.address }}:{{ headscale_metrics_port }}:9090
 # Volume mounts
 Volume={{ headscale_data_dir }}:/var/lib/headscale:{{ volume_mount_options | default('Z') }}
 Volume={{ headscale_config_dir }}:/etc/headscale:{{ volume_mount_options | default('Z') }}
+Volume=/etc/privatebox/certs:/certs:ro
 
 # Environment variables
 Environment="TZ={{ timezone | default('UTC') }}"
