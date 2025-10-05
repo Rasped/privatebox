@@ -208,7 +208,7 @@ main() {
 
     # Monitor Phase 4 progress by checking the VM's marker file
     display "⏳ Waiting for guest setup to complete..."
-    display "   This may take 5-10 minutes"
+    display "   This may take 15-20 minutes for full service deployment"
 
     # Define SSH key path (same as verify-install.sh uses)
     local ssh_key_path="${SSH_KEY_PATH:-/root/.ssh/id_rsa}"
@@ -233,7 +233,7 @@ main() {
     if [[ "$vm_accessible" == true ]]; then
         # Poll for Phase 4 progress messages
         local last_line_count=0
-        local phase4_timeout=900  # 15 minutes
+        local phase4_timeout=1500  # 25 minutes (allows for 20min orchestration + buffer)
         elapsed=0
 
         while [[ $elapsed -lt $phase4_timeout ]]; do
