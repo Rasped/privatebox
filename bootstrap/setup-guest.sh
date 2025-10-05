@@ -151,7 +151,7 @@ cat > "$SEMAPHORE_CONFIG" <<EOF
 {
   "bolt": { "host": "/var/lib/semaphore/database.boltdb" },
   "dialect": "bolt",
-  "port": ":3443",
+  "port": ":3000",
   "interface": "",
   "tmp_path": "/tmp/semaphore",
   "cookie_hash": "${COOKIE_HASH}",
@@ -192,7 +192,7 @@ Volume=/opt/semaphore/projects:/projects:Z
 Volume=/opt/semaphore/ansible:/home/semaphore/.ansible:Z
 # HTTPS certificate
 Volume=/etc/privatebox/certs:/certs:ro
-PublishPort=2443:3443
+PublishPort=2443:3000
 Environment=SEMAPHORE_DB_DIALECT=bolt
 Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
 Environment=SEMAPHORE_ADMIN=admin
