@@ -40,7 +40,7 @@ colors:
 message:
   style: "is-info"
   title: "Welcome!"
-  content: "PrivateBox Network Services - All services protected by authentication"
+  content: "PrivateBox Network Services - All services use HTTPS with self-signed certificates. Click 'Advanced' → 'Proceed' on first visit to each service."
 
 links: []
 
@@ -52,7 +52,7 @@ services:
         logo: "assets/tools/adguardhome.png"
         subtitle: "DNS Filtering"
         tag: "security"
-        url: "http://10.10.20.10:8080/login.html"
+        url: "https://10.10.20.10:3443/login.html"
         type: "Ping"
         target: "_blank"
 
@@ -67,7 +67,7 @@ services:
         logo: "assets/tools/headscale.png"
         subtitle: "VPN Control Server"
         tag: "vpn"
-        url: "http://10.10.20.10:8082/health"
+        url: "https://10.10.20.10:4443/health"
         type: "Ping"
         target: "_blank"
 
@@ -78,7 +78,7 @@ services:
         logo: "assets/tools/portainer.png"
         subtitle: "Container Management"
         tag: "management"
-        url: "http://10.10.20.10:9000/api/status"
+        url: "https://10.10.20.10:1443/api/status"
         type: "Ping"
         target: "_blank"
 
@@ -86,7 +86,7 @@ services:
         logo: "assets/tools/ansible.png"
         subtitle: "Ansible Automation"
         tag: "automation"
-        url: "http://10.10.20.10:3000/api/ping"
+        url: "https://10.10.20.10:2443/api/ping"
         type: "Ping"
         target: "_blank"
 
