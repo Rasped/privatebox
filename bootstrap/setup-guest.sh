@@ -85,7 +85,7 @@ openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
   -addext "subjectAltName=IP:10.10.20.10,DNS:privatebox.local,DNS:*.privatebox.local" \
   2>/dev/null || error_exit "Failed to generate certificate"
 
-chmod 600 "$CERT_DIR/privatebox.key"
+chmod 644 "$CERT_DIR/privatebox.key"
 chmod 644 "$CERT_DIR/privatebox.crt"
 
 log "✓ HTTPS certificate generated (valid 10 years)"
@@ -124,7 +124,7 @@ ContainerName=portainer
 Volume=/run/podman/podman.sock:/var/run/docker.sock:z
 Volume=/opt/portainer/data:/data:z
 Volume=snippets:/snippets:z
-Volume=/etc/privatebox/certs:/certs:ro
+Volume=/etc/privatebox/certs:/certs:ro,z
 PublishPort=1443:9443
 Environment=TZ=UTC
 Exec=--ssl --sslcert /certs/privatebox.crt --sslkey /certs/privatebox.key
@@ -191,7 +191,7 @@ Volume=/opt/semaphore/config:/etc/semaphore:Z
 Volume=/opt/semaphore/projects:/projects:Z
 Volume=/opt/semaphore/ansible:/home/semaphore/.ansible:Z
 # HTTPS certificate
-Volume=/etc/privatebox/certs:/certs:ro
+Volume=/etc/privatebox/certs:/certs:ro,z
 PublishPort=2443:3000
 Environment=SEMAPHORE_DB_DIALECT=bolt
 Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
