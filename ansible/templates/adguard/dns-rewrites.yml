@@ -26,3 +26,11 @@ rewrites:
   - domain: "headplane.lan"
     answer: "10.10.20.10"
     comment: "Headplane Headscale Web UI"
+
+  - domain: "opnsense.lan"
+    answer: "10.10.20.1"
+    comment: "OPNsense Firewall"
+
+  - domain: "proxmox.lan"
+    answer: "10.10.20.20"
+    comment: "Proxmox Hypervisor"

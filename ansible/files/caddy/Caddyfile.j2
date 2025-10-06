@@ -150,6 +150,48 @@ headscale.lan {
     }
 }
 
+# OPNsense (Firewall & Router)
+opnsense.lan {
+    tls internal
+
+    reverse_proxy https://10.10.20.1 {
+        header_up Host {upstream_hostport}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        transport http {
+            tls_insecure_skip_verify
+        }
+    }
+
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+    }
+}
+
+# Proxmox (Hypervisor)
+proxmox.lan {
+    tls internal
+
+    reverse_proxy https://10.10.20.20:8006 {
+        header_up Host {upstream_hostport}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        transport http {
+            tls_insecure_skip_verify
+        }
+    }
+
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+    }
+}
+
 # Catch-all for undefined .lan services
 *.lan {
     tls internal
