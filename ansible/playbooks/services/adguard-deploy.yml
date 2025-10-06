@@ -542,7 +542,31 @@
                   whitelist: false
                 status_code: 200
               register: refresh_result
-              
+
+            - name: Load DNS rewrites configuration
+              include_vars:
+                file: ../../templates/adguard/dns-rewrites.yml
+                name: dns_rewrites
+
+            - name: Configure DNS rewrites for .lan domains
+              uri:
+                url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/rewrite/add"
+                validate_certs: no
+                method: POST
+                user: "{{ adguard_admin_username }}"
+                password: "{{ adguard_admin_password }}"
+                force_basic_auth: true
+                body_format: json
+                body:
+                  domain: "{{ item.domain }}"
+                  answer: "{{ item.answer }}"
+                status_code: 200
+              register: rewrite_result
+              loop: "{{ dns_rewrites }}"
+              loop_control:
+                label: "{{ item.domain }} → {{ item.answer }}"
+              ignore_errors: true  # Ignore if rewrite already exists
+
         - name: Verify DNS configuration
           block:
             - name: Check AdGuard DNS port is listening
