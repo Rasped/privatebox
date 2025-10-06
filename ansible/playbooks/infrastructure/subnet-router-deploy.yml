@@ -91,6 +91,11 @@
         state: directory
         mode: '0755'
 
+    - name: Read PrivateBox CA certificate from Proxmox
+      slurp:
+        src: /etc/privatebox/certs/privatebox.crt
+      register: privatebox_ca_cert
+
     - name: Generate cloud-init user-data
       copy:
         dest: "/var/lib/vz/snippets/subnet-router-{{ vmid }}.yml"
@@ -136,8 +141,15 @@
                 # Set fixed UDP port for WireGuard peer-to-peer traffic
                 PORT="41641"
 
+            - path: /usr/local/share/ca-certificates/privatebox.crt
+              permissions: '0644'
+              encoding: b64
+              content: {{ privatebox_ca_cert.content }}
+
           runcmd:
             - sysctl -p /etc/sysctl.d/99-ip_forward.conf
+            # Install PrivateBox CA certificate
+            - update-ca-certificates
             # Wait for network and DNS
             - timeout 30 sh -c 'until ping -c1 8.8.8.8 >/dev/null 2>&1; do sleep 1; done'
             - timeout 30 sh -c 'until ping -c1 pkgs.tailscale.com >/dev/null 2>&1; do sleep 1; done'

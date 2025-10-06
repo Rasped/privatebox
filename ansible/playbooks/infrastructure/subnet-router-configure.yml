@@ -1,5 +1,5 @@
 ---
-- name: "Subnet Router 3: Configure VPN Connection"
+- name: "Subnet Router 2: Configure VPN Connection"
   hosts: subnet-router
   gather_facts: false
   become: true
