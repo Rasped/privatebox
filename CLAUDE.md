@@ -61,7 +61,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Run from your workstation to bootstrap on a Proxmox host at `.10`:
   - `ssh root@192.168.1.10 "curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash"`
   - Script auto-detects network and configures everything. Check `/tmp/privatebox-config.conf` if you need different settings.
-  - **IMPORTANT**: Always run in foreground for at least 10 minutes. Expected completion: ~7 minutes.
+  - **IMPORTANT**: Always run in foreground for at least 15 minutes. Expected completion: ~10 minutes.
   - Do NOT run in background - need to monitor progress and handle any interactive prompts.
 
 ## TLS & DNS
