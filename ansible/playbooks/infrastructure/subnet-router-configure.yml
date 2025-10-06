@@ -35,6 +35,32 @@
       set_fact:
         preauth_key: "{{ HEADSCALE_PREAUTH_KEY }}"
 
+    - name: Install PrivateBox CA certificate
+      block:
+        - name: Fetch CA certificate from management VM
+          fetch:
+            src: /etc/privatebox/certs/privatebox.crt
+            dest: /tmp/privatebox.crt
+            flat: yes
+          delegate_to: 10.10.20.10
+
+        - name: Copy CA certificate to subnet router
+          copy:
+            src: /tmp/privatebox.crt
+            dest: /usr/local/share/ca-certificates/privatebox.crt
+            mode: '0644'
+
+        - name: Update CA certificates
+          command: update-ca-certificates
+          register: ca_update
+          changed_when: "'1 added' in ca_update.stdout"
+
+        - name: Remove temporary certificate
+          file:
+            path: /tmp/privatebox.crt
+            state: absent
+          delegate_to: localhost
+
     - name: Check if Tailscale is already connected
       command: tailscale status --json
       register: tailscale_status
@@ -61,6 +87,8 @@
       register: tailscale_up
       changed_when: true
       when: not (already_connected | default(false))
+      async: 60
+      poll: 5
 
     - name: Wait for connection to establish
       pause:
