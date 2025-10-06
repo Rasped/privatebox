@@ -225,11 +225,11 @@
 
         - name: Wait for Headplane to be ready
           uri:
-            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
-            status_code: [200, 301, 302, 404]
+            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/admin"
+            status_code: [200, 301, 302]
             timeout: 10
           register: headplane_ready
-          until: headplane_ready.status in [200, 301, 302, 404]
+          until: headplane_ready.status in [200, 301, 302]
           retries: 12
           delay: 5
           when: service_start.changed
