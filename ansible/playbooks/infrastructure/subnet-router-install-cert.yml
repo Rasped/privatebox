@@ -1,0 +1,61 @@
+---
+- name: "Subnet Router 2: Install CA Certificate"
+  hosts: subnet-router
+  gather_facts: false
+  become: true
+
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_inventory: "subnet-router"
+
+  tasks:
+    - name: Display installation header
+      debug:
+        msg:
+          - "=========================================="
+          - "   SUBNET ROUTER CA CERTIFICATE INSTALL"
+          - "=========================================="
+          - "Installing PrivateBox CA certificate"
+
+    - name: Read PrivateBox CA certificate from management VM
+      slurp:
+        src: /etc/privatebox/certs/privatebox.crt
+      register: ca_cert_content
+      delegate_to: localhost
+      become: true
+
+    - name: Install CA certificate on subnet router
+      copy:
+        content: "{{ ca_cert_content.content | b64decode }}"
+        dest: /usr/local/share/ca-certificates/privatebox.crt
+        mode: '0644'
+
+    - name: Update CA certificates
+      command: update-ca-certificates
+      register: ca_update
+      changed_when: "'1 added' in ca_update.stdout"
+
+    - name: Verify certificate installation
+      stat:
+        path: /usr/local/share/ca-certificates/privatebox.crt
+      register: cert_stat
+
+    - name: Display installation result
+      debug:
+        msg:
+          - "=========================================="
+          - "   CA CERTIFICATE INSTALLED"
+          - "=========================================="
+          - ""
+          - "Certificate Status:"
+          - "  ✓ PrivateBox CA certificate installed"
+          - "  ✓ System trust store updated"
+          - "  ✓ Headscale HTTPS connections will be trusted"
+          - ""
+          - "Next Step:"
+          - "  Run 'Subnet Router 3: Configure VPN Connection'"
+          - "=========================================="
