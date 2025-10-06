@@ -10,7 +10,7 @@
   vars:
     service_name: "headscale"
     subnet_route: "10.10.10.0/24"
-    semaphore_url: "http://localhost:3000"
+    semaphore_url: "https://localhost:2443"
     project_id: 1
 
     # Template configuration for Semaphore
