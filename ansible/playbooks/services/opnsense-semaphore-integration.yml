@@ -15,7 +15,7 @@
     # Fixed internal IPs
     opnsense_ip: "10.10.20.1"
     semaphore_ip: "10.10.20.10"
-    semaphore_url: "http://{{ semaphore_ip }}:3000"
+    semaphore_url: "https://{{ semaphore_ip }}:2443"
     
     # Get API token from SemaphoreAPI environment
     semaphore_token: "{{ SEMAPHORE_API_TOKEN | default('') }}"
@@ -75,6 +75,7 @@
         method: GET
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
         status_code: 200
       register: api_test
 
@@ -93,6 +94,7 @@
         method: GET
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
         status_code: 200
       register: existing_environments
 
@@ -210,6 +212,7 @@
         method: GET
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
         status_code: 200
       register: existing_keys
 
@@ -272,6 +275,7 @@
         method: GET
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
         status_code: 200
       register: existing_inventories
 
@@ -317,6 +321,7 @@
             method: GET
             headers:
               Authorization: "Bearer {{ semaphore_token }}"
+            validate_certs: no
             status_code: 200
           register: templates
 
@@ -336,6 +341,7 @@
               template_id: "{{ generate_template_id }}"
               debug: false
               dry_run: false
+            validate_certs: no
             status_code: [201]
           register: template_task
           when: generate_template_id is not none
@@ -351,6 +357,7 @@
             method: GET
             headers:
               Authorization: "Bearer {{ semaphore_token }}"
+            validate_certs: no
             status_code: 200
           register: task_status
           until: task_status.json.status in ['success', 'error', 'failed']
@@ -378,6 +385,7 @@
         method: GET
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
         status_code: 200
       register: final_inventory
 
@@ -387,6 +395,7 @@
         method: GET
         headers:
           Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
         status_code: 200
       register: final_templates
 
