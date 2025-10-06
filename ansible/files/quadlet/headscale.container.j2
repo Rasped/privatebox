@@ -13,6 +13,9 @@ Before=multi-user.target
 Image={{ container_image_registry | default('docker.io') }}/{{ headscale_image }}:{{ headscale_version }}
 ContainerName=headscale
 
+# Label for Headplane integration (Docker discovery)
+Label=service=headscale
+
 # Network configuration
 PublishPort={{ ansible_default_ipv4.address }}:{{ headscale_web_port }}:8080
 PublishPort={{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}:50443

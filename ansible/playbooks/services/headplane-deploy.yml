@@ -1,0 +1,373 @@
+---
+- name: "Headplane 1: Deploy Headscale Web UI"
+  hosts: container-host
+  become: true
+  gather_facts: true
+
+  vars:
+    service_name: "headplane"
+    service_description: "Modern web UI for Headscale VPN control server"
+    service_tag: "headplane"
+
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "HeadscaleAPI"
+
+    # Headplane default configuration - can be overridden by group_vars
+    headplane_image: "ghcr.io/tale/headplane"
+    headplane_version: "latest"
+    headplane_web_port: 8080        # HTTP web interface port
+    headplane_data_dir: "/opt/privatebox/data/headplane"
+    headplane_config_dir: "/opt/privatebox/config/headplane"
+
+    # Default values for hands-off deployment (no prompts)
+    confirm_deploy: true
+    custom_web_port: "{{ headplane_web_port }}"
+
+    # Headscale connection (Services VLAN)
+    headscale_url: "https://{{ ansible_default_ipv4.address }}:4443"
+
+    # Quadlet configuration
+    use_system_quadlet: true
+    quadlet_system_path: "/etc/containers/systemd"
+    quadlet_user_path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+
+    # Container runtime configuration
+    container_image_registry: "ghcr.io"
+    volume_mount_options: "Z"
+    timezone: "UTC"
+    container_security_label_disable: false
+    container_no_new_privileges: true
+    container_drop_capabilities: []
+
+    # Health check configuration
+    health_check_interval: "30s"
+    health_check_retries: 3
+    health_check_start_period: "60s"
+    health_check_timeout: "10s"
+
+    # Container management configuration
+    container_log_driver: "journald"
+    container_pull_policy: "missing"
+    container_restart_policy: "always"
+    container_restart_sec: 30
+
+    # Systemd configuration
+    systemd_timeout_start_sec: 900
+    systemd_timeout_stop_sec: 90
+
+  tasks:
+    # Pre-deployment validation
+    - name: "{{ service_name }} - Pre-deployment checks"
+      when: confirm_deploy | bool
+      tags: [headplane, preflight]
+      block:
+        - name: Check system requirements
+          assert:
+            that:
+              - ansible_distribution in ["Ubuntu", "Debian"]
+              - >
+                (ansible_distribution == "Ubuntu" and ansible_distribution_version is version('22.04', '>=')) or
+                (ansible_distribution == "Debian" and ansible_distribution_version is version('12', '>='))
+            fail_msg: "This playbook requires Ubuntu 22.04+ or Debian 12+"
+
+        - name: Check if Podman is installed
+          command: which podman
+          register: podman_check
+          changed_when: false
+          failed_when: false
+
+        - name: Install Podman if not present
+          when: podman_check.rc != 0
+          block:
+            - name: Update apt cache
+              apt:
+                update_cache: yes
+                cache_valid_time: 3600
+
+            - name: Install Podman
+              apt:
+                name:
+                  - podman
+                  - podman-compose
+                  - containernetworking-plugins
+                state: present
+
+        - name: Check Podman version
+          command: podman --version
+          register: podman_version
+          changed_when: false
+
+        - name: Display Podman version
+          debug:
+            msg: "Podman version: {{ podman_version.stdout }}"
+
+        - name: Check for port conflicts
+          wait_for:
+            port: "{{ custom_web_port }}"
+            state: stopped
+            timeout: 1
+          ignore_errors: true
+          register: port_check
+
+        - name: Warn about port conflicts
+          debug:
+            msg: "WARNING: Port {{ custom_web_port }} appears to be in use. Service may fail to start."
+          when: port_check.failed is defined and not port_check.failed
+
+        - name: Verify Headscale is running
+          uri:
+            url: "{{ headscale_url }}/health"
+            validate_certs: no
+            status_code: [200]
+            timeout: 5
+          register: headscale_health
+          failed_when: false
+
+        - name: Assert Headscale is available
+          assert:
+            that:
+              - headscale_health.status == 200
+            fail_msg: "Headscale is not running or not reachable at {{ headscale_url }}"
+
+    # Main deployment
+    - name: "{{ service_name }} - Deployment"
+      when: confirm_deploy | bool
+      tags: [headplane, deploy]
+      block:
+        - name: Create directory structure
+          file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner | default(ansible_user) }}"
+            group: "{{ item.group | default(ansible_user) }}"
+            mode: "{{ item.mode | default('0755') }}"
+          loop:
+            - { path: "{{ headplane_data_dir }}" }
+            - { path: "{{ headplane_config_dir }}" }
+            - { path: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}" }
+
+        - name: Set SELinux context for data directories
+          when: ansible_selinux.status is defined and ansible_selinux.status == "enabled"
+          command: |
+            chcon -R -t container_file_t {{ item }}
+          loop:
+            - "{{ headplane_data_dir }}"
+            - "{{ headplane_config_dir }}"
+          changed_when: true
+
+        - name: Generate cookie secret for Headplane
+          shell: openssl rand -base64 32 | head -c 32
+          register: cookie_secret_result
+          changed_when: false
+
+        - name: Set cookie secret fact
+          set_fact:
+            headplane_cookie_secret: "{{ cookie_secret_result.stdout }}"
+
+        - name: Verify Headscale API key is available
+          assert:
+            that:
+              - HEADSCALE_API_KEY is defined
+              - HEADSCALE_API_KEY | length > 0
+            fail_msg: "HEADSCALE_API_KEY not found in environment. Check HeadscaleAPI environment in Semaphore."
+
+        - name: Generate Headplane configuration file
+          copy:
+            content: |
+              ---
+              server:
+                host: "0.0.0.0"
+                port: 3000
+                cookie_secret: "{{ headplane_cookie_secret }}"
+                cookie_secure: false  # HTTP mode, not HTTPS
+
+              headscale:
+                url: "{{ headscale_url }}"
+                api_key: "{{ HEADSCALE_API_KEY }}"
+
+              integration:
+                docker:
+                  enabled: true
+                  socket: "unix:///var/run/docker.sock"
+                  container_label: "service=headscale"
+            dest: "{{ headplane_config_dir }}/config.yaml"
+            owner: "{{ ansible_user }}"
+            group: "{{ ansible_user }}"
+            mode: '0600'
+          register: config_created
+
+        - name: Deploy Quadlet unit file
+          template:
+            src: ../../files/quadlet/headplane.container.j2
+            dest: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}/{{ service_name }}.container"
+            owner: root
+            group: root
+            mode: '0644'
+          register: quadlet_deployed
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+          when: quadlet_deployed.changed
+
+        - name: Enable Headplane service
+          systemd:
+            name: "{{ service_name }}.service"
+            enabled: true
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+
+        - name: Start Headplane service
+          systemd:
+            name: "{{ service_name }}.service"
+            state: started
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_start
+
+        - name: Wait for Headplane to be ready
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
+            status_code: [200, 301, 302]
+            timeout: 10
+          register: headplane_ready
+          until: headplane_ready.status in [200, 301, 302]
+          retries: 12
+          delay: 5
+          when: service_start.changed
+
+        - name: Configure firewall for Headplane
+          block:
+            - name: Check if ufw is installed
+              command: which ufw
+              register: ufw_check
+              changed_when: false
+              failed_when: false
+
+            - name: Configure ufw firewall rules
+              when: ufw_check.rc == 0
+              block:
+                - name: Allow Headplane web interface
+                  ufw:
+                    rule: allow
+                    port: "{{ custom_web_port }}"
+                    proto: tcp
+                    comment: "Headplane Web UI"
+
+                - name: Note firewall configuration
+                  debug:
+                    msg: "Firewall rules configured for Headplane"
+              rescue:
+                - name: Note firewall configuration failure
+                  debug:
+                    msg: "Warning: Failed to configure firewall rules. Please configure manually if needed."
+
+    # Post-deployment validation
+    - name: "{{ service_name }} - Post-deployment validation"
+      when: confirm_deploy | bool
+      tags: [headplane, validate]
+      block:
+        - name: Wait for service to become active
+          systemd:
+            name: "{{ service_name }}.service"
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_status
+          until: service_status.status.ActiveState == "active"
+          retries: 100
+          delay: 1
+
+        - name: Display service activation result
+          debug:
+            msg: "✓ Headplane service is active after {{ service_status.attempts | default(1) }} attempt(s)"
+
+        - name: Check container status
+          command: podman ps --filter "name=headplane" --format json
+          register: container_status
+          changed_when: false
+
+        - name: Parse container info
+          set_fact:
+            container_info: "{{ container_status.stdout | from_json | first | default({}) }}"
+          when: container_status.stdout
+
+        - name: Display container status
+          debug:
+            msg:
+              - "Container: {{ container_info.Names | default(['Not found']) | first }}"
+              - "Status: {{ container_info.State | default('Unknown') }}"
+              - "Image: {{ container_info.Image | default('Unknown') }}"
+          when: container_info is defined
+
+    # Display access information
+    - name: "{{ service_name }} - Access information"
+      when: confirm_deploy | bool
+      tags: [headplane, info]
+      block:
+        - name: Generate service information
+          set_fact:
+            service_info:
+              name: "{{ service_name }}"
+              status: "{{ 'Active' if service_status.status.ActiveState == 'active' else 'Inactive' }}"
+              web_url: "http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
+              headscale_url: "{{ headscale_url }}"
+
+        - name: Display access information
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "Service Status: {{ service_info.status }}"
+              - "Web UI: {{ service_info.web_url }}"
+              - "Headscale: {{ service_info.headscale_url }}"
+              - ""
+              - "Features:"
+              - "  - Manage VPN nodes and users"
+              - "  - Approve/deny subnet routes"
+              - "  - Edit ACL policies"
+              - "  - Configure DNS settings"
+              - "  - Docker Integrated Mode (auto-reload Headscale)"
+              - ""
+              - "Access:"
+              - "  Open {{ service_info.web_url }} in browser"
+              - "  Authenticated via Headscale API key"
+              - ""
+              - "Service Management:"
+              - "  - Status: sudo systemctl status {{ service_name }}.service"
+              - "  - Logs: sudo podman logs {{ service_name }}"
+              - "  - Restart: sudo systemctl restart {{ service_name }}.service"
+              - "=========================================="
+
+    # Save deployment documentation
+    - name: Save deployment info
+      when: confirm_deploy | bool
+      tags: [headplane, info]
+      copy:
+        content: |
+          Headplane Deployment Information
+          =====================================
+          Deployed: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
+
+          Access URLs:
+          - Web UI: http://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}
+          - Headscale: {{ headscale_url }}
+
+          Service: {{ service_name }}.service
+          Container: {{ service_name }}
+
+          Data Directory: {{ headplane_data_dir }}
+          Config Directory: {{ headplane_config_dir }}
+
+          Integration: Docker Integrated Mode
+          - Auto-discovers Headscale container
+          - Automatically reloads Headscale on config changes
+        dest: "/opt/privatebox/deployment-info-headplane.txt"
+        mode: '0644'
+
+  handlers:
+    - name: restart headplane
+      systemd:
+        name: "{{ service_name }}.service"
+        state: restarted
+        scope: "{{ 'system' if use_system_quadlet else 'user' }}"

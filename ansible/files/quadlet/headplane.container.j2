@@ -1,0 +1,68 @@
+[Unit]
+Description=Headplane - Modern web UI for Headscale
+Documentation=https://github.com/tale/headplane
+Wants=network-online.target
+After=network-online.target headscale.service
+{% if use_system_quadlet | default(true) %}
+Before=multi-user.target
+{% endif %}
+
+[Container]
+# Container image
+Image={{ container_image_registry | default('ghcr.io') }}/{{ headplane_image }}:{{ headplane_version }}
+ContainerName=headplane
+
+# Network configuration - bind to Services VLAN IP
+PublishPort={{ ansible_default_ipv4.address }}:{{ headplane_web_port }}:3000
+
+# Volume mounts
+Volume={{ headplane_config_dir }}:/etc/headplane:{{ volume_mount_options | default('Z') }}
+Volume={{ headplane_data_dir }}:/var/lib/headplane:{{ volume_mount_options | default('Z') }}
+Volume=/var/run/docker.sock:/var/run/docker.sock:ro
+
+# Environment variables
+Environment="TZ={{ timezone | default('UTC') }}"
+Environment="HEADPLANE_CONFIG_PATH=/etc/headplane/config.yaml"
+
+# Security settings
+SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}
+NoNewPrivileges={{ container_no_new_privileges | default('true') | lower }}
+{% if container_drop_capabilities is defined and container_drop_capabilities | length > 0 %}
+{% for cap in container_drop_capabilities %}
+DropCapability={{ cap }}
+{% endfor %}
+{% endif %}
+
+# Health check
+HealthCmd=/bin/sh -c "wget -q --spider http://localhost:3000 || exit 1"
+HealthInterval={{ health_check_interval | default('30s') }}
+HealthRetries={{ health_check_retries | default(3) }}
+HealthStartPeriod={{ health_check_start_period | default('60s') }}
+HealthTimeout={{ health_check_timeout | default('10s') }}
+
+# Logging
+{% if container_log_driver is defined %}
+LogDriver={{ container_log_driver }}
+{% endif %}
+
+# Pull policy
+Pull={{ container_pull_policy | default('missing') }}
+
+[Service]
+# Restart policy
+Restart={{ container_restart_policy | default('always') }}
+RestartSec={{ container_restart_sec | default(30) }}
+
+# Systemd service settings
+TimeoutStartSec={{ systemd_timeout_start_sec | default(900) }}
+TimeoutStopSec={{ systemd_timeout_stop_sec | default(90) }}
+
+# Run pre-start commands if needed
+{% if headplane_data_dir is defined %}
+ExecStartPre=/bin/mkdir -p {{ headplane_data_dir }}
+ExecStartPre=/bin/mkdir -p {{ headplane_config_dir }}
+{% endif %}
+
+[Install]
+# Enable service at boot
+WantedBy=multi-user.target default.target

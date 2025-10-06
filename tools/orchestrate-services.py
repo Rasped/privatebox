@@ -57,6 +57,7 @@ class SemaphoreOrchestrator:
             "OPNsense 2: Semaphore Integration",
             "OPNsense 3: Post-Configuration",
             "Headscale 1: Deploy VPN Control Server",
+            "Headplane 1: Deploy Headscale Web UI",
             "Subnet Router 1: Create Alpine VM",
             "Generate Templates",
             "Subnet Router 2: Configure VPN Connection",
@@ -329,7 +330,9 @@ class SemaphoreOrchestrator:
             print("  - Subnet Router VM at 10.10.10.10 (LAN) / 10.10.20.11 (Services)")
             print("  - OPNsense firewall configured at 10.10.20.1")
             print("  - AdGuard DNS service running at 10.10.20.10:53")
-            print("  - AdGuard web interface at http://10.10.20.10:8080")
+            print("  - AdGuard web interface at https://10.10.20.10:3443")
+            print("  - Headscale VPN server at https://10.10.20.10:4443")
+            print("  - Headplane VPN management at http://10.10.20.10:8080")
             print("  - Homer dashboard at http://10.10.20.10:8081")
             return True
 
