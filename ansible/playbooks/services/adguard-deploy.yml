@@ -562,7 +562,7 @@
                   answer: "{{ item.answer }}"
                 status_code: 200
               register: rewrite_result
-              loop: "{{ dns_rewrites }}"
+              loop: "{{ dns_rewrites.rewrites }}"
               loop_control:
                 label: "{{ item.domain }} → {{ item.answer }}"
               ignore_errors: true  # Ignore if rewrite already exists
