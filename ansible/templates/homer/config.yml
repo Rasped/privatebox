@@ -71,6 +71,13 @@ services:
         type: "Ping"
         target: "_blank"
 
+      - name: "Headplane"
+        logo: "assets/tools/headscale.png"
+        subtitle: "Headscale Web UI"
+        tag: "vpn"
+        url: "http://10.10.20.10:8080/admin"
+        target: "_blank"
+
   - name: "Management"
     icon: "fas fa-tools"
     items:
