@@ -57,11 +57,11 @@ class SemaphoreOrchestrator:
             "OPNsense 2: Semaphore Integration",
             "OPNsense 3: Post-Configuration",
             "Headscale 1: Deploy VPN Control Server",
-            "Headplane 1: Deploy Headscale Web UI",
-            "Subnet Router 1: Create Alpine VM",
             "Generate Templates",
+            "Subnet Router 1: Create Alpine VM",
             "Subnet Router 2: Configure VPN Connection",
             "Subnet Router 3: Approve Routes",
+            "Headplane 1: Deploy Headscale Web UI",
             "Homer 1: Deploy Dashboard Service"
         ]
 
