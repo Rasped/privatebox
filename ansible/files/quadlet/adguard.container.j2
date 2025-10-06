@@ -57,8 +57,8 @@ CPUQuota={{ adguard_cpu_quota }}
 UserNS={{ container_user_namespace }}
 {% endif %}
 
-# Health check
-HealthCmd=/bin/sh -c 'wget -q --spider http://localhost:3000 || exit 1'
+# Health check (HTTPS with self-signed cert)
+HealthCmd=/bin/sh -c 'wget -q --spider --no-check-certificate https://localhost:3000 || exit 1'
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}
