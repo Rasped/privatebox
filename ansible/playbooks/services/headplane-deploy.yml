@@ -188,9 +188,7 @@
 
               integration:
                 docker:
-                  enabled: true
-                  socket: "unix:///var/run/docker.sock"
-                  container_label: "service=headscale"
+                  enabled: false
             dest: "{{ headplane_config_dir }}/config.yaml"
             owner: "{{ ansible_user }}"
             group: "{{ ansible_user }}"
