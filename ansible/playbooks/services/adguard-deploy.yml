@@ -161,6 +161,8 @@
         - name: Configure AdGuard HTTPS-only
           copy:
             content: |
+              http:
+                address: 127.0.0.1:8080
               tls:
                 enabled: true
                 server_name: privatebox.local
