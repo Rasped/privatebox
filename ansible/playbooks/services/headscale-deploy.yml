@@ -437,23 +437,7 @@
             headscale_api_key: "{{ api_key.stdout | trim }}"
           when: api_key.rc == 0
 
-        - name: Check if HeadscaleAPI environment exists in Semaphore
-          uri:
-            url: "https://localhost:2443/api/project/1/environment"
-            validate_certs: no
-            method: GET
-            headers:
-              Authorization: "Bearer {{ SEMAPHORE_API_TOKEN }}"
-            status_code: [200]
-          register: existing_environments
-          when: api_key.rc == 0
-
-        - name: Parse existing environment ID
-          set_fact:
-            existing_env_id: "{{ (existing_environments.json | selectattr('name', 'equalto', 'HeadscaleAPI') | first).id | default(0) }}"
-          when: api_key.rc == 0
-
-        - name: Create HeadscaleAPI environment in Semaphore
+        - name: Submit HeadscaleAPI environment to Semaphore
           shell: |
             jq -n \
               --arg name "HeadscaleAPI" \
@@ -475,7 +459,7 @@
               -d @- \
               "https://localhost:2443/api/project/1/environment"
           register: env_create_response
-          when: api_key.rc == 0 and existing_env_id | int == 0
+          when: api_key.rc == 0
           changed_when: true
 
         - name: Display API key registration result
