@@ -44,7 +44,9 @@ class SemaphoreOrchestrator:
         if not self.api_token:
             self.api_token = os.environ.get("SEMAPHORE_API_TOKEN")
 
-        self.base_url = "https://localhost:2443"
+        # Get Semaphore URL from arguments or use default
+        # When running inside Semaphore container, need to use host IP not localhost
+        self.base_url = variables.get('SEMAPHORE_URL', 'https://10.10.20.10:2443')
         self.project_id = 1
         self.headers = {"Authorization": f"Bearer {self.api_token}"}
 
