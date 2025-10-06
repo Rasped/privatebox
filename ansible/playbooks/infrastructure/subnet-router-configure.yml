@@ -8,7 +8,7 @@
     ANSIBLE_JINJA2_NATIVE: "True"
 
   vars:
-    headscale_server_url: "http://10.10.20.10:8082"
+    headscale_server_url: "https://10.10.20.10:4443"
     advertise_routes: "10.10.10.0/24"
 
     # Template configuration for Semaphore
