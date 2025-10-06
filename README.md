@@ -35,32 +35,38 @@ That's it! The installer will:
 - Set up web interfaces for easy management
 - Display connection information when complete
 
-### Custom Installation
+### Installation Options
 
 ```bash
+# Dry run (test without creating VM)
+bash quickstart.sh --dry-run
 
-# Unattended installation
-sudo bash quickstart.sh --yes
+# Keep downloaded files after installation
+bash quickstart.sh --no-cleanup
 
-# Clean up installation files after completion
-sudo bash quickstart.sh --cleanup
+# Use specific git branch
+bash quickstart.sh --branch develop
+
+# Verbose output
+bash quickstart.sh --verbose
 
 # See all options
-sudo bash quickstart.sh --help
+bash quickstart.sh --help
 ```
 
 ## What's Included
 
 ### Privacy Services
 
-- **AdGuard Home**: Network-wide ad and tracker blocking (Available)
-- **OPNsense**: Enterprise-grade firewall and router (Near Complete - Final configuration in progress)
-- **Unbound DNS**: Privacy-focused recursive DNS resolver (Planned)
+- **AdGuard Home**: Network-wide ad and tracker blocking with DNS filtering
+- **OPNsense**: Enterprise-grade firewall and router with VLAN support
+- **Headscale**: Self-hosted VPN control plane (Tailscale-compatible)
 
 ### Management Tools
 
-- **Portainer**: Simple container management with web UI
-- **Semaphore**: Ansible automation with point-and-click deployment
+- **Portainer**: Container management with web UI
+- **Semaphore**: Ansible automation platform with web UI
+- **Homer**: Centralized dashboard for all services
 
 ## Prerequisites
 
@@ -77,17 +83,9 @@ ansible/         # Service deployment playbooks
 documentation/   # Technical documentation and guides
 ```
 
-## Current Deployment Status
+## Access Information
 
-**✅ 100% Hands-off Deployment Achieved!** See [DEPLOYMENT-STATUS.md](documentation/DEPLOYMENT-STATUS.md) for detailed status report.
-
-## Getting Started
-
-````
-
-### Access Information
-
-After installation completes (5-10 minutes), you can access your PrivateBox services using `.lan` domains with HTTPS and trusted certificates:
+After installation completes (~15 minutes), you can access your PrivateBox services using `.lan` domains with HTTPS and self-signed certificates:
 
 **Network Services:**
 - **AdGuard Home**: `https://adguard.lan` - DNS filtering and ad blocking
@@ -105,15 +103,12 @@ After installation completes (5-10 minutes), you can access your PrivateBox serv
 **Login Credentials:**
 - Username: `admin`
 - Password: Auto-generated during setup (displayed after installation)
-- To retrieve manually: `ssh debian@<VM-IP>` then `sudo cat /etc/privatebox/config.env | grep SERVICES_PASSWORD`
+- To retrieve: `ssh debian@<VM-IP>` then `sudo cat /etc/privatebox/config.env | grep SERVICES_PASSWORD`
 
-**Semaphore Template Synchronization:**
-- Bootstrap automatically creates a "Generate Templates" task in Semaphore
-- Ansible playbooks with `semaphore_*` metadata in `vars_prompt` are automatically synced to Semaphore job templates
-- Run "Generate Templates" from Semaphore UI to sync new or updated playbooks
-- Initial sync runs automatically during bootstrap setup
-
-**Note:** The VM credentials above are for logging into the Debian VM, not for Proxmox.
+**Certificate Warnings:**
+- First visit: Browser shows security warning (self-signed certificate)
+- Click "Advanced" → "Proceed" to accept
+- This is normal for network appliances (same as UniFi, Firewalla, pfSense)
 
 ## Template Synchronization
 
@@ -160,35 +155,36 @@ vars_prompt:
 - **Manual Sync**: Click "Run" on "Generate Templates" task in Semaphore UI
 - **What Happens**: Templates are created/updated for all annotated playbooks
 
-## Security Considerations
+## Security Features
 
-- All sensitive variables are encrypted using Ansible Vault
-- Dedicated SSH keys for Ansible automation
-- Limited API access with proper authentication
-- Comprehensive logging for auditing
-- Regular rotation of passwords and keys
+- Auto-generated unique passwords per installation
+- Dedicated SSH keys for automation
+- HTTPS for all management interfaces
+- VLAN-based network segmentation
+- API access with authentication tokens
 
-## Current Status
+## Deployment Status
 
-### ✅ Working Features
+### ✅ Complete & Working
 
-- **Bootstrap System**: One-command VM creation with all management tools
-- **Container Management**: Portainer for easy container administration
-- **Automation Platform**: Semaphore with automatic template synchronization
-- **AdGuard Home**: Fully automated deployment via Semaphore templates
-- **SSH Key Management**: Automatic configuration for both Proxmox and container hosts
+- **Automated Bootstrap**: One-command deployment on Proxmox
+- **Network Infrastructure**: OPNsense firewall with VLAN segmentation
+- **DNS & Ad-Blocking**: AdGuard Home with custom blocklists
+- **VPN Infrastructure**: Headscale (Tailscale-compatible) with Headplane UI
+- **Container Platform**: Portainer for service management
+- **Automation**: Semaphore with automatic template generation
+- **Service Dashboard**: Homer with all service links
+- **HTTPS**: Self-signed certificates for all services
 
-### 🚧 In Development
+### 🚧 In Progress
 
-- **OPNsense Integration**: Firewall and router functionality (near complete, final VLAN configuration in progress)
-- **Network Segmentation**: VLAN-based network isolation (design phase)
-- **Additional Privacy Services**: Unbound DNS, WireGuard VPN
+- **Recovery System**: Factory reset and disaster recovery mechanisms
+- **Documentation**: End-user guides and troubleshooting
 
-### 📋 Future Features
+### 📋 Planned
 
-- **Consumer Dashboard**: User-friendly web interface for non-technical users
-- **Backup/Restore**: Automated configuration backup and recovery
-- **Additional Services**: Pi-hole, WireGuard VPN, Nginx Proxy Manager
+- **Additional Services**: Jellyfin media server, Nextcloud file sync
+- **Backup/Restore**: Automated configuration backup
 
 ## Documentation
 
