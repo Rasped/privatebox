@@ -1,0 +1,27 @@
+---
+# DNS rewrites for .lan domains pointing to Management VM
+# These are automatically configured in AdGuard during deployment
+
+- domain: "homer.lan"
+  answer: "10.10.20.10"
+  comment: "Homer Dashboard"
+
+- domain: "portainer.lan"
+  answer: "10.10.20.10"
+  comment: "Portainer Container Management"
+
+- domain: "semaphore.lan"
+  answer: "10.10.20.10"
+  comment: "Semaphore Ansible Automation"
+
+- domain: "adguard.lan"
+  answer: "10.10.20.10"
+  comment: "AdGuard Home DNS"
+
+- domain: "headscale.lan"
+  answer: "10.10.20.10"
+  comment: "Headscale VPN Control Server"
+
+- domain: "headplane.lan"
+  answer: "10.10.20.10"
+  comment: "Headplane Headscale Web UI"
