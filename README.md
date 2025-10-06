@@ -87,14 +87,22 @@ documentation/   # Technical documentation and guides
 
 ### Access Information
 
-After installation completes (5-10 minutes), you can access your PrivateBox VM:
+After installation completes (5-10 minutes), you can access your PrivateBox services using `.lan` domains with HTTPS and trusted certificates:
 
+**Network Services:**
+- **AdGuard Home**: `https://adguard.lan` - DNS filtering and ad blocking
+- **OPNsense**: `https://opnsense.lan` - Firewall and router management
+- **Headplane**: `https://headplane.lan/admin` - VPN management
 
-**Web Services** (available after VM login):
-- **Portainer**: `http://<VM-IP>:9000` - Container management UI
-- **Semaphore**: `http://<VM-IP>:3000` - Ansible automation UI
+**Management Services:**
+- **Portainer**: `https://portainer.lan` - Container management UI
+- **Semaphore**: `https://semaphore.lan` - Ansible automation UI
+- **Proxmox**: `https://proxmox.lan` - Virtualization platform
 
-**Semaphore Login:**
+**Dashboard:**
+- **Homer**: `https://homer.lan` - Central dashboard for all services
+
+**Login Credentials:**
 - Username: `admin`
 - Password: Auto-generated during setup (displayed after installation)
 - To retrieve manually: `ssh debian@<VM-IP>` then `sudo cat /etc/privatebox/config.env | grep SERVICES_PASSWORD`
