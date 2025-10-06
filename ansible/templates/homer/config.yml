@@ -63,19 +63,11 @@ services:
         url: "https://opnsense.lan"
         target: "_blank"
 
-      - name: "Headscale"
-        logo: "assets/tools/headscale.png"
-        subtitle: "VPN Control Server"
-        tag: "vpn"
-        url: "https://headscale.lan"
-        type: "Ping"
-        target: "_blank"
-
       - name: "Headplane"
         logo: "assets/tools/headscale.png"
-        subtitle: "Headscale Web UI"
+        subtitle: "VPN Management"
         tag: "vpn"
-        url: "https://headplane.lan"
+        url: "https://headplane.lan/admin"
         target: "_blank"
 
   - name: "Management"
