@@ -14,7 +14,7 @@
       semaphore_environment: "HeadscaleAPI"
 
     # Headplane default configuration - can be overridden by group_vars
-    headplane_image: "ghcr.io/tale/headplane"
+    headplane_image: "tale/headplane"
     headplane_version: "latest"
     headplane_web_port: 8080        # HTTP web interface port
     headplane_data_dir: "/opt/privatebox/data/headplane"
