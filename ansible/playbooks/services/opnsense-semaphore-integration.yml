@@ -166,7 +166,7 @@
                   {type: "var", name: "OPNSENSE_API_SECRET", secret: $api_secret, operation: "create"}
                 ]
               }' | \
-            curl -sS -f \
+            curl -ksS -f \
               -H "Authorization: Bearer {{ semaphore_token }}" \
               -H "Content-Type: application/json" \
               -d @- \
@@ -235,7 +235,7 @@
           --argjson pid {{ project_id }} \
           --arg key "{{ decoded_private_key.stdout }}" \
           '{name: $name, type: $type, project_id: $pid, ssh: {private_key: $key}}' | \
-        curl -sS -f \
+        curl -ksS -f \
           -H "Authorization: Bearer {{ semaphore_token }}" \
           -H "Content-Type: application/json" \
           -d @- \
@@ -292,7 +292,7 @@
           --arg inv "{{ inventory_yaml }}" \
           --argjson keyid {{ ssh_key_id }} \
           '{name: $name, type: $type, project_id: $pid, inventory: $inv, ssh_key_id: $keyid}' | \
-        curl -sS -f \
+        curl -ksS -f \
           -H "Authorization: Bearer {{ semaphore_token }}" \
           -H "Content-Type: application/json" \
           -d @- \
