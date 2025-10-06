@@ -83,7 +83,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - `tools/generate-templates.py` reads `vars_prompt` with `semaphore_*` and builds typed templates.
 
 ## Semaphore API (Cookie Auth) — IMPORTANT
-- Semaphore ONLY accessible via Services VLAN at https://10.10.20.10:3000 (not from workstation).
+- Semaphore ONLY accessible via Services VLAN at https://10.10.20.10:2443 (not from workstation).
 - Access requires double-hop: workstation → Proxmox (.10) → Semaphore (10.10.20.10).
 - Use session cookies (not hardcoded tokens) when scripting against Semaphore.
 - All API calls use HTTPS with `-k` flag (self-signed cert).
@@ -95,29 +95,29 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - From workstation: may need to retrieve from Semaphore ServicePasswords environment (if already have access)
   - Last resort: check bootstrap logs or ask user
 - Login to get session cookie (from Proxmox):
-  - `curl -sSk --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' https://10.10.20.10:3000/api/auth/login`
+  - `curl -sSk --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' https://10.10.20.10:2443/api/auth/login`
 - Test cookie validity:
-  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:3000/api/user | grep -q '"admin":true' && echo VALID`
+  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/user | grep -q '"admin":true' && echo VALID`
 
 ### API Access from Workstation (Double-Hop)
 - All commands via SSH to Proxmox: `ssh root@192.168.1.10 "curl ..."`
-- Example: `ssh root@192.168.1.10 "curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:3000/api/projects"`
+- Example: `ssh root@192.168.1.10 "curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/projects"`
 
 ### Curl Examples (Run from Proxmox)
 - Login and store cookie:
-  - `curl -sSk --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' https://10.10.20.10:3000/api/auth/login`
+  - `curl -sSk --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' https://10.10.20.10:2443/api/auth/login`
 - Get project id (PID):
-  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:3000/api/projects`
+  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/projects`
 - List environments (contains passwords):
-  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:3000/api/project/1/environment`
+  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/project/1/environment`
 - List templates for a project:
-  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:3000/api/project/<PID>/templates`
+  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/project/<PID>/templates`
 - Find a template id (TID) by name with jq:
-  - `TID=$(curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:3000/api/project/<PID>/templates | jq -r '.[] | select(.name=="Generate Templates") | .id')`
+  - `TID=$(curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/project/<PID>/templates | jq -r '.[] | select(.name=="Generate Templates") | .id')`
 - Run a template (creates a task):
-  - `curl -sSk --cookie /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"template_id":<TID>,"debug":false,"dry_run":false}' https://10.10.20.10:3000/api/project/<PID>/tasks`
+  - `curl -sSk --cookie /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"template_id":<TID>,"debug":false,"dry_run":false}' https://10.10.20.10:2443/api/project/<PID>/tasks`
 - Check tasks/status:
-  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:3000/api/project/<PID>/tasks`
+  - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/project/<PID>/tasks`
 
 Notes
 - Semaphore NOT accessible from workstation directly (blocked by VLAN isolation).
