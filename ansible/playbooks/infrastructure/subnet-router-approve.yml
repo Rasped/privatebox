@@ -93,6 +93,6 @@
           - ""
           - "Next Steps:"
           - "  1. Create VPN client: podman exec headscale headscale preauthkeys create --user 1"
-          - "  2. Connect client: tailscale up --login-server=http://10.10.20.10:8082 --authkey=<KEY>"
+          - "  2. Connect client: tailscale up --login-server=https://10.10.20.10:4443 --authkey=<KEY>"
           - "  3. Access LAN: ping 10.10.10.1 (from VPN client)"
           - "=========================================="
