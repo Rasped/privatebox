@@ -26,7 +26,6 @@
         src: /etc/privatebox/certs/privatebox.crt
       register: ca_cert_content
       delegate_to: localhost
-      become: true
 
     - name: Install CA certificate on subnet router
       copy:
