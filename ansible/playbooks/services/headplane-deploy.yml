@@ -185,6 +185,7 @@
               headscale:
                 url: "{{ headscale_url }}"
                 api_key: "{{ HEADSCALE_API_KEY }}"
+                config_strict: false
 
               integration:
                 docker:
