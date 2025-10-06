@@ -201,8 +201,21 @@ echo "    content: |"
 echo "$semaphore_api_content"
 fi)
 
+  - path: /etc/privatebox/certs/privatebox.crt
+    permissions: '0644'
+    owner: root:root
+    content: |
+$(sed 's/^/      /' < /etc/privatebox/certs/privatebox.crt)
+
+  - path: /etc/privatebox/certs/privatebox.key
+    permissions: '0644'
+    owner: root:root
+    content: |
+$(sed 's/^/      /' < /etc/privatebox/certs/privatebox.key)
+
 runcmd:
   - [mkdir, -p, /etc/privatebox]
+  - [mkdir, -p, /etc/privatebox/certs]
   - [mkdir, -p, /var/log]
   - ['/bin/bash', '/usr/local/bin/setup-guest.sh']
 

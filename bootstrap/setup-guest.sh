@@ -72,23 +72,16 @@ log "Creating Portainer snippets volume..."
 podman volume create snippets >/dev/null 2>&1 || true
 
 #==============================#
-# Generate HTTPS certificate
+# HTTPS certificate (already provisioned via cloud-init)
 #==============================#
-log "Generating self-signed HTTPS certificate..."
+log "Verifying HTTPS certificate..."
 CERT_DIR="/etc/privatebox/certs"
-mkdir -p "$CERT_DIR"
 
-openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
-  -keyout "$CERT_DIR/privatebox.key" \
-  -out "$CERT_DIR/privatebox.crt" \
-  -subj "/CN=PrivateBox Management/O=SubRosa ApS/C=DK" \
-  -addext "subjectAltName=IP:10.10.20.10,DNS:privatebox.local,DNS:*.privatebox.local" \
-  2>/dev/null || error_exit "Failed to generate certificate"
+if [[ ! -f "$CERT_DIR/privatebox.crt" ]] || [[ ! -f "$CERT_DIR/privatebox.key" ]]; then
+  error_exit "HTTPS certificate not found (should be provisioned via cloud-init)"
+fi
 
-chmod 644 "$CERT_DIR/privatebox.key"
-chmod 644 "$CERT_DIR/privatebox.crt"
-
-log "✓ HTTPS certificate generated (valid 10 years)"
+log "✓ HTTPS certificate verified"
 
 #==============================#
 # Custom Semaphore image (with proxmoxer)

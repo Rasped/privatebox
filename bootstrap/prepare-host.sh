@@ -38,8 +38,8 @@ check_dependencies() {
     local deps_to_install=()
     
     # Check for required commands
-    local required_commands=("ethtool" "sshpass" "zstd" "curl" "wget")
-    local required_packages=("ethtool" "sshpass" "zstd" "curl" "wget")
+    local required_commands=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl")
+    local required_packages=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl")
     
     for i in "${!required_commands[@]}"; do
         if ! command -v "${required_commands[$i]}" &> /dev/null; then
@@ -172,9 +172,31 @@ detect_wan_bridge() {
 source "${SCRIPT_DIR}/lib/password-generator.sh"
 
 # Generate configuration
+generate_https_certificate() {
+    display "Generating HTTPS certificate..."
+
+    local cert_dir="/etc/privatebox/certs"
+
+    # Create certificate directory
+    mkdir -p "$cert_dir"
+
+    # Generate self-signed certificate (10 year validity)
+    openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
+      -subj "/C=DK/O=PrivateBox/CN=privatebox.local" \
+      -keyout "$cert_dir/privatebox.key" \
+      -out "$cert_dir/privatebox.crt" \
+      2>/dev/null || error_exit "Failed to generate HTTPS certificate"
+
+    chmod 644 "$cert_dir/privatebox.key"
+    chmod 644 "$cert_dir/privatebox.crt"
+
+    display "  ✓ HTTPS certificate generated (valid 10 years)"
+    log "HTTPS certificate created at $cert_dir"
+}
+
 generate_config() {
     display "Generating configuration..."
-    
+
     # WAN bridge for OPNsense
     local wan_bridge="$WAN_BRIDGE"
     local proxmox_ip="$PROXMOX_IP"
@@ -571,7 +593,10 @@ main() {
     
     # Configure Services network
     configure_services_network
-    
+
+    # Generate HTTPS certificate
+    generate_https_certificate
+
     # Generate configuration
     generate_config
     
