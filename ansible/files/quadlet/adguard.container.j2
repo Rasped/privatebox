@@ -55,7 +55,7 @@ UserNS={{ container_user_namespace }}
 {% endif %}
 
 # Health check (HTTPS with self-signed cert)
-HealthCmd=/bin/sh -c 'wget -q --spider --no-check-certificate https://localhost:3000 || exit 1'
+HealthCmd=/bin/sh -c 'wget -q --spider --no-check-certificate https://127.0.0.1:3000 || exit 1'
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}
