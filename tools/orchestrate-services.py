@@ -59,9 +59,8 @@ class SemaphoreOrchestrator:
             "Headscale 1: Deploy VPN Control Server",
             "Subnet Router 1: Create Alpine VM",
             "Generate Templates",
-            "Subnet Router 2: Install CA Certificate",
-            "Subnet Router 3: Configure VPN Connection",
-            "Subnet Router 4: Approve Routes",
+            "Subnet Router 2: Configure VPN Connection",
+            "Subnet Router 3: Approve Routes",
             "Homer 1: Deploy Dashboard Service"
         ]
 
