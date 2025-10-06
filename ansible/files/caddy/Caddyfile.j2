@@ -33,7 +33,7 @@ http:// {
 homer.lan {
     tls internal
 
-    reverse_proxy localhost:8081 {
+    reverse_proxy 10.10.20.10:8081 {
         header_up Host {upstream_hostport}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
@@ -50,7 +50,7 @@ homer.lan {
 headplane.lan {
     tls internal
 
-    reverse_proxy localhost:8080 {
+    reverse_proxy 10.10.20.10:8080 {
         header_up Host {upstream_hostport}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
@@ -67,7 +67,7 @@ headplane.lan {
 portainer.lan {
     tls internal
 
-    reverse_proxy https://localhost:1443 {
+    reverse_proxy https://10.10.20.10:1443 {
         header_up Host {upstream_hostport}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
@@ -89,7 +89,7 @@ portainer.lan {
 semaphore.lan {
     tls internal
 
-    reverse_proxy https://localhost:2443 {
+    reverse_proxy https://10.10.20.10:2443 {
         header_up Host {upstream_hostport}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
@@ -111,7 +111,7 @@ semaphore.lan {
 adguard.lan {
     tls internal
 
-    reverse_proxy https://localhost:3443 {
+    reverse_proxy https://10.10.20.10:3443 {
         header_up Host {upstream_hostport}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
@@ -133,7 +133,7 @@ adguard.lan {
 headscale.lan {
     tls internal
 
-    reverse_proxy https://localhost:4443 {
+    reverse_proxy https://10.10.20.10:4443 {
         header_up Host {upstream_hostport}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
