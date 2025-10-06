@@ -1,0 +1,294 @@
+---
+- name: "Caddy 1: Deploy Reverse Proxy Service"
+  hosts: container-host
+  become: true
+  gather_facts: true
+
+  vars:
+    service_name: "Caddy"
+    service_description: "Reverse proxy for PrivateBox services"
+    service_tag: "caddy"
+
+    # Caddy default configuration
+    caddy_image: "caddy"
+    caddy_version: "2-alpine"
+    caddy_http_port: 80
+    caddy_https_port: 443
+    caddy_config_dir: "/opt/caddy"
+    caddy_data_dir: "/opt/caddy/data"
+    caddy_config_storage_dir: "/opt/caddy/config"
+
+    # Default values for hands-off deployment
+    confirm_deploy: true
+
+    # Quadlet configuration
+    use_system_quadlet: true
+    quadlet_system_path: "/etc/containers/systemd"
+
+    # Container runtime configuration
+    container_image_registry: "docker.io"
+    volume_mount_options: "Z"
+    timezone: "UTC"
+    container_security_label_disable: false
+    container_no_new_privileges: true
+    container_drop_capabilities: []
+
+    # Health check configuration
+    health_check_interval: "30s"
+    health_check_retries: 3
+    health_check_start_period: "60s"
+    health_check_timeout: "10s"
+
+    # Container management configuration
+    container_log_driver: "journald"
+    container_pull_policy: "missing"
+    container_restart_policy: "always"
+    container_restart_sec: 30
+
+    # Systemd configuration
+    systemd_timeout_start_sec: 900
+    systemd_timeout_stop_sec: 90
+
+  tasks:
+    # Pre-deployment validation
+    - name: "{{ service_name }} - Pre-deployment checks"
+      when: confirm_deploy | bool
+      tags: [caddy, preflight]
+      block:
+        - name: Check system requirements
+          assert:
+            that:
+              - ansible_distribution in ["Ubuntu", "Debian"]
+              - >
+                (ansible_distribution == "Ubuntu" and ansible_distribution_version is version('22.04', '>=')) or
+                (ansible_distribution == "Debian" and ansible_distribution_major_version | int >= 12)
+            fail_msg: "This playbook requires Ubuntu 22.04+, Debian 12+, or Debian 13+"
+            success_msg: "✓ OS requirements met: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+        - name: Display deployment header
+          debug:
+            msg:
+              - "=========================================="
+              - "     CADDY REVERSE PROXY DEPLOYMENT"
+              - "=========================================="
+              - "Service: {{ service_name }}"
+              - "Description: {{ service_description }}"
+              - "Target: {{ inventory_hostname }}"
+              - "HTTP Port: {{ caddy_http_port }}"
+              - "HTTPS Port: {{ caddy_https_port }}"
+
+        - name: Check if Podman is installed
+          command: which podman
+          register: podman_check
+          changed_when: false
+          failed_when: false
+
+        - name: Validate Podman installation
+          assert:
+            that:
+              - podman_check.rc == 0
+            fail_msg: "Podman is not installed. Please install Podman first."
+            success_msg: "✓ Podman is available"
+
+        - name: Check port availability
+          block:
+            - name: Check if HTTP port is available
+              wait_for:
+                host: "{{ ansible_default_ipv4.address }}"
+                port: "{{ caddy_http_port }}"
+                state: stopped
+                timeout: 1
+              register: http_port_check
+              failed_when: false
+
+            - name: Check if HTTPS port is available
+              wait_for:
+                host: "{{ ansible_default_ipv4.address }}"
+                port: "{{ caddy_https_port }}"
+                state: stopped
+                timeout: 1
+              register: https_port_check
+              failed_when: false
+
+            - name: Display port warnings
+              debug:
+                msg: "WARNING: Port {{ item.port }} appears to be in use. Service may fail to start."
+              when: item.check.failed is defined and not item.check.failed
+              loop:
+                - { port: "{{ caddy_http_port }}", check: "{{ http_port_check }}" }
+                - { port: "{{ caddy_https_port }}", check: "{{ https_port_check }}" }
+
+    # Directory structure setup
+    - name: "{{ service_name }} - Create directory structure"
+      tags: [caddy, setup]
+      block:
+        - name: Create Caddy directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+            owner: root
+            group: root
+          loop:
+            - "{{ caddy_config_dir }}"
+            - "{{ caddy_data_dir }}"
+            - "{{ caddy_config_storage_dir }}"
+            - "{{ quadlet_system_path }}"
+
+        - name: Deploy Caddyfile configuration
+          template:
+            src: ../../files/caddy/Caddyfile.j2
+            dest: "{{ caddy_config_dir }}/Caddyfile"
+            owner: root
+            group: root
+            mode: '0644'
+          register: caddyfile_deployed
+
+        - name: Validate Caddyfile syntax
+          debug:
+            msg: "Caddyfile deployed. Syntax validation will happen on container start."
+
+    # Container deployment
+    - name: "{{ service_name }} - Deploy container"
+      tags: [caddy, deploy]
+      block:
+        - name: Pull Caddy container image
+          command: podman pull {{ container_image_registry }}/{{ caddy_image }}:{{ caddy_version }}
+          register: pull_result
+          changed_when: "'Copying blob' in pull_result.stdout or 'Copying config' in pull_result.stdout"
+          retries: 3
+          delay: 10
+
+        - name: Display pull result
+          debug:
+            msg: "{{ 'Image pulled successfully' if pull_result.changed else 'Image already up to date' }}"
+
+        - name: Deploy Quadlet unit file
+          template:
+            src: ../../files/quadlet/caddy.container.j2
+            dest: "{{ quadlet_system_path }}/caddy.container"
+            owner: root
+            group: root
+            mode: '0644'
+          register: quadlet_deployed
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+          when: quadlet_deployed.changed or caddyfile_deployed.changed
+
+    # Service management
+    - name: "{{ service_name }} - Start and enable service"
+      tags: [caddy, service]
+      block:
+        - name: Enable Caddy service
+          systemd:
+            name: caddy.service
+            enabled: yes
+
+        - name: Start Caddy service
+          systemd:
+            name: caddy.service
+            state: started
+          register: service_started
+
+        - name: Wait for Caddy health endpoint
+          uri:
+            url: "http://{{ ansible_default_ipv4.address }}:{{ caddy_http_port }}/health"
+            method: GET
+            status_code: 200
+            timeout: 10
+          register: health_check
+          retries: 6
+          delay: 5
+          until: health_check.status == 200
+
+    # Post-deployment verification
+    - name: "{{ service_name }} - Verify deployment"
+      tags: [caddy, verify]
+      block:
+        - name: Get service status
+          systemd:
+            name: caddy.service
+          register: service_status
+
+        - name: Display service status
+          debug:
+            msg:
+              - "Service: caddy.service"
+              - "Active: {{ service_status.status.ActiveState }}"
+              - "Running: {{ service_status.status.SubState }}"
+
+        - name: Test Homer proxy
+          uri:
+            url: "https://{{ ansible_default_ipv4.address }}/health"
+            method: GET
+            validate_certs: no
+            status_code: [200, 404]
+            timeout: 10
+          register: homer_test
+          failed_when: false
+
+        - name: Display deployment summary
+          debug:
+            msg:
+              - ""
+              - "=========================================="
+              - "     DEPLOYMENT SUCCESS"
+              - "=========================================="
+              - ""
+              - "Caddy is now running on {{ ansible_default_ipv4.address }}"
+              - ""
+              - "Access URLs (.lan domains):"
+              - "  - homer.lan (Homer Dashboard)"
+              - "  - headplane.lan (Headscale Web UI)"
+              - "  - portainer.lan (Container Management)"
+              - "  - semaphore.lan (Ansible Automation)"
+              - "  - adguard.lan (DNS & Ad Blocking)"
+              - "  - headscale.lan (VPN Control Server)"
+              - ""
+              - "Health Check:"
+              - "  - http://{{ ansible_default_ipv4.address }}/health"
+              - ""
+              - "Configuration:"
+              - "  - Caddyfile: {{ caddy_config_dir }}/Caddyfile"
+              - "  - Data: {{ caddy_data_dir }}"
+              - "  - Config: {{ caddy_config_storage_dir }}"
+              - ""
+              - "Service Management:"
+              - "  - systemctl status caddy.service"
+              - "  - systemctl restart caddy.service"
+              - "  - journalctl -u caddy.service -f"
+              - ""
+              - "Next Steps:"
+              - "  1. Add DNS records for *.lan domains → {{ ansible_default_ipv4.address }}"
+              - "  2. Access services via https://homer.lan"
+              - "  3. Accept self-signed certificate on first visit"
+              - ""
+
+    - name: Save deployment info
+      copy:
+        content: |
+          Caddy Deployment Information
+          =====================================
+          Deployed: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
+
+          Access URLs:
+          - Health Check: http://{{ ansible_default_ipv4.address }}/health
+          - Homer: https://homer.lan
+          - Headplane: https://headplane.lan
+          - Portainer: https://portainer.lan
+          - Semaphore: https://semaphore.lan
+          - AdGuard: https://adguard.lan
+          - Headscale: https://headscale.lan
+
+          Service: caddy.service
+          Container: caddy
+
+          Configuration:
+          Caddyfile: {{ caddy_config_dir }}/Caddyfile
+          Data: {{ caddy_data_dir }}
+          Config: {{ caddy_config_storage_dir }}
+        dest: "/opt/privatebox/deployment-info-caddy.txt"
+        mode: '0644'
