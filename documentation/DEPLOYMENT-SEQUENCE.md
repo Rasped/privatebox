@@ -558,3 +558,399 @@ This document maps the **exact, actual deployment sequence** from a clean Proxmo
 
 **Control returns to:** `bootstrap/bootstrap.sh` (Phase 4 monitoring)
 
+---
+
+## Phase 4: Guest Configuration (setup-guest.sh)
+
+**Location:** `/usr/local/bin/setup-guest.sh` (embedded in cloud-init from `bootstrap/setup-guest.sh`)
+**Executed on:** Management VM (inside guest)
+**Triggered by:** cloud-init `runcmd` section
+**Purpose:** Install Podman, configure Portainer/Semaphore, deploy services via Semaphore API
+
+### Step 17: Guest Bootstrap and Logging
+
+**What happens:**
+1. Sources configuration: `/etc/privatebox/config.env`
+2. Verifies `SERVICES_PASSWORD` is set (exits on failure)
+3. Sets up logging to `/var/log/privatebox-guest-setup.log`
+4. Redirects all output to log file with `tee`
+5. Creates marker file: `/etc/privatebox-install-complete`
+6. Writes progress: `PROGRESS:Starting guest configuration`
+
+**Files created:**
+- `/var/log/privatebox-guest-setup.log` (setup log)
+- `/etc/privatebox-install-complete` (progress marker for bootstrap monitoring)
+
+**State after step:** Logging initialized, configuration loaded
+
+### Step 18: System Package Installation
+
+**What happens:**
+1. **Updates package lists:**
+   ```bash
+   apt-get update
+   ```
+   - Progress marker: `PROGRESS:Updating system packages`
+
+2. **Upgrades all packages:**
+   ```bash
+   DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+   ```
+
+3. **Installs required packages:**
+   ```bash
+   DEBIAN_FRONTEND=noninteractive apt-get install -y \
+     curl wget ca-certificates gnupg lsb-release jq git \
+     podman buildah skopeo openssh-client
+   ```
+   - `podman` - Container runtime (Docker alternative)
+   - `buildah` - Container image building
+   - `skopeo` - Container image management
+   - `jq` - JSON parsing for API calls
+   - `git` - Repository operations
+   - `openssh-client` - SSH operations
+
+**Files modified:**
+- System packages updated and installed
+
+**State after step:** All dependencies installed, system fully updated
+
+### Step 19: Podman Socket Configuration
+
+**What happens:**
+1. **Enable Podman socket:**
+   ```bash
+   systemctl enable --now podman.socket
+   ```
+   - Provides Docker-compatible API at `/run/podman/podman.sock`
+   - Required for Portainer to manage containers
+
+2. **Auto-update disabled:**
+   - Automatic container updates not enabled
+   - Updates will be manual via Semaphore
+
+**Files created:**
+- `/run/podman/podman.sock` (Docker-compatible API socket)
+
+**Systemd units enabled:**
+- `podman.socket` (active and enabled)
+
+**State after step:** Podman socket running, Docker API available
+
+### Step 20: Directory and Volume Creation
+
+**What happens:**
+1. **Create persistent directories:**
+   ```bash
+   mkdir -p /opt/portainer/data
+   mkdir -p /opt/semaphore/{data,config,projects,ansible}
+   mkdir -p /etc/containers/systemd
+   mkdir -p /usr/local/lib
+   mkdir -p /root/.credentials
+   ```
+
+2. **Set permissions for Semaphore:**
+   ```bash
+   chown -R 1001:1001 /opt/semaphore
+   ```
+   - Semaphore container runs as uid 1001 (non-root)
+
+3. **Create Podman volume for Portainer:**
+   ```bash
+   podman volume create snippets
+   ```
+   - Used for Portainer Stack file storage
+
+**Directories created:**
+- `/opt/portainer/data` - Portainer configuration and data
+- `/opt/semaphore/data` - Semaphore database (BoltDB)
+- `/opt/semaphore/config` - Semaphore config.json
+- `/opt/semaphore/projects` - Cloned repositories and playbooks
+- `/opt/semaphore/ansible` - Ansible home directory cache
+- `/etc/containers/systemd` - Podman Quadlet unit files
+- `/root/.credentials` - Temporary credential storage
+
+**Podman volumes:**
+- `snippets` (Portainer stack storage)
+
+**State after step:** Directory structure ready for services
+
+### Step 21: Build Custom Semaphore Image
+
+**What happens:**
+1. **Write Containerfile** (`/opt/semaphore/Containerfile`):
+   ```dockerfile
+   FROM docker.io/semaphoreui/semaphore:latest
+   USER root
+   RUN pip3 install --no-cache-dir proxmoxer requests
+   USER semaphore
+   ```
+   - Adds Python libraries for Proxmox API (`proxmoxer`, `requests`)
+   - Required for Ansible Proxmox modules
+
+2. **Build custom image:**
+   ```bash
+   podman build -t localhost/semaphore-proxmox:latest /opt/semaphore
+   ```
+   - Progress marker: `PROGRESS:Building custom Semaphore image`
+   - Image tagged as `localhost/semaphore-proxmox:latest`
+   - Built locally (not pulled from registry)
+
+**Files created:**
+- `/opt/semaphore/Containerfile` (build instructions)
+
+**Container images:**
+- `localhost/semaphore-proxmox:latest` (custom Semaphore with Proxmox support)
+
+**State after step:** Custom Semaphore image ready for deployment
+
+### Step 22: Create Portainer Quadlet
+
+**What happens:**
+1. **Write Quadlet unit** (`/etc/containers/systemd/portainer.container`):
+   ```ini
+   [Unit]
+   Description=Portainer Container
+   Wants=network-online.target podman.socket
+   After=network-online.target podman.socket
+
+   [Container]
+   Image=docker.io/portainer/portainer-ce:latest
+   ContainerName=portainer
+   Volume=/run/podman/podman.sock:/var/run/docker.sock:z
+   Volume=/opt/portainer/data:/data:z
+   Volume=snippets:/snippets:z
+   Volume=/etc/privatebox/certs:/certs:ro,z
+   PublishPort=1443:9443
+   Environment=TZ=UTC
+   Exec=--ssl --sslcert /certs/privatebox.crt --sslkey /certs/privatebox.key
+
+   [Service]
+   Restart=always
+   TimeoutStartSec=300
+
+   [Install]
+   WantedBy=multi-user.target default.target
+   ```
+   - Systemd Quadlet format (auto-converts to systemd unit)
+   - Binds to port 1443 on host (maps to 9443 in container)
+   - HTTPS enabled with self-signed cert from step 9
+   - Podman socket mounted for container management
+
+**Files created:**
+- `/etc/containers/systemd/portainer.container` (Quadlet unit)
+
+**State after step:** Portainer configured, awaiting systemd reload
+
+### Step 23: Generate Semaphore Configuration
+
+**What happens:**
+1. **Generate random secrets:**
+   ```bash
+   COOKIE_HASH=$(head -c32 /dev/urandom | base64 | head -c44)
+   COOKIE_ENCRYPTION=$(head -c32 /dev/urandom | base64 | head -c32)
+   ACCESS_KEY_ENCRYPTION=$(head -c32 /dev/urandom | base64 | head -c32)
+   ```
+
+2. **Write config.json** (`/opt/semaphore/config/config.json`):
+   ```json
+   {
+     "bolt": { "host": "/var/lib/semaphore/database.boltdb" },
+     "dialect": "bolt",
+     "port": ":3000",
+     "tmp_path": "/tmp/semaphore",
+     "cookie_hash": "[random]",
+     "cookie_encryption": "[random]",
+     "access_key_encryption": "[random]",
+     "tls": {
+       "enabled": true,
+       "cert_file": "/certs/privatebox.crt",
+       "key_file": "/certs/privatebox.key"
+     },
+     "email": { "alert": false },
+     "telegram": { "alert": false },
+     "ldap": { "enable": false },
+     "password_login_disable": false,
+     "non_admin_can_create_project": false
+   }
+   ```
+   - BoltDB (embedded database, no external DB needed)
+   - HTTPS enabled on port 3000
+   - Alerts disabled (email, Telegram)
+   - Only admins can create projects
+
+**Files created:**
+- `/opt/semaphore/config/config.json` (Semaphore configuration)
+
+**State after step:** Semaphore configured with secure random secrets
+
+### Step 24: Create Semaphore Quadlet
+
+**What happens:**
+1. **Write Quadlet unit** (`/etc/containers/systemd/semaphore.container`):
+   ```ini
+   [Unit]
+   Description=Semaphore Container
+   Wants=network-online.target
+   After=network-online.target
+
+   [Container]
+   Image=localhost/semaphore-proxmox:latest
+   ContainerName=semaphore
+   Volume=/opt/semaphore/data:/var/lib/semaphore:Z
+   Volume=/opt/semaphore/config:/etc/semaphore:Z
+   Volume=/opt/semaphore/projects:/projects:Z
+   Volume=/opt/semaphore/ansible:/home/semaphore/.ansible:Z
+   Volume=/etc/privatebox/certs:/certs:ro,z
+   PublishPort=2443:3000
+   Environment=SEMAPHORE_DB_DIALECT=bolt
+   Environment=SEMAPHORE_DB_PATH=/var/lib/semaphore/database.boltdb
+   Environment=SEMAPHORE_ADMIN=admin
+   Environment=SEMAPHORE_ADMIN_PASSWORD=[from SERVICES_PASSWORD]
+   Environment=SEMAPHORE_ADMIN_NAME=Administrator
+   Environment=SEMAPHORE_ADMIN_EMAIL=admin@privatebox.local
+   Environment=SEMAPHORE_CONFIG_PATH=/etc/semaphore/config.json
+   Environment=SEMAPHORE_PLAYBOOK_PATH=/projects
+   Exec=semaphore server --config=/etc/semaphore/config.json
+
+   [Service]
+   Restart=always
+   TimeoutStartSec=300
+
+   [Install]
+   WantedBy=multi-user.target default.target
+   ```
+   - Uses custom image built in step 21
+   - Binds to port 2443 on host (maps to 3000 in container)
+   - Admin user auto-created via environment variables
+
+**Files created:**
+- `/etc/containers/systemd/semaphore.container` (Quadlet unit)
+
+**State after step:** Semaphore configured, awaiting systemd reload
+
+### Step 25: Configure Nightly Image Rebuild
+
+**What happens:**
+1. **Write rebuild service** (`/etc/systemd/system/semaphore-image-update.service`):
+   ```ini
+   [Unit]
+   Description=Rebuild custom Semaphore image (with proxmoxer)
+
+   [Service]
+   Type=oneshot
+   WorkingDirectory=/opt/semaphore
+   ExecStart=/usr/bin/podman build -t localhost/semaphore-proxmox:latest .
+   ```
+
+2. **Write rebuild timer** (`/etc/systemd/system/semaphore-image-update.timer`):
+   ```ini
+   [Unit]
+   Description=Nightly rebuild for custom Semaphore image
+
+   [Timer]
+   OnCalendar=daily
+   Persistent=true
+
+   [Install]
+   WantedBy=timers.target
+   ```
+   - Runs daily to rebuild Semaphore image with latest base
+   - Ensures security updates from upstream
+
+**Files created:**
+- `/etc/systemd/system/semaphore-image-update.service` (rebuild service)
+- `/etc/systemd/system/semaphore-image-update.timer` (daily timer)
+
+**State after step:** Auto-update configured for Semaphore image
+
+### Step 26: Start Services via Systemd
+
+**What happens:**
+1. **Reload systemd daemon:**
+   ```bash
+   systemctl daemon-reload
+   ```
+   - Processes Quadlet files from `/etc/containers/systemd/`
+   - Generates systemd service units automatically
+
+2. **Enable nightly rebuild timer:**
+   ```bash
+   systemctl enable --now semaphore-image-update.timer
+   ```
+
+3. **Start Portainer:**
+   ```bash
+   systemctl start portainer.service
+   ```
+   - Progress marker: `PROGRESS:Starting Portainer service`
+   - Service auto-generated from Quadlet file
+
+4. **Wait for Portainer readiness:**
+   - Polls `https://localhost:1443/api/status` every 5 seconds
+   - Timeout: 30 attempts (2.5 minutes)
+
+5. **Start Semaphore:**
+   ```bash
+   systemctl start semaphore.service
+   ```
+   - Progress marker: `PROGRESS:Starting Semaphore service`
+
+6. **Wait for Semaphore readiness:**
+   - Polls `https://localhost:2443/api/ping` every 2 seconds
+   - Timeout: 60 attempts (2 minutes)
+
+**Systemd units started:**
+- `portainer.service` (running)
+- `semaphore.service` (running)
+- `semaphore-image-update.timer` (enabled)
+
+**State after step:** Portainer and Semaphore running, APIs accessible
+
+### Step 27: Create Semaphore Admin User
+
+**What happens:**
+1. **Get Semaphore container image name:**
+   ```bash
+   IMAGE=$(podman container inspect -f '{{.ImageName}}' semaphore)
+   ```
+   - Typically `localhost/semaphore-proxmox:latest`
+
+2. **Stop Semaphore service:**
+   ```bash
+   systemctl stop semaphore.service
+   sleep 2
+   ```
+   - Required because admin user creation modifies database directly
+
+3. **Create admin user:**
+   ```bash
+   podman run --rm \
+     -v /opt/semaphore/config:/etc/semaphore:Z \
+     -v /opt/semaphore/data:/var/lib/semaphore:Z \
+     localhost/semaphore-proxmox:latest semaphore user add \
+     --admin \
+     --login admin \
+     --name "Administrator" \
+     --email admin@privatebox.local \
+     --password "${SERVICES_PASSWORD}" \
+     --config /etc/semaphore/config.json
+   ```
+   - Progress marker: `PROGRESS:Creating Semaphore admin user`
+   - Runs one-shot container to add user to database
+   - Idempotent (ignores "already exists" errors)
+
+4. **Restart Semaphore:**
+   ```bash
+   systemctl start semaphore.service
+   ```
+
+5. **Wait for API readiness again:**
+   - Polls `https://localhost:2443/api/ping` every 2 seconds
+   - Timeout: 30 attempts (1 minute)
+
+**BoltDB changes:**
+- Admin user `admin` created in `/opt/semaphore/data/database.boltdb`
+
+**State after step:** Semaphore running with admin user ready for API access
+
