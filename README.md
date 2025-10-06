@@ -178,12 +178,11 @@ vars_prompt:
 
 ### 🚧 In Progress
 
-- **Recovery System**: Factory reset and disaster recovery mechanisms
 - **Documentation**: End-user guides and troubleshooting
 
 ### 📋 Planned
 
-- **Additional Services**: Jellyfin media server, Nextcloud file sync
+- **Recovery System**: Factory reset and disaster recovery mechanisms
 - **Backup/Restore**: Automated configuration backup
 
 ## Documentation
