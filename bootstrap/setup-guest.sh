@@ -59,7 +59,6 @@ log "Container auto-updates disabled - use Semaphore for manual updates"
 # Directories & volumes
 #==============================#
 log "Creating directories..."
-mkdir -p /opt/portainer/data
 mkdir -p /opt/semaphore/{data,config,projects,ansible}
 mkdir -p /etc/containers/systemd
 mkdir -p /usr/local/lib
@@ -67,9 +66,6 @@ mkdir -p /root/.credentials
 
 # Semaphore container runs as uid 1001
 chown -R 1001:1001 /opt/semaphore
-
-log "Creating Portainer snippets volume..."
-podman volume create snippets >/dev/null 2>&1 || true
 
 #==============================#
 # HTTPS certificate (already provisioned via cloud-init)
@@ -100,36 +96,6 @@ EOF
 log "Building Semaphore image (localhost/semaphore-proxmox:latest)..."
 echo "PROGRESS:Building custom Semaphore image" >> /etc/privatebox-install-complete
 podman build -t localhost/semaphore-proxmox:latest /opt/semaphore || error_exit "Failed to build Semaphore image"
-
-#==============================#
-# Portainer quadlet
-#==============================#
-log "Writing Portainer quadlet..."
-cat > /etc/containers/systemd/portainer.container <<'EOF'
-[Unit]
-Description=Portainer Container
-Wants=network-online.target podman.socket
-After=network-online.target podman.socket
-
-[Container]
-Image=docker.io/portainer/portainer-ce:latest
-ContainerName=portainer
-Volume=/run/podman/podman.sock:/var/run/docker.sock:z
-Volume=/opt/portainer/data:/data:z
-Volume=snippets:/snippets:z
-Volume=/etc/privatebox/certs:/certs:ro,z
-PublishPort=1443:9443
-Environment=TZ=UTC
-Exec=--ssl --sslcert /certs/privatebox.crt --sslkey /certs/privatebox.key
-# Auto-update disabled - manual updates only
-
-[Service]
-Restart=always
-TimeoutStartSec=300
-
-[Install]
-WantedBy=multi-user.target default.target
-EOF
 
 #==============================#
 # Semaphore config.json
@@ -245,20 +211,6 @@ systemctl daemon-reload
 log "Enabling nightly image rebuild timer..."
 systemctl enable --now semaphore-image-update.timer
 
-log "Starting Portainer..."
-echo "PROGRESS:Starting Portainer service" >> /etc/privatebox-install-complete
-# Quadlet services are auto-generated, just start them
-systemctl start portainer.service || error_exit "Failed to start Portainer"
-
-log "Waiting for Portainer to be ready..."
-for i in {1..30}; do
-  if curl -sfk https://localhost:1443/api/status >/dev/null 2>&1; then
-    log "Portainer is ready"
-    break
-  fi
-  sleep 5
-done
-
 log "Starting Semaphore..."
 echo "PROGRESS:Starting Semaphore service" >> /etc/privatebox-install-complete
 # Quadlet services are auto-generated, just start them
@@ -352,14 +304,12 @@ cat <<EOF
 ========================================
 PrivateBox Guest Configuration Complete
 ========================================
-Portainer: https://$(hostname -I | awk '{print $1}'):1443
 Semaphore: https://$(hostname -I | awk '{print $1}'):2443
 
 Admin user: admin
 Admin password: (from /etc/privatebox/config.env -> SERVICES_PASSWORD)
 
 Data dirs:
-  - /opt/portainer/data
   - /opt/semaphore/data, /opt/semaphore/config
 Projects/playbooks:
   - /opt/semaphore/projects  (mounted at /projects in the container)

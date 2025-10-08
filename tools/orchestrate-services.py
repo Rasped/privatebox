@@ -52,6 +52,7 @@ class SemaphoreOrchestrator:
 
         # Define the template sequence
         self.template_sequence = [
+            "Portainer 1: Deploy Container Management UI",
             "AdGuard 1: Deploy Container Service",
             "OPNsense 1: Establish Secure Access",
             "OPNsense 2: Semaphore Integration",
@@ -327,6 +328,7 @@ class SemaphoreOrchestrator:
         else:
             print("\n✅ All templates completed successfully!")
             print("\nServices deployed:")
+            print("  - Portainer container UI at https://10.10.20.10:1443")
             print("  - Subnet Router VM at 10.10.10.10 (LAN) / 10.10.20.11 (Services)")
             print("  - OPNsense firewall configured at 10.10.20.1")
             print("  - AdGuard DNS service running at 10.10.20.10:53")
