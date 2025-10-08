@@ -17,8 +17,8 @@ PublishPort={{ ansible_default_ipv4.address }}:{{ portainer_web_port }}:9443
 
 # Volume mounts
 Volume=/run/podman/podman.sock:/var/run/docker.sock:z
-Volume={{ portainer_data_dir }}:/data:{{ volume_mount_options | default('z') }}
-Volume=snippets:/snippets:{{ volume_mount_options | default('z') }}
+Volume={{ portainer_data_dir }}:/data:{{ volume_mount_options | default('Z') }}
+Volume=snippets:/snippets:{{ volume_mount_options | default('Z') }}
 Volume=/etc/privatebox/certs:/certs:ro,z
 
 # Environment variables
