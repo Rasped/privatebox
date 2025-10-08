@@ -54,9 +54,9 @@ class SemaphoreOrchestrator:
         self.template_sequence = [
             "Portainer 1: Deploy Container Management UI",
             "AdGuard 1: Deploy Container Service",
-            "OPNsense 1: Establish Secure Access",
-            "OPNsense 2: Semaphore Integration",
-            "OPNsense 3: Post-Configuration",
+            "OPNsense 1: Configure Secure Access",
+            "OPNsense 2: Configure Semaphore Integration",
+            "OPNsense 3: Apply Post-Configuration",
             "Headscale 1: Deploy VPN Control Server",
             "Subnet Router 1: Create Alpine VM",
             "Generate Templates",
