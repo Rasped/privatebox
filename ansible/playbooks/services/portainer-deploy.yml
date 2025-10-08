@@ -1,0 +1,390 @@
+---
+- name: "Portainer 1: Deploy Container Management UI"
+  hosts: container-host
+  become: true
+  gather_facts: true
+
+  vars:
+    service_name: "Portainer"
+    service_description: "Container management UI for PrivateBox"
+    service_tag: "portainer"
+
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "ServicePasswords"
+
+    # Portainer default configuration - can be overridden by group_vars
+    portainer_image: "portainer/portainer-ce"
+    portainer_version: "latest"
+    portainer_web_port: 1443      # HTTPS web interface port (mapped from 9443)
+    portainer_data_dir: "/opt/portainer/data"
+
+    # Default values for hands-off deployment (no prompts)
+    confirm_deploy: true
+
+    # Portainer admin credentials
+    portainer_admin_username: "admin"
+    # Use SERVICES_PASSWORD from Semaphore environment
+    # Semaphore passes environment secrets as Ansible extra vars
+    portainer_admin_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
+
+    # Quadlet configuration
+    use_system_quadlet: true
+    quadlet_system_path: "/etc/containers/systemd"
+    quadlet_user_path: "{{ ansible_env.HOME }}/.config/containers/systemd"
+
+    # Container runtime configuration
+    container_image_registry: "docker.io"
+    volume_mount_options: "z"
+    timezone: "UTC"
+    container_security_label_disable: false
+    container_no_new_privileges: true
+    container_drop_capabilities: []
+
+    # Health check configuration
+    health_check_interval: "30s"
+    health_check_retries: 3
+    health_check_start_period: "60s"
+    health_check_timeout: "10s"
+
+    # Container management configuration
+    container_log_driver: "journald"
+    container_pull_policy: "missing"
+    container_restart_policy: "always"
+    container_restart_sec: 30
+
+    # Systemd configuration
+    systemd_timeout_start_sec: 300
+    systemd_timeout_stop_sec: 90
+
+
+  tasks:
+    # Pre-deployment validation
+    - name: "{{ service_name }} - Pre-deployment checks"
+      when: confirm_deploy | bool
+      tags: [portainer, preflight]
+      block:
+        - name: Check system requirements
+          assert:
+            that:
+              - ansible_distribution in ["Ubuntu", "Debian"]
+              - >
+                (ansible_distribution == "Ubuntu" and ansible_distribution_version is version('22.04', '>=')) or
+                (ansible_distribution == "Debian" and ansible_distribution_version is version('12', '>='))
+            fail_msg: "This playbook requires Ubuntu 22.04+ or Debian 12+"
+
+        - name: Check if Podman is installed
+          command: which podman
+          register: podman_check
+          changed_when: false
+          failed_when: false
+
+        - name: Install Podman if not present
+          when: podman_check.rc != 0
+          block:
+            - name: Update apt cache
+              apt:
+                update_cache: yes
+                cache_valid_time: 3600
+
+            - name: Install Podman
+              apt:
+                name:
+                  - podman
+                  - podman-compose
+                  - containernetworking-plugins
+                state: present
+
+        - name: Check Podman version
+          command: podman --version
+          register: podman_version
+          changed_when: false
+
+        - name: Display Podman version
+          debug:
+            msg: "Podman version: {{ podman_version.stdout }}"
+
+        - name: Check for Podman socket
+          stat:
+            path: /run/podman/podman.sock
+          register: podman_socket
+
+        - name: Ensure Podman socket is enabled
+          when: not podman_socket.stat.exists
+          systemd:
+            name: podman.socket
+            enabled: true
+            state: started
+
+        - name: Check for certificate files
+          stat:
+            path: "{{ item }}"
+          register: cert_check
+          loop:
+            - /etc/privatebox/certs/privatebox.crt
+            - /etc/privatebox/certs/privatebox.key
+          failed_when: not cert_check.stat.exists
+
+        - name: Check for port conflicts
+          wait_for:
+            port: "{{ portainer_web_port }}"
+            state: stopped
+            timeout: 1
+          ignore_errors: true
+          register: port_check
+
+        - name: Warn about port conflicts
+          debug:
+            msg: "WARNING: Port {{ portainer_web_port }} appears to be in use. Service may fail to start."
+          when: port_check.failed is defined and not port_check.failed
+
+    # Main deployment
+    - name: "{{ service_name }} - Deployment"
+      when: confirm_deploy | bool
+      tags: [portainer, deploy]
+      block:
+        - name: Create directory structure
+          file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner | default(ansible_user) }}"
+            group: "{{ item.group | default(ansible_user) }}"
+            mode: "{{ item.mode | default('0755') }}"
+          loop:
+            - { path: "{{ portainer_data_dir }}" }
+            - { path: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}" }
+
+        - name: Set SELinux context for data directories
+          when: ansible_selinux.status is defined and ansible_selinux.status == "enabled"
+          command: |
+            chcon -R -t container_file_t {{ portainer_data_dir }}
+          changed_when: true
+
+        - name: Create Podman volume for snippets
+          command: podman volume create snippets
+          register: volume_create
+          changed_when: volume_create.rc == 0
+          failed_when: false  # Ignore if already exists
+
+        - name: Deploy Quadlet unit file
+          template:
+            src: ../../files/quadlet/portainer.container.j2
+            dest: "{{ quadlet_system_path if use_system_quadlet else quadlet_user_path }}/portainer.container"
+            owner: root
+            group: root
+            mode: '0644'
+          register: quadlet_deployed
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: true
+          when: quadlet_deployed.changed
+
+        - name: Enable Portainer service
+          systemd:
+            name: portainer.service
+            enabled: true
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+
+        - name: Start Portainer service
+          systemd:
+            name: portainer.service
+            state: started
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_start
+
+        - name: Wait for Portainer to be ready
+          uri:
+            url: "https://{{ ansible_default_ipv4.address }}:{{ portainer_web_port }}/api/status"
+            validate_certs: no
+            status_code: [200, 204]
+            timeout: 10
+          register: portainer_ready
+          until: portainer_ready.status in [200, 204]
+          retries: 12
+          delay: 10
+          when: service_start.changed
+
+        - name: Configure firewall for Portainer
+          block:
+            - name: Check if ufw is installed
+              command: which ufw
+              register: ufw_check
+              changed_when: false
+              failed_when: false
+
+            - name: Configure ufw firewall rules
+              when: ufw_check.rc == 0
+              block:
+                - name: Allow Portainer web interface
+                  ufw:
+                    rule: allow
+                    port: "{{ portainer_web_port }}"
+                    proto: tcp
+                    comment: "Portainer Web UI"
+
+                - name: Note firewall configuration
+                  debug:
+                    msg: "Firewall rules configured for Portainer"
+              rescue:
+                - name: Note firewall configuration failure
+                  debug:
+                    msg: "Warning: Failed to configure firewall rules. Please configure manually if needed."
+
+    # Post-deployment validation
+    - name: "{{ service_name }} - Post-deployment validation"
+      when: confirm_deploy | bool
+      tags: [portainer, validate]
+      block:
+        - name: Check service status
+          systemd:
+            name: portainer.service
+            scope: "{{ 'system' if use_system_quadlet else 'user' }}"
+          register: service_status
+
+        - name: Verify service is active
+          assert:
+            that:
+              - service_status.status.ActiveState == "active"
+            fail_msg: "Portainer service is not active"
+
+        - name: Check container status
+          command: podman ps --filter "name=portainer" --format json
+          register: container_status
+          changed_when: false
+
+        - name: Parse container info
+          set_fact:
+            container_info: "{{ container_status.stdout | from_json | first | default({}) }}"
+          when: container_status.stdout
+
+        - name: Display container status
+          debug:
+            msg:
+              - "Container: {{ container_info.Names | default(['Not found']) | first }}"
+              - "Status: {{ container_info.State | default('Unknown') }}"
+              - "Image: {{ container_info.Image | default('Unknown') }}"
+          when: container_info is defined
+
+    # Display access information
+    - name: "{{ service_name }} - Access information"
+      when: confirm_deploy | bool
+      tags: [portainer, info]
+      block:
+        - name: Generate service information
+          set_fact:
+            service_info:
+              name: "{{ service_name }}"
+              status: "{{ 'Active' if service_status.status.ActiveState == 'active' else 'Inactive' }}"
+              web_url: "https://{{ ansible_default_ipv4.address }}:{{ portainer_web_port }}"
+
+        - name: Display access information
+          debug:
+            msg:
+              - "=========================================="
+              - "{{ service_name }} Deployment Complete!"
+              - "=========================================="
+              - ""
+              - "Service Status: {{ service_info.status }}"
+              - ""
+              - "Web Interface: {{ service_info.web_url }}"
+              - "Username: {{ portainer_admin_username }}"
+              - "Password: Using SERVICES_PASSWORD from Semaphore"
+              - ""
+              - "Service Management:"
+              - "- Status: sudo systemctl status portainer.service"
+              - "- Logs: sudo podman logs portainer"
+              - "- Restart: sudo systemctl restart portainer.service"
+              - "=========================================="
+
+        - name: Save deployment info
+          copy:
+            content: |
+              {{ service_name }} Deployment Information
+              =====================================
+              Deployed: {{ ansible_date_time.iso8601 }}
+              Host: {{ inventory_hostname }}
+
+              Access URLs:
+              - Web Interface: {{ service_info.web_url }}
+
+              Service: portainer.service
+              Container: portainer
+
+              Data Directory: {{ portainer_data_dir }}
+            dest: "/opt/privatebox/deployment-info-portainer.txt"
+            mode: '0644'
+
+    # Automatic Portainer configuration
+    - name: "{{ service_name }} - Automatic configuration"
+      when: confirm_deploy | bool
+      tags: [portainer, configure]
+      block:
+        - name: Wait for Portainer API to be available
+          uri:
+            url: "https://{{ ansible_default_ipv4.address }}:{{ portainer_web_port }}/api/status"
+            validate_certs: no
+            method: GET
+            status_code: [200, 204]
+            timeout: 10
+          register: api_status
+          until: api_status.status in [200, 204]
+          retries: 12
+          delay: 5
+
+        - name: Check if Portainer is already initialized
+          uri:
+            url: "https://{{ ansible_default_ipv4.address }}:{{ portainer_web_port }}/api/users/admin/check"
+            validate_certs: no
+            method: GET
+            status_code: [200, 204]
+          register: init_check
+          failed_when: false
+
+        - name: Display initialization status
+          debug:
+            msg: >
+              Portainer status: {{ 'Needs initial setup' if init_check.status == 204
+              else 'Already initialized' }}
+
+        - name: Initialize Portainer admin user if not already initialized
+          when: init_check.status == 204  # 204 means not initialized
+          block:
+            - name: Create admin user
+              uri:
+                url: "https://{{ ansible_default_ipv4.address }}:{{ portainer_web_port }}/api/users/admin/init"
+                validate_certs: no
+                method: POST
+                body_format: json
+                body:
+                  Username: "{{ portainer_admin_username }}"
+                  Password: "{{ portainer_admin_password }}"
+                status_code: 200
+                timeout: 30
+              register: init_result
+
+            - name: Wait for initialization to complete
+              pause:
+                seconds: 5
+
+            - name: Verify initialization
+              uri:
+                url: "https://{{ ansible_default_ipv4.address }}:{{ portainer_web_port }}/api/users/admin/check"
+                validate_certs: no
+                method: GET
+                status_code: 200
+              register: final_check
+              until: final_check.status == 200
+              retries: 3
+              delay: 3
+
+            - name: Display initialization status
+              debug:
+                msg: "Portainer admin user initialized successfully"
+
+  handlers:
+    - name: restart portainer
+      systemd:
+        name: portainer.service
+        state: restarted
+        scope: "{{ 'system' if use_system_quadlet else 'user' }}"
