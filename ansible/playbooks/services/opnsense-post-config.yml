@@ -3,7 +3,7 @@
 # This playbook cleans up the OPNsense configuration after deployment
 # and ensures Unbound is properly configured on port 5353
 
-- name: "OPNsense 3: Post-Configuration"
+- name: "OPNsense 3: Apply Post-Configuration"
   hosts: proxmox
   gather_facts: yes
   vars:
