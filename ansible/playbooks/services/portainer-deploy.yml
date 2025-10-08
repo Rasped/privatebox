@@ -17,7 +17,7 @@
     portainer_image: "portainer/portainer-ce"
     portainer_version: "latest"
     portainer_web_port: 1443      # HTTPS web interface port (mapped from 9443)
-    portainer_data_dir: "/opt/portainer/data"
+    portainer_data_dir: "/opt/privatebox/data/portainer"
 
     # Default values for hands-off deployment (no prompts)
     confirm_deploy: true
@@ -35,7 +35,7 @@
 
     # Container runtime configuration
     container_image_registry: "docker.io"
-    volume_mount_options: "z"
+    volume_mount_options: "Z"
     timezone: "UTC"
     container_security_label_disable: false
     container_no_new_privileges: true
@@ -119,11 +119,19 @@
         - name: Check for certificate files
           stat:
             path: "{{ item }}"
-          register: cert_check
           loop:
             - /etc/privatebox/certs/privatebox.crt
             - /etc/privatebox/certs/privatebox.key
-          failed_when: not cert_check.stat.exists
+          register: cert_check
+
+        - name: Verify all certificates exist
+          assert:
+            that:
+              - item.stat.exists
+            fail_msg: "Certificate file {{ item.item }} not found"
+          loop: "{{ cert_check.results }}"
+          loop_control:
+            label: "{{ item.item }}"
 
         - name: Check for port conflicts
           wait_for:
