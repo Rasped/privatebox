@@ -297,6 +297,12 @@
               - "- Restart: sudo systemctl restart portainer.service"
               - "=========================================="
 
+        - name: Create deployment info directory
+          file:
+            path: /opt/privatebox
+            state: directory
+            mode: '0755'
+
         - name: Save deployment info
           copy:
             content: |
