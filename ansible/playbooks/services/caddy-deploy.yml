@@ -216,7 +216,7 @@
         - name: Create Dockerfile for custom Caddy image
           copy:
             content: |
-              FROM caddy:2-alpine
+              FROM docker.io/caddy:2-alpine
               COPY caddy /usr/bin/caddy
             dest: /opt/caddy-build/Dockerfile
             mode: '0644'
