@@ -9,7 +9,7 @@ Before=multi-user.target
 
 [Container]
 # Container image
-Image={{ container_image_registry | default('docker.io') }}/caddy:{{ caddy_version | default('2-alpine') }}
+Image={{ container_image_registry | default('docker.io') }}/{{ caddy_image | default('caddy') }}:{{ caddy_version | default('2-alpine') }}
 ContainerName=caddy
 
 # Network configuration - bind to Services VLAN IP
