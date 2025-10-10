@@ -50,6 +50,27 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Network design: See `documentation/network-architecture/vlan-design.md` for complete architecture.
 - OPNsense: use VM template approach (manual config → convert to template → store on GitHub).
 
+## Infrastructure Map
+### VMs
+- **VM 9000** - Management VM (Debian 13) at 10.10.20.10 - hosts all containerized services
+- **VM 100** - OPNsense (firewall/router) at 10.10.20.1 (Services), 10.10.10.1 (Trusted LAN)
+- **Proxmox Host** - at 10.10.20.20:8006 (not a VM, hypervisor itself)
+
+### Services (all on Management VM)
+- **Portainer** (1443) - portainer.lan → https://10.10.20.10:1443 - container management
+- **Semaphore** (2443) - semaphore.lan → https://10.10.20.10:2443 - Ansible automation
+- **Caddy** (80/443) - reverse proxy, terminates TLS for .lan domains (self-signed certs)
+- **AdGuard** (53, 3443) - adguard.lan → https://10.10.20.10:3443 - DNS + ad blocking
+- **Headscale** - VPN control server
+- **Headplane** (8080) - headplane.lan → http://10.10.20.10:8080 - Headscale web UI
+- **Homer** (8081) - homer.lan → http://10.10.20.10:8081 - service dashboard
+
+### Domain Access
+- Current: all services use `.lan` domains (e.g., portainer.lan, semaphore.lan)
+- DNS rewrites in AdGuard map `.lan` → 10.10.20.10 (Management VM)
+- Caddy provides self-signed TLS certs for `.lan` domains
+- Future: add customer deSEC.io domains (e.g., portainer.customer.dedyn.io) with Let's Encrypt certs via DNS-01
+
 ## Flow Summary
 1. Quickstart → `bootstrap/bootstrap.sh`.
 2. Phase 1: detect network, generate config, Proxmox token, verify storage.
