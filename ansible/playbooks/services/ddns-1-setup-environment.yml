@@ -151,7 +151,7 @@
       block:
         - name: Test deSEC authentication
           uri:
-            url: "https://desec.io/api/v1/auth/"
+            url: "https://desec.io/api/v1/domains/"
             method: GET
             headers:
               Authorization: "Token {{ semaphore_dns_api_token }}"
@@ -160,7 +160,7 @@
 
         - name: Display deSEC account info
           debug:
-            msg: "✓ deSEC API authenticated successfully"
+            msg: "✓ deSEC API authenticated successfully ({{ desec_test.json | length }} domains)"
           when: enable_debug | bool
 
       rescue:
