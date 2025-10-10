@@ -7,71 +7,54 @@
   environment:
     ANSIBLE_JINJA2_NATIVE: "True"
 
-  vars_prompt:
-    - name: semaphore_dns_provider
-      prompt: |
-
-        Select DNS Provider:
-          1) deSEC (⭐ RECOMMENDED - EU-based, GDPR-compliant, non-profit, DNSSEC enabled)
-          2) Dynu (Strong alternative - free, 30s TTL, global network)
-          3) Cloudflare (For users with own domains - enterprise-grade)
-          4) DuckDNS (Compatibility only - not recommended for new setups)
-
-        Enter provider name (desec/dynu/cloudflare/duckdns)
-      private: no
-      default: "desec"
-
-    - name: semaphore_dns_api_token
-      prompt: |
-
-        DNS API Token:
-          - deSEC: Get from https://desec.io/tokens
-          - Dynu: Get from https://www.dynu.com/en-US/ControlPanel/APICredentials
-          - Cloudflare: Create token at https://dash.cloudflare.com/profile/api-tokens
-                        (Needs permissions: Zone:DNS:Edit)
-          - DuckDNS: Get from https://www.duckdns.org/
-
-        Enter API token
-      private: yes
-
-    - name: semaphore_ddns_domain
-      prompt: |
-
-        Dynamic DNS Domain:
-          - deSEC: yourname.dedyn.io (or own domain)
-          - Dynu: yourname.dynu.com (or own domain)
-          - Cloudflare: yourdomain.com (must own the domain)
-          - DuckDNS: yourname.duckdns.org
-
-        Enter domain (without *.prefix)
-      private: no
-
-    - name: semaphore_letsencrypt_email
-      prompt: |
-
-        Let's Encrypt Email:
-          Used for certificate expiry notifications and account recovery.
-
-        Enter email address
-      private: no
-
-    - name: semaphore_cloudflare_zone_id
-      prompt: |
-
-        Cloudflare Zone ID (optional):
-          Find in Cloudflare dashboard → Your Domain → Overview → Zone ID
-          Leave empty to auto-detect via API.
-
-        Enter Zone ID or press Enter to skip
-      private: no
-      default: ""
-
   vars:
     # Template configuration for Semaphore
     template_config:
       semaphore_environment: "SemaphoreAPI"
       semaphore_inventory: "localhost"
       semaphore_category: "services"
+      semaphore_survey_vars:
+        - name: "semaphore_dns_provider"
+          title: "DNS Provider"
+          description: "Select your DNS provider"
+          type: "enum"
+          required: true
+          values:
+            - name: "deSEC (⭐ Recommended - EU-based, GDPR, non-profit, DNSSEC)"
+              value: "desec"
+            - name: "Dynu (Free, 30s TTL, global network)"
+              value: "dynu"
+            - name: "Cloudflare (For own domains)"
+              value: "cloudflare"
+            - name: "DuckDNS (Compatibility only)"
+              value: "duckdns"
+        - name: "semaphore_dns_api_token"
+          title: "DNS API Token"
+          description: "Get from: deSEC (desec.io/tokens) | Dynu (dynu.com APICredentials) | Cloudflare (dash.cloudflare.com/profile/api-tokens) | DuckDNS (duckdns.org)"
+          type: "secret"
+          required: true
+        - name: "semaphore_ddns_domain"
+          title: "Dynamic DNS Domain"
+          description: "Examples: yourname.dedyn.io | yourname.dynu.com | yourdomain.com | yourname.duckdns.org"
+          type: ""
+          required: true
+        - name: "semaphore_letsencrypt_email"
+          title: "Let's Encrypt Email"
+          description: "Used for certificate expiry notifications"
+          type: ""
+          required: true
+        - name: "semaphore_cloudflare_zone_id"
+          title: "Cloudflare Zone ID (optional)"
+          description: "Leave empty to auto-detect. Find in Cloudflare dashboard → Your Domain → Overview"
+          type: ""
+          required: false
+
+    # Load survey variables from environment
+    semaphore_dns_provider: "{{ lookup('env', 'semaphore_dns_provider') | default('desec') }}"
+    semaphore_dns_api_token: "{{ lookup('env', 'semaphore_dns_api_token') }}"
+    semaphore_ddns_domain: "{{ lookup('env', 'semaphore_ddns_domain') }}"
+    semaphore_letsencrypt_email: "{{ lookup('env', 'semaphore_letsencrypt_email') }}"
+    semaphore_cloudflare_zone_id: "{{ lookup('env', 'semaphore_cloudflare_zone_id') | default('') }}"
 
     # Semaphore configuration
     semaphore_ip: "10.10.20.10"
