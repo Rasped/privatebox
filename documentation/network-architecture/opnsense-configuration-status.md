@@ -310,6 +310,6 @@ To validate our VPN configurations work correctly, we will:
 ## Contact/Notes
 
 - Configuration performed via API and SSH
-- Using OPNsense web UI at http://192.168.1.173
+- Using OPNsense web UI at https://192.168.1.173
 - Default credentials still in use (root/opnsense) - MUST BE CHANGED
 - Proxmox host assumed to be at 192.168.1.10

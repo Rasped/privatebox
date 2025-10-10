@@ -17,7 +17,13 @@
       "WebSearch",
       "WebFetch(domain:docs.semaphoreui.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:headscale.net)"
+      "WebFetch(domain:headscale.net)",
+      "Bash(git pull:*)",
+      "Bash(cat:*)",
+      "Bash(git log:*)",
+      "Bash(while read commit)",
+      "Bash(do git show $commit:tools/orchestrate-services.py)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": [],
