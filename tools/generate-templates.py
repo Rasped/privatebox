@@ -237,7 +237,20 @@ def parse_playbook(playbook_path):
         if vars_section.get('semaphore_exclude', False):
             # Playbook explicitly excluded from Semaphore
             return None
-        
+
+        # Check for pre-formatted survey vars in template_config
+        template_config = vars_section.get('template_config', {})
+        if 'semaphore_survey_vars' in template_config:
+            survey_vars = template_config['semaphore_survey_vars']
+            # Get the hosts to determine which inventory to use
+            hosts = play.get('hosts', 'all')
+            return {
+                'name': play.get('name', 'Unnamed playbook'),
+                'hosts': hosts,
+                'survey_vars': survey_vars,
+                'template_config': template_config
+            }
+
         # Get vars_prompt for variables
         vars_prompt = play.get('vars_prompt', [])
         
@@ -346,7 +359,7 @@ def create_or_update_template(base_url, api_token, project_id, playbook_path, pl
     template_name = playbook_info.get('name', playbook_path.stem)
 
     # Convert variables to survey format
-    survey_vars = convert_to_survey_vars(playbook_info['vars'])
+    survey_vars = playbook_info.get('survey_vars') or convert_to_survey_vars(playbook_info.get('vars', []))
 
     # Determine playbook subdirectory (services or infrastructure)
     playbook_subdir = playbook_path.parent.name
