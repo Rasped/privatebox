@@ -1,0 +1,118 @@
+---
+- name: "DynDNS 2a: Prepare Configuration"
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "DynamicDNS"
+      semaphore_inventory: "localhost"
+      semaphore_category: "services"
+
+    # Load variables from DynamicDNS environment
+    dns_provider: "{{ DNS_PROVIDER }}"
+    dns_api_token: "{{ DNS_API_TOKEN }}"
+    ddns_domain: "{{ DDNS_DOMAIN }}"
+    letsencrypt_email: "{{ LETSENCRYPT_EMAIL }}"
+    cloudflare_zone_id: "{{ CLOUDFLARE_ZONE_ID | default('') }}"
+
+    # Handoff file location
+    handoff_file: "/tmp/ddns-handoff.json"
+
+  tasks:
+    # ============================================
+    # Phase 1: Validation
+    # ============================================
+
+    - name: Display configuration header
+      debug:
+        msg:
+          - "========================================"
+          - "   DYNDNS CONFIGURATION HANDOFF"
+          - "========================================"
+          - "Provider: {{ dns_provider }}"
+          - "Domain: {{ ddns_domain }}"
+          - "Email: {{ letsencrypt_email }}"
+          - "Handoff file: {{ handoff_file }}"
+
+    - name: Validate DNS provider
+      assert:
+        that:
+          - dns_provider in ['desec', 'dynu', 'cloudflare', 'duckdns']
+        fail_msg: "Unsupported DNS provider: {{ dns_provider }}"
+
+    - name: Validate required fields
+      assert:
+        that:
+          - dns_api_token | length > 0
+          - ddns_domain | length > 0
+          - letsencrypt_email | length > 0
+        fail_msg: "Missing required configuration fields"
+
+    - name: Validate Cloudflare Zone ID if using Cloudflare
+      assert:
+        that:
+          - cloudflare_zone_id | length > 0
+        fail_msg: "Cloudflare Zone ID is required when using Cloudflare provider"
+      when: dns_provider == 'cloudflare'
+
+    # ============================================
+    # Phase 2: Create Handoff Configuration
+    # ============================================
+
+    - name: Prepare handoff configuration
+      set_fact:
+        handoff_config:
+          dns_provider: "{{ dns_provider }}"
+          dns_api_token: "{{ dns_api_token }}"
+          ddns_domain: "{{ ddns_domain }}"
+          letsencrypt_email: "{{ letsencrypt_email }}"
+          cloudflare_zone_id: "{{ cloudflare_zone_id }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+      no_log: true
+
+    - name: Write handoff file with DNS credentials
+      copy:
+        content: "{{ handoff_config | to_nice_json }}"
+        dest: "{{ handoff_file }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Verify handoff file was created
+      stat:
+        path: "{{ handoff_file }}"
+      register: handoff_stat
+
+    - name: Fail if handoff file was not created
+      fail:
+        msg: "Failed to create handoff file at {{ handoff_file }}"
+      when: not handoff_stat.stat.exists
+
+    # ============================================
+    # Phase 3: Summary
+    # ============================================
+
+    - name: Display completion summary
+      debug:
+        msg:
+          - "========================================"
+          - "   CONFIGURATION HANDOFF COMPLETE"
+          - "========================================"
+          - ""
+          - "Handoff file created: {{ handoff_file }}"
+          - "File size: {{ handoff_stat.stat.size }} bytes"
+          - "File permissions: {{ handoff_stat.stat.mode }}"
+          - ""
+          - "Next Step:"
+          - "  Run 'DynDNS 2b: Configure OPNsense' to apply configuration"
+          - ""
+          - "Note:"
+          - "  Handoff file contains sensitive credentials"
+          - "  It will be automatically deleted after configuration"
+          - ""
+          - "========================================"

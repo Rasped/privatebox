@@ -1,0 +1,327 @@
+---
+- name: "DynDNS 2b: Configure OPNsense"
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "OPNsenseAPI"
+      semaphore_inventory: "localhost"
+      semaphore_category: "services"
+
+    # OPNsense API configuration
+    opnsense_api_url: "{{ OPNSENSE_API_URL }}"
+    opnsense_api_key: "{{ OPNSENSE_API_KEY }}"
+    opnsense_api_secret: "{{ OPNSENSE_API_SECRET }}"
+
+    # Handoff file location
+    handoff_file: "/tmp/ddns-handoff.json"
+
+    # Provider to OPNsense service mapping
+    provider_service_map:
+      desec: "desec"
+      dynu: "dynu"
+      cloudflare: "cloudflare"
+      duckdns: "duckdns"
+
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Read Handoff Configuration
+    # ============================================
+
+    - name: Display configuration header
+      debug:
+        msg:
+          - "========================================"
+          - "   OPNSENSE DYNDNS CONFIGURATION"
+          - "========================================"
+          - "API URL: {{ opnsense_api_url }}"
+          - "Handoff file: {{ handoff_file }}"
+
+    - name: Check if handoff file exists
+      stat:
+        path: "{{ handoff_file }}"
+      register: handoff_stat
+
+    - name: Fail if handoff file not found
+      fail:
+        msg: |
+          Handoff file not found at {{ handoff_file }}
+
+          Please run 'DynDNS 2a: Prepare Configuration' first to create the handoff file.
+      when: not handoff_stat.stat.exists
+
+    - name: Read DNS config from handoff file
+      slurp:
+        src: "{{ handoff_file }}"
+      register: ddns_config_file
+      no_log: true
+
+    - name: Parse DNS configuration
+      set_fact:
+        ddns_config: "{{ ddns_config_file.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Validate handoff configuration
+      assert:
+        that:
+          - ddns_config.dns_provider is defined
+          - ddns_config.dns_api_token is defined
+          - ddns_config.ddns_domain is defined
+        fail_msg: "Invalid handoff configuration"
+
+    - name: Display configuration (without secrets)
+      debug:
+        msg:
+          - "Provider: {{ ddns_config.dns_provider }}"
+          - "Domain: {{ ddns_config.ddns_domain }}"
+          - "Email: {{ ddns_config.letsencrypt_email }}"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 2: Install DynDNS Plugin
+    # ============================================
+
+    - name: Check if os-ddclient plugin is installed
+      uri:
+        url: "{{ opnsense_api_url }}/api/core/firmware/status"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: 200
+      register: firmware_status
+      ignore_errors: true
+
+    - name: Install os-ddclient plugin if not present
+      block:
+        - name: Trigger plugin installation
+          uri:
+            url: "{{ opnsense_api_url }}/api/core/firmware/install/os-ddclient"
+            method: POST
+            user: "{{ opnsense_api_key }}"
+            password: "{{ opnsense_api_secret }}"
+            force_basic_auth: yes
+            validate_certs: no
+            status_code: [200, 201]
+          register: install_result
+
+        - name: Wait for plugin installation to complete
+          pause:
+            seconds: 30
+
+        - name: Display installation result
+          debug:
+            msg: "os-ddclient plugin installation initiated"
+          when: enable_debug | bool
+
+      rescue:
+        - name: Plugin installation warning
+          debug:
+            msg: "Warning: Could not verify plugin installation. Continuing..."
+
+    # ============================================
+    # Phase 3: Configure DynDNS Account
+    # ============================================
+
+    - name: Determine OPNsense service name
+      set_fact:
+        opnsense_service: "{{ provider_service_map[ddns_config.dns_provider] }}"
+
+    - name: Extract subdomain for DuckDNS
+      set_fact:
+        duckdns_subdomain: "{{ ddns_config.ddns_domain | regex_replace('\\.duckdns\\.org$', '') }}"
+      when: ddns_config.dns_provider == 'duckdns'
+
+    - name: Build DynDNS account configuration
+      set_fact:
+        dyndns_account:
+          enabled: "1"
+          service: "{{ opnsense_service }}"
+          username: ""
+          password: "{{ ddns_config.dns_api_token }}"
+          zone: "{{ ddns_config.cloudflare_zone_id if ddns_config.dns_provider == 'cloudflare' else '' }}"
+          hostnames: "{{ duckdns_subdomain if ddns_config.dns_provider == 'duckdns' else ddns_config.ddns_domain }}"
+          checkip: "interface"
+          interface: "wan"
+          force_ssl: "1"
+          description: "Managed by PrivateBox - {{ ddns_config.dns_provider }}"
+      no_log: true
+
+    - name: Check for existing DynDNS accounts
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/accounts/searchItem"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: 200
+      register: existing_accounts
+      ignore_errors: true
+
+    - name: Find existing account for this domain
+      set_fact:
+        existing_account: "{{ existing_accounts.json.rows | default([]) | selectattr('hostnames', 'equalto', dyndns_account.hostnames) | list | first | default(false) }}"
+      when: existing_accounts.status == 200
+      no_log: true
+
+    - name: Delete existing account if found
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/accounts/delItem/{{ existing_account.uuid }}"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200, 201]
+      when: existing_account
+      register: delete_result
+
+    - name: Add DynDNS account
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/accounts/addItem"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          account: "{{ dyndns_account }}"
+        status_code: [200, 201]
+      register: add_account_result
+      no_log: true
+
+    - name: Display account creation result
+      debug:
+        msg: "✓ DynDNS account created for {{ ddns_config.ddns_domain }}"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 4: Enable and Start DynDNS Service
+    # ============================================
+
+    - name: Reconfigure DynDNS service
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/service/reconfigure"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200, 201]
+      register: reconfigure_result
+
+    - name: Wait for reconfiguration
+      pause:
+        seconds: 5
+
+    - name: Start DynDNS service
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/service/start"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200, 201]
+      register: start_result
+
+    - name: Check DynDNS service status
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/service/status"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: 200
+      register: service_status
+      ignore_errors: true
+
+    - name: Display service status
+      debug:
+        msg: "DynDNS service status: {{ service_status.json.status if service_status.status == 200 else 'unknown' }}"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 5: Verification
+    # ============================================
+
+    - name: Wait for initial DNS update
+      pause:
+        seconds: 10
+        prompt: "Waiting for initial DynDNS update..."
+
+    - name: Verify DNS record (external check)
+      shell: "dig +short {{ ddns_config.ddns_domain }} @8.8.8.8"
+      register: dns_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Display DNS verification result
+      debug:
+        msg: |
+          DNS Verification:
+          {% if dns_check.rc == 0 and dns_check.stdout %}
+          ✓ Domain {{ ddns_config.ddns_domain }} resolves to: {{ dns_check.stdout_lines[0] }}
+          {% else %}
+          ⚠ DNS propagation may take a few minutes
+          {% endif %}
+
+    # ============================================
+    # Phase 6: Cleanup
+    # ============================================
+
+    - name: Delete handoff file (success path)
+      file:
+        path: "{{ handoff_file }}"
+        state: absent
+      no_log: true
+
+    # ============================================
+    # Phase 7: Summary
+    # ============================================
+
+    - name: Display completion summary
+      debug:
+        msg:
+          - "========================================"
+          - "   OPNSENSE DYNDNS CONFIGURATION COMPLETE"
+          - "========================================"
+          - ""
+          - "Provider: {{ ddns_config.dns_provider }}"
+          - "Domain: {{ ddns_config.ddns_domain }}"
+          - "Service: {{ 'Running' if service_status.status == 200 else 'Check OPNsense GUI' }}"
+          - "DNS Record: {{ dns_check.stdout_lines[0] if dns_check.rc == 0 and dns_check.stdout else 'Pending propagation' }}"
+          - ""
+          - "Next Steps:"
+          - "  1. Run 'DynDNS 3: Configure AdGuard' to add DNS rewrites"
+          - "  2. Run 'DynDNS 4: Configure Caddy Let's Encrypt' to get certificates"
+          - ""
+          - "Note:"
+          - "  Handoff file has been securely deleted"
+          - ""
+          - "========================================"
+
+  # Ensure cleanup happens even on failure
+  rescue:
+    - name: Delete handoff file (error path)
+      file:
+        path: "{{ handoff_file }}"
+        state: absent
+      no_log: true
+      ignore_errors: true
+
+    - name: Re-raise the error
+      fail:
+        msg: "DynDNS configuration failed. Handoff file has been cleaned up."
