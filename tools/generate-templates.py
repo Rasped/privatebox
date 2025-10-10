@@ -440,20 +440,24 @@ def display_playbook_info(playbook_path, info):
     """Display parsed playbook information."""
     print(f"\n📄 {playbook_path.name}")
     print(f"   Name: {info['name']}")
-    
-    if info['vars']:
+
+    # Handle pre-formatted survey_vars (new format)
+    if 'survey_vars' in info and info['survey_vars']:
+        print(f"   Survey variables (pre-formatted): {len(info['survey_vars'])} variable(s)")
+    # Handle legacy vars_prompt conversion (old format)
+    elif 'vars' in info and info['vars']:
         print(f"   Variables with Semaphore metadata:")
         for var in info['vars']:
             var_name = var.get('name', 'unnamed')
             var_type = var.get('semaphore_type', 'text')
             description = var.get('semaphore_description', var.get('prompt', ''))
             required = var.get('semaphore_required', not var.get('private', True))
-            
+
             print(f"\n   - Variable: {var_name}")
             print(f"     Type: {var_type}")
             print(f"     Description: {description}")
             print(f"     Required: {required}")
-            
+
             # Show additional fields for specific types
             if var_type == 'integer':
                 if 'semaphore_min' in var:
