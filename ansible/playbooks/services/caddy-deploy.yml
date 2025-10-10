@@ -10,8 +10,8 @@
     service_tag: "caddy"
 
     # Caddy default configuration
-    caddy_image: "caddy"
-    caddy_version: "2-alpine"
+    caddy_image: "caddy-custom"
+    caddy_version: "latest"
     caddy_http_port: 80
     caddy_https_port: 443
     caddy_config_dir: "/opt/caddy"
@@ -26,7 +26,7 @@
     quadlet_system_path: "/etc/containers/systemd"
 
     # Container runtime configuration
-    container_image_registry: "docker.io"
+    container_image_registry: "localhost"
     volume_mount_options: "Z"
     timezone: "UTC"
     container_security_label_disable: false
@@ -118,6 +118,118 @@
                 - { port: "{{ caddy_http_port }}", check: "{{ http_port_check }}" }
                 - { port: "{{ caddy_https_port }}", check: "{{ https_port_check }}" }
 
+    # Build Caddy with DNS plugins
+    - name: "{{ service_name }} - Build Caddy with DNS plugins"
+      tags: [caddy, build]
+      block:
+        - name: Check if Go is installed
+          command: which go
+          register: go_check
+          changed_when: false
+          failed_when: false
+
+        - name: Install Go
+          when: go_check.rc != 0
+          block:
+            - name: Download Go binary
+              get_url:
+                url: "https://go.dev/dl/go1.21.5.linux-amd64.tar.gz"
+                dest: "/tmp/go1.21.5.linux-amd64.tar.gz"
+                mode: '0644'
+
+            - name: Remove old Go installation
+              file:
+                path: /usr/local/go
+                state: absent
+
+            - name: Extract Go binary
+              unarchive:
+                src: "/tmp/go1.21.5.linux-amd64.tar.gz"
+                dest: /usr/local
+                remote_src: yes
+
+            - name: Add Go to PATH
+              lineinfile:
+                path: /etc/profile.d/go.sh
+                line: 'export PATH=$PATH:/usr/local/go/bin'
+                create: yes
+                mode: '0644'
+
+        - name: Check if custom Caddy already exists
+          stat:
+            path: /usr/local/bin/caddy-custom
+          register: custom_caddy_check
+
+        - name: Build custom Caddy with DNS plugins
+          when: not custom_caddy_check.stat.exists
+          block:
+            - name: Install xcaddy
+              shell: |
+                export PATH=$PATH:/usr/local/go/bin
+                export GOPATH=/root/go
+                go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+              args:
+                creates: /root/go/bin/xcaddy
+
+            - name: Build Caddy with DNS provider plugins
+              shell: |
+                export PATH=$PATH:/usr/local/go/bin:/root/go/bin
+                export GOPATH=/root/go
+                cd /tmp
+                xcaddy build \
+                  --with github.com/caddy-dns/desec \
+                  --with github.com/caddy-dns/dynu \
+                  --with github.com/caddy-dns/cloudflare \
+                  --with github.com/caddy-dns/duckdns
+              args:
+                creates: /tmp/caddy
+
+            - name: Install custom Caddy binary
+              copy:
+                src: /tmp/caddy
+                dest: /usr/local/bin/caddy-custom
+                mode: '0755'
+                remote_src: yes
+
+            - name: Verify custom Caddy build
+              command: /usr/local/bin/caddy-custom version
+              register: caddy_version
+              changed_when: false
+
+            - name: Display Caddy version
+              debug:
+                msg: "Custom Caddy built successfully: {{ caddy_version.stdout }}"
+
+        - name: Create build directory for custom image
+          file:
+            path: /opt/caddy-build
+            state: directory
+            mode: '0755'
+
+        - name: Copy custom Caddy binary to build directory
+          copy:
+            src: /usr/local/bin/caddy-custom
+            dest: /opt/caddy-build/caddy
+            mode: '0755'
+            remote_src: yes
+
+        - name: Create Dockerfile for custom Caddy image
+          copy:
+            content: |
+              FROM caddy:2-alpine
+              COPY caddy /usr/bin/caddy
+            dest: /opt/caddy-build/Dockerfile
+            mode: '0644'
+
+        - name: Build custom Caddy container image
+          command: podman build -t localhost/caddy-custom:latest /opt/caddy-build
+          register: image_build
+          changed_when: "'COMMIT localhost/caddy-custom:latest' in image_build.stdout"
+
+        - name: Display image build result
+          debug:
+            msg: "Custom Caddy image built successfully with DNS plugins"
+
     # Directory structure setup
     - name: "{{ service_name }} - Create directory structure"
       tags: [caddy, setup]
@@ -152,16 +264,15 @@
     - name: "{{ service_name }} - Deploy container"
       tags: [caddy, deploy]
       block:
-        - name: Pull Caddy container image
-          command: podman pull {{ container_image_registry }}/{{ caddy_image }}:{{ caddy_version }}
-          register: pull_result
-          changed_when: "'Copying blob' in pull_result.stdout or 'Copying config' in pull_result.stdout"
-          retries: 3
-          delay: 10
+        - name: Verify custom Caddy image exists
+          command: podman image exists {{ container_image_registry }}/{{ caddy_image }}:{{ caddy_version }}
+          register: image_check
+          changed_when: false
+          failed_when: image_check.rc != 0
 
-        - name: Display pull result
+        - name: Display image status
           debug:
-            msg: "{{ 'Image pulled successfully' if pull_result.changed else 'Image already up to date' }}"
+            msg: "Custom Caddy image ready: {{ container_image_registry }}/{{ caddy_image }}:{{ caddy_version }}"
 
         - name: Deploy Quadlet unit file
           template:
