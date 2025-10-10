@@ -86,6 +86,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - Script auto-detects network and configures everything. Check `/tmp/privatebox-config.conf` if you need different settings.
   - **IMPORTANT**: Always run in foreground for at least 15 minutes. Expected completion: ~15 minutes.
   - Do NOT run in background - need to monitor progress and handle any interactive prompts.
+  - **For Claude Code**: Use timeout of 1200000ms (20 minutes) minimum. The Bash tool documentation incorrectly states max is 600000ms (10 minutes) - ignore that, use 20+ minutes.
 
 ## TLS & DNS
 - DNS Architecture: AdGuard (10.10.20.10:53) filters ads → Quad9 (primary, port 53) → Unbound fallback (10.10.20.1:53).
