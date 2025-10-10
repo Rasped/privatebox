@@ -1,0 +1,497 @@
+---
+- name: "DynDNS 1: Setup Environment"
+  hosts: proxmox
+  gather_facts: yes
+
+  environment:
+    ANSIBLE_JINJA2_NATIVE: "True"
+
+  vars_prompt:
+    - name: semaphore_dns_provider
+      prompt: |
+
+        Select DNS Provider:
+          1) deSEC (⭐ RECOMMENDED - EU-based, GDPR-compliant, non-profit, DNSSEC enabled)
+          2) Dynu (Strong alternative - free, 30s TTL, global network)
+          3) Cloudflare (For users with own domains - enterprise-grade)
+          4) DuckDNS (Compatibility only - not recommended for new setups)
+
+        Enter provider name (desec/dynu/cloudflare/duckdns)
+      private: no
+      default: "desec"
+
+    - name: semaphore_dns_api_token
+      prompt: |
+
+        DNS API Token:
+          - deSEC: Get from https://desec.io/tokens
+          - Dynu: Get from https://www.dynu.com/en-US/ControlPanel/APICredentials
+          - Cloudflare: Create token at https://dash.cloudflare.com/profile/api-tokens
+                        (Needs permissions: Zone:DNS:Edit)
+          - DuckDNS: Get from https://www.duckdns.org/
+
+        Enter API token
+      private: yes
+
+    - name: semaphore_ddns_domain
+      prompt: |
+
+        Dynamic DNS Domain:
+          - deSEC: yourname.dedyn.io (or own domain)
+          - Dynu: yourname.dynu.com (or own domain)
+          - Cloudflare: yourdomain.com (must own the domain)
+          - DuckDNS: yourname.duckdns.org
+
+        Enter domain (without *.prefix)
+      private: no
+
+    - name: semaphore_letsencrypt_email
+      prompt: |
+
+        Let's Encrypt Email:
+          Used for certificate expiry notifications and account recovery.
+
+        Enter email address
+      private: no
+
+    - name: semaphore_cloudflare_zone_id
+      prompt: |
+
+        Cloudflare Zone ID (optional):
+          Find in Cloudflare dashboard → Your Domain → Overview → Zone ID
+          Leave empty to auto-detect via API.
+
+        Enter Zone ID or press Enter to skip
+      private: no
+      default: ""
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "SemaphoreAPI"
+      semaphore_category: "services"
+
+    # Semaphore configuration
+    semaphore_ip: "10.10.20.10"
+    semaphore_url: "https://{{ semaphore_ip }}:2443"
+    semaphore_token: "{{ SEMAPHORE_API_TOKEN | default('') }}"
+    project_id: 1
+
+    # Supported providers
+    supported_providers:
+      - desec
+      - dynu
+      - cloudflare
+      - duckdns
+
+    # Environment name
+    environment_name: "DynamicDNS"
+
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Validation
+    # ============================================
+
+    - name: Display configuration header
+      debug:
+        msg:
+          - "========================================"
+          - "   DYNAMIC DNS ENVIRONMENT SETUP"
+          - "========================================"
+          - "Provider: {{ semaphore_dns_provider }}"
+          - "Domain: {{ semaphore_ddns_domain }}"
+          - "Email: {{ semaphore_letsencrypt_email }}"
+
+    - name: Normalize provider name to lowercase
+      set_fact:
+        dns_provider: "{{ semaphore_dns_provider | lower | trim }}"
+
+    - name: Validate DNS provider is supported
+      fail:
+        msg: |
+          Unsupported DNS provider: {{ dns_provider }}
+
+          Supported providers:
+            - desec (⭐ Recommended)
+            - dynu
+            - cloudflare
+            - duckdns
+      when: dns_provider not in supported_providers
+
+    - name: Validate API token is not empty
+      fail:
+        msg: "DNS API token is required"
+      when: semaphore_dns_api_token | length == 0
+
+    - name: Validate domain is not empty
+      fail:
+        msg: "Domain is required"
+      when: semaphore_ddns_domain | length == 0
+
+    - name: Validate email format
+      fail:
+        msg: "Invalid email address format"
+      when: semaphore_letsencrypt_email is not match("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+    - name: Verify Semaphore API token is available
+      fail:
+        msg: |
+          SEMAPHORE_API_TOKEN not found in environment.
+          This playbook must be run from Semaphore with the SemaphoreAPI environment selected.
+      when: semaphore_token | length == 0
+
+    - name: Test Semaphore API connectivity
+      uri:
+        url: "{{ semaphore_url }}/api/user"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
+        status_code: 200
+      register: api_test
+
+    - name: Display API connection info
+      debug:
+        msg: "Connected to Semaphore as: {{ api_test.json.username }} (admin: {{ api_test.json.admin }})"
+      when: enable_debug | bool
+
+    # ============================================
+    # Phase 2: DNS API Connectivity Test
+    # ============================================
+
+    - name: Test deSEC API connectivity
+      when: dns_provider == 'desec'
+      block:
+        - name: Test deSEC authentication
+          uri:
+            url: "https://desec.io/api/v1/auth/"
+            method: GET
+            headers:
+              Authorization: "Token {{ semaphore_dns_api_token }}"
+            status_code: 200
+          register: desec_test
+
+        - name: Display deSEC account info
+          debug:
+            msg: "✓ deSEC API authenticated successfully"
+          when: enable_debug | bool
+
+      rescue:
+        - name: deSEC API test failed
+          fail:
+            msg: |
+              Failed to authenticate with deSEC API.
+
+              Please verify:
+              1. Token is correct (get from https://desec.io/tokens)
+              2. Token has not been revoked
+              3. Network connectivity to desec.io
+
+    - name: Test Dynu API connectivity
+      when: dns_provider == 'dynu'
+      block:
+        - name: Test Dynu authentication
+          uri:
+            url: "https://api.dynu.com/v2/dns"
+            method: GET
+            headers:
+              accept: "application/json"
+              API-Key: "{{ semaphore_dns_api_token }}"
+            status_code: 200
+          register: dynu_test
+
+        - name: Display Dynu account info
+          debug:
+            msg: "✓ Dynu API authenticated successfully ({{ dynu_test.json.domains | default([]) | length }} domains)"
+          when: enable_debug | bool
+
+      rescue:
+        - name: Dynu API test failed
+          fail:
+            msg: |
+              Failed to authenticate with Dynu API.
+
+              Please verify:
+              1. API Key is correct (get from https://www.dynu.com/en-US/ControlPanel/APICredentials)
+              2. API Key is enabled
+              3. Network connectivity to api.dynu.com
+
+    - name: Test Cloudflare API connectivity
+      when: dns_provider == 'cloudflare'
+      block:
+        - name: Test Cloudflare authentication and list zones
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ semaphore_dns_api_token }}"
+              Content-Type: "application/json"
+            status_code: 200
+          register: cloudflare_test
+
+        - name: Display Cloudflare account info
+          debug:
+            msg: "✓ Cloudflare API authenticated successfully ({{ cloudflare_test.json.result | length }} zones)"
+          when: enable_debug | bool
+
+        - name: Auto-detect zone ID if not provided
+          when: semaphore_cloudflare_zone_id | length == 0
+          block:
+            - name: Find zone matching domain
+              set_fact:
+                detected_zone_id: "{{ cloudflare_test.json.result | selectattr('name', 'equalto', semaphore_ddns_domain) | map(attribute='id') | first | default('') }}"
+
+            - name: Fail if zone not found
+              fail:
+                msg: |
+                  Could not auto-detect Cloudflare Zone ID for domain: {{ semaphore_ddns_domain }}
+
+                  Available zones:
+                  {% for zone in cloudflare_test.json.result %}
+                  - {{ zone.name }} ({{ zone.id }})
+                  {% endfor %}
+
+                  Please provide Zone ID manually or ensure domain matches exactly.
+              when: detected_zone_id | length == 0
+
+            - name: Use detected zone ID
+              set_fact:
+                final_cloudflare_zone_id: "{{ detected_zone_id }}"
+
+            - name: Display detected zone
+              debug:
+                msg: "✓ Auto-detected Zone ID: {{ final_cloudflare_zone_id }}"
+
+        - name: Use provided zone ID
+          when: semaphore_cloudflare_zone_id | length > 0
+          set_fact:
+            final_cloudflare_zone_id: "{{ semaphore_cloudflare_zone_id }}"
+
+      rescue:
+        - name: Cloudflare API test failed
+          fail:
+            msg: |
+              Failed to authenticate with Cloudflare API.
+
+              Please verify:
+              1. Token is correct (create at https://dash.cloudflare.com/profile/api-tokens)
+              2. Token has permission: Zone:DNS:Edit
+              3. Token is not expired
+              4. Network connectivity to api.cloudflare.com
+
+    - name: Test DuckDNS API connectivity
+      when: dns_provider == 'duckdns'
+      block:
+        - name: Extract subdomain from domain
+          set_fact:
+            duckdns_subdomain: "{{ semaphore_ddns_domain | regex_replace('\\.duckdns\\.org$', '') }}"
+
+        - name: Test DuckDNS authentication
+          uri:
+            url: "https://www.duckdns.org/update?domains={{ duckdns_subdomain }}&token={{ semaphore_dns_api_token }}&verbose=true"
+            method: GET
+            status_code: 200
+          register: duckdns_test
+
+        - name: Verify DuckDNS response
+          fail:
+            msg: |
+              DuckDNS API test failed.
+              Response: {{ duckdns_test.content }}
+          when: "'OK' not in duckdns_test.content"
+
+        - name: Display DuckDNS test result
+          debug:
+            msg: "✓ DuckDNS API authenticated successfully"
+          when: enable_debug | bool
+
+      rescue:
+        - name: DuckDNS API test failed
+          fail:
+            msg: |
+              Failed to authenticate with DuckDNS API.
+
+              Please verify:
+              1. Token is correct (get from https://www.duckdns.org/)
+              2. Domain format is correct (yourname.duckdns.org)
+              3. Subdomain exists in your DuckDNS account
+              4. Network connectivity to www.duckdns.org
+
+    # ============================================
+    # Phase 3: Create Semaphore Environment
+    # ============================================
+
+    - name: Check if DynamicDNS environment already exists
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
+        status_code: 200
+      register: existing_environments
+
+    - name: Find existing DynamicDNS environment
+      set_fact:
+        existing_ddns_env: "{{ existing_environments.json | selectattr('name', 'equalto', environment_name) | list | first | default(false) }}"
+
+    - name: Prepare environment JSON data
+      set_fact:
+        env_json_data:
+          DNS_PROVIDER: "{{ dns_provider }}"
+          DDNS_DOMAIN: "{{ semaphore_ddns_domain }}"
+          LETSENCRYPT_EMAIL: "{{ semaphore_letsencrypt_email }}"
+
+    - name: Add Cloudflare Zone ID to environment if present
+      when: dns_provider == 'cloudflare'
+      set_fact:
+        env_json_data: "{{ env_json_data | combine({'CLOUDFLARE_ZONE_ID': final_cloudflare_zone_id}) }}"
+
+    - name: Create DynamicDNS environment in Semaphore
+      when: not existing_ddns_env
+      block:
+        - name: Create environment with jq
+          shell: |
+            jq -n \
+              --arg name "{{ environment_name }}" \
+              --argjson pid {{ project_id }} \
+              --arg provider "{{ dns_provider }}" \
+              --arg domain "{{ semaphore_ddns_domain }}" \
+              --arg email "{{ semaphore_letsencrypt_email }}" \
+              --arg token "{{ semaphore_dns_api_token }}" \
+              {% if dns_provider == 'cloudflare' %}
+              --arg zone_id "{{ final_cloudflare_zone_id }}" \
+              {% endif %}
+              '{
+                name: $name,
+                project_id: $pid,
+                json: ({
+                  DNS_PROVIDER: $provider,
+                  DDNS_DOMAIN: $domain,
+                  LETSENCRYPT_EMAIL: $email
+                  {% if dns_provider == 'cloudflare' %}
+                  , CLOUDFLARE_ZONE_ID: $zone_id
+                  {% endif %}
+                } | tostring),
+                env: "{}",
+                secrets: [
+                  {type: "var", name: "DNS_API_TOKEN", secret: $token, operation: "create"}
+                ]
+              }' | \
+            curl -ksS -f \
+              -H "Authorization: Bearer {{ semaphore_token }}" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+          register: create_env_result
+          changed_when: true
+
+        - name: Parse environment creation result
+          set_fact:
+            env_result: "{{ create_env_result.stdout | from_json }}"
+
+        - name: Report environment creation success
+          debug:
+            msg: "✓ DynamicDNS environment created successfully (ID: {{ env_result.id }})"
+
+    - name: Update existing DynamicDNS environment
+      when: existing_ddns_env
+      block:
+        - name: Update environment with jq
+          shell: |
+            jq -n \
+              --argjson id {{ existing_ddns_env.id }} \
+              --arg name "{{ environment_name }}" \
+              --argjson pid {{ project_id }} \
+              --arg provider "{{ dns_provider }}" \
+              --arg domain "{{ semaphore_ddns_domain }}" \
+              --arg email "{{ semaphore_letsencrypt_email }}" \
+              --arg token "{{ semaphore_dns_api_token }}" \
+              {% if dns_provider == 'cloudflare' %}
+              --arg zone_id "{{ final_cloudflare_zone_id }}" \
+              {% endif %}
+              '{
+                id: $id,
+                name: $name,
+                project_id: $pid,
+                json: ({
+                  DNS_PROVIDER: $provider,
+                  DDNS_DOMAIN: $domain,
+                  LETSENCRYPT_EMAIL: $email
+                  {% if dns_provider == 'cloudflare' %}
+                  , CLOUDFLARE_ZONE_ID: $zone_id
+                  {% endif %}
+                } | tostring),
+                env: "{}",
+                secrets: [
+                  {type: "var", name: "DNS_API_TOKEN", secret: $token, operation: "update"}
+                ]
+              }' | \
+            curl -ksS -f -X PUT \
+              -H "Authorization: Bearer {{ semaphore_token }}" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "{{ semaphore_url }}/api/project/{{ project_id }}/environment/{{ existing_ddns_env.id }}"
+          register: update_env_result
+          changed_when: true
+
+        - name: Report environment update success
+          debug:
+            msg: "✓ DynamicDNS environment updated successfully (ID: {{ existing_ddns_env.id }})"
+
+    # ============================================
+    # Phase 4: Verification
+    # ============================================
+
+    - name: Retrieve updated environment list
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
+        status_code: 200
+      register: final_environments
+
+    - name: Find DynamicDNS environment
+      set_fact:
+        final_ddns_env: "{{ final_environments.json | selectattr('name', 'equalto', environment_name) | list | first }}"
+
+    - name: Verify environment contains expected data
+      assert:
+        that:
+          - final_ddns_env is defined
+          - final_ddns_env.name == environment_name
+        fail_msg: "Environment verification failed"
+        success_msg: "✓ Environment verified successfully"
+
+    - name: Display final summary
+      debug:
+        msg:
+          - "========================================"
+          - "   DYNAMIC DNS SETUP COMPLETE"
+          - "========================================"
+          - ""
+          - "Environment Details:"
+          - "  Name: {{ environment_name }}"
+          - "  ID: {{ final_ddns_env.id }}"
+          - ""
+          - "Configuration:"
+          - "  Provider: {{ dns_provider }}"
+          - "  Domain: {{ semaphore_ddns_domain }}"
+          - "  Email: {{ semaphore_letsencrypt_email }}"
+          - "{% if dns_provider == 'cloudflare' %}  Zone ID: {{ final_cloudflare_zone_id }}{% endif %}"
+          - ""
+          - "Status:"
+          - "  ✓ DNS API connectivity verified"
+          - "  ✓ Credentials stored securely in Semaphore"
+          - "  ✓ Environment ready for use"
+          - ""
+          - "Next Steps:"
+          - "  1. Run 'DynDNS 2: Configure OPNsense' to enable DynDNS updates"
+          - "  2. Run 'DynDNS 3: Configure AdGuard' to add DNS rewrites"
+          - "  3. Run 'DynDNS 4: Configure Caddy Let's Encrypt' to get certificates"
+          - ""
+          - "========================================"
