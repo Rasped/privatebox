@@ -193,12 +193,12 @@
 
             - name: Verify custom Caddy build
               command: /usr/local/bin/caddy-custom version
-              register: caddy_version
+              register: caddy_build_result
               changed_when: false
 
             - name: Display Caddy version
               debug:
-                msg: "Custom Caddy built successfully: {{ caddy_version.stdout }}"
+                msg: "Custom Caddy built successfully: {{ caddy_build_result.stdout }}"
 
         - name: Create build directory for custom image
           file:
