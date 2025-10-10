@@ -35,7 +35,7 @@ Transform a Proxmox host into a comprehensive privacy-focused network appliance 
 - **OPNsense VM template** created and backed up
 - **OPNsense with Unbound DNS** configured on port 53
 - **AdGuard deployment playbook** ✅ (fully deployed and configured with Quad9 + Unbound fallback, blocklists active)
-- **Homer dashboard** ✅ (deployed at http://10.10.20.10:8081 with service registry)
+- **Homer dashboard** ✅ (deployed at https://homer.lan with service registry)
 
 ### 🔧 NEEDS FINALIZATION
 

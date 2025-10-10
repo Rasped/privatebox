@@ -54,16 +54,17 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 ### VMs
 - **VM 9000** - Management VM (Debian 13) at 10.10.20.10 - hosts all containerized services
 - **VM 100** - OPNsense (firewall/router) at 10.10.20.1 (Services), 10.10.10.1 (Trusted LAN)
+- **VM 101** - Subnet Router (Debian 13) at 10.10.20.11 (Services), 10.10.10.10 (Trusted LAN) - Tailscale subnet router
 - **Proxmox Host** - at 10.10.20.20:8006 (not a VM, hypervisor itself)
 
 ### Services (all on Management VM)
-- **Portainer** (1443) - portainer.lan → https://10.10.20.10:1443 - container management
-- **Semaphore** (2443) - semaphore.lan → https://10.10.20.10:2443 - Ansible automation
-- **Caddy** (80/443) - reverse proxy, terminates TLS for .lan domains (self-signed certs)
-- **AdGuard** (53, 3443) - adguard.lan → https://10.10.20.10:3443 - DNS + ad blocking
-- **Headscale** - VPN control server
-- **Headplane** (8080) - headplane.lan → http://10.10.20.10:8080 - Headscale web UI
-- **Homer** (8081) - homer.lan → http://10.10.20.10:8081 - service dashboard
+- **Portainer** - https://portainer.lan - container management
+- **Semaphore** - https://semaphore.lan - Ansible automation
+- **Caddy** - reverse proxy (HTTPS for .lan domains, HTTP health endpoint at /health)
+- **AdGuard** - https://adguard.lan (web UI), 10.10.20.10:53 (DNS) - DNS + ad blocking
+- **Headscale** - https://10.10.20.10:4443 - VPN control server API (no web UI)
+- **Headplane** - https://headplane.lan - Headscale web UI
+- **Homer** - https://homer.lan - service dashboard
 
 ### Domain Access
 - Current: all services use `.lan` domains (e.g., portainer.lan, semaphore.lan)
