@@ -87,14 +87,9 @@ PrivateBox actively recommends **deSEC** as the default DNS provider for the fol
 
 ## Implementation Steps
 
-### 1. Caddy DNS Plugins Installation
+### 1. Caddy DNS Plugins - ✅ ALREADY COMPLETE
 
-**Objective:** Install multiple DNS provider plugins at bootstrap to support various providers.
-
-**Approach:**
-- Use `xcaddy` to rebuild Caddy binary with DNS plugins
-- Install during bootstrap (one-time operation)
-- Support 4 carefully selected providers
+**Status:** Caddy installation already includes DNS plugin support for all 4 providers.
 
 **Supported Providers:**
 ```
@@ -104,104 +99,30 @@ PrivateBox actively recommends **deSEC** as the default DNS provider for the fol
 - caddy-dns/duckdns     # COMPATIBILITY: DuckDNS (option for existing users, not recommended)
 ```
 
-**Provider Selection Rationale:**
-1. **deSEC** - PRIMARY recommendation aligned with PrivateBox values:
-   - European (Germany), GDPR-compliant by design
-   - Non-profit foundation (no commercial interests)
-   - DNSSEC enabled by default (superior security)
-   - Free subdomains (e.g., `customer.dedyn.io`)
-   - Privacy-focused, no tracking, open-source
-
-2. **Dynu** - Strong alternative recommendation:
-   - Completely free, never expires (no 30-day renewal)
-   - 30-second TTL (fastest DNS propagation)
-   - 12 globally distributed nameservers
-   - Native OPNsense support (22.7+)
-
-3. **Cloudflare** - For users with purchased domains:
-   - Requires own domain (not free subdomain)
-   - Enterprise-grade infrastructure
-   - Advanced features (proxy, WAF, analytics)
-
-4. **DuckDNS** - Compatibility option (not recommended):
-   - Supported for users migrating from existing setups
-   - Popular in self-hosting/Home Assistant communities
-   - Simple setup, well-documented
-   - AWS-hosted (privacy trade-off)
-
-**Files to Modify:**
-- `bootstrap/setup-guest.sh` or new `bootstrap/build-caddy.sh`
-
-**Installation Method:**
-```bash
-# Install xcaddy
-go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-
-# Build Caddy with our 4 supported DNS providers
-xcaddy build \
-  --with github.com/caddy-dns/desec \
-  --with github.com/caddy-dns/dynu \
-  --with github.com/caddy-dns/cloudflare \
-  --with github.com/caddy-dns/duckdns
-
-# Replace system Caddy
-mv caddy /usr/local/bin/caddy
-chmod +x /usr/local/bin/caddy
-```
-
-**Decision:** Bootstrap integration vs. separate playbook?
-- **Recommendation:** Separate playbook `install-caddy-dns-plugins.yml` (can be re-run if providers change)
+**No action required** - proceed directly to Step 2.
 
 ---
 
-### 2. DynamicDNS Semaphore Environment
+### 2. DynamicDNS Semaphore Environment - ✅ ALREADY COMPLETE
 
-**Objective:** Create Semaphore environment to store DNS provider credentials.
+**Status:** Environment ID 8 created successfully via playbook `ddns-1-setup-environment.yml` (Template 16).
 
-**Playbook:** `ansible/playbooks/setup/setup-ddns-environment.yml`
+**Current Configuration:**
+- Provider: deSEC
+- Domain: subrosa.dedyn.io
+- Email: rasped@gmail.com
+- API Token: Stored securely in Semaphore environment
+- Test Status: API connectivity verified (1 domain found)
 
-**vars_prompt:**
-```yaml
-- dns_provider       # e.g., "desec", "cloudflare", "duckdns"
-- dns_api_token      # Provider API token (no_log: true)
-- ddns_domain        # e.g., "customer.dedyn.io"
-- letsencrypt_email  # Email for Let's Encrypt notifications
-```
-
-**Environment Structure:**
-```json
-{
-  "name": "DynamicDNS",
-  "project_id": 1,
-  "json": {
-    "DNS_PROVIDER": "desec",
-    "DDNS_DOMAIN": "customer.dedyn.io",
-    "LETSENCRYPT_EMAIL": "admin@example.com"
-  },
-  "secrets": [
-    {
-      "type": "var",
-      "name": "DNS_API_TOKEN",
-      "secret": "xxx",
-      "operation": "create"
-    }
-  ]
-}
-```
-
-**Tasks:**
-1. Validate provider is supported
-2. Test DNS API connectivity
-3. Create environment via Semaphore API
-4. Verify environment created successfully
+**No action required** - environment ready for use by subsequent playbooks.
 
 ---
 
-### 3. OPNsense DynDNS Configuration
+### 3. OPNsense DynDNS Configuration - **NEXT STEP**
 
 **Objective:** Configure OPNsense to update DNS records when WAN IP changes.
 
-**Playbook:** `ansible/playbooks/services/configure-opnsense-ddns.yml`
+**Playbook:** `ansible/playbooks/services/ddns-2-configure-opnsense.yml`
 
 **vars_prompt:**
 ```yaml
@@ -232,7 +153,7 @@ chmod +x /usr/local/bin/caddy
 
 **Objective:** Add DNS rewrites for custom domain while preserving `.lan` rewrites.
 
-**Playbook:** `ansible/playbooks/services/configure-adguard-ddns.yml`
+**Playbook:** `ansible/playbooks/services/ddns-3-configure-adguard.yml`
 
 **vars_prompt:**
 ```yaml
@@ -261,7 +182,7 @@ chmod +x /usr/local/bin/caddy
 
 **Objective:** Update Caddy to obtain Let's Encrypt certificates via DNS-01 challenge.
 
-**Playbook:** `ansible/playbooks/services/configure-caddy-letsencrypt.yml`
+**Playbook:** `ansible/playbooks/services/ddns-4-configure-caddy-letsencrypt.yml`
 
 **vars_prompt:**
 ```yaml
@@ -342,7 +263,7 @@ EnvironmentFile=/etc/privatebox/ddns-config.env
 
 **Objective:** Verify complete setup works end-to-end.
 
-**Playbook:** `ansible/playbooks/services/verify-ddns-setup.yml` (optional)
+**Playbook:** `ansible/playbooks/services/ddns-5-verify-setup.yml` (optional)
 
 **Tests:**
 1. **DNS Resolution:**
@@ -384,15 +305,17 @@ curl -sk -u "$OPNSENSE_API_KEY:$OPNSENSE_API_SECRET" https://10.10.20.1/api/dynd
 
 ## Playbook Execution Order
 
-From Semaphore, user runs:
+**Completed:**
+- ✅ Step 1: Caddy DNS plugins (already installed)
+- ✅ Step 2: DynamicDNS environment (Environment ID 8, domain: subrosa.dedyn.io)
+
+**Remaining - From Semaphore, user runs:**
 
 ```
-1. install-caddy-dns-plugins.yml      # One-time: rebuild Caddy with DNS plugins
-2. setup-ddns-environment.yml         # Create DynamicDNS environment, store credentials
-3. configure-opnsense-ddns.yml        # Enable DynDNS in OPNsense
-4. configure-adguard-ddns.yml         # Add DNS rewrites for custom domain
-5. configure-caddy-letsencrypt.yml    # Update Caddy, obtain Let's Encrypt certs
-6. verify-ddns-setup.yml              # (Optional) Verify everything works
+3. ddns-2-configure-opnsense.yml       # Enable DynDNS in OPNsense
+4. ddns-3-configure-adguard.yml        # Add DNS rewrites for custom domain
+5. ddns-4-configure-caddy-letsencrypt.yml  # Update Caddy, obtain Let's Encrypt certs
+6. ddns-5-verify-setup.yml             # (Optional) Verify everything works
 ```
 
 **Initial Run:** Use Let's Encrypt staging environment to avoid rate limits.
@@ -499,20 +422,21 @@ From Semaphore, user runs:
 ## Prerequisites
 
 ### Bootstrap Must Include:
-- Go compiler (for xcaddy)
 - Network access for Let's Encrypt API
 - DNS provider account with API access
 
 ### User Must Provide:
-- Custom domain (e.g., `customer.dedyn.io`)
-- DNS provider API credentials
-- Email for Let's Encrypt notifications
+- ✅ Custom domain (subrosa.dedyn.io - already configured)
+- ✅ DNS provider API credentials (deSEC - already stored in Environment ID 8)
+- ✅ Email for Let's Encrypt notifications (rasped@gmail.com - already configured)
 
 ### Existing Infrastructure:
+- ✅ Caddy DNS plugins (deSEC, Dynu, Cloudflare, DuckDNS)
 - ✅ OPNsense API credentials (already configured)
 - ✅ AdGuard API access (via SERVICES_PASSWORD)
 - ✅ Semaphore API access (for environment creation)
 - ✅ Caddy reverse proxy (base installation)
+- ✅ DynamicDNS environment (Environment ID 8)
 
 ---
 
