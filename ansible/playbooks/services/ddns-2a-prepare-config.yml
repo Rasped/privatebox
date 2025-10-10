@@ -73,7 +73,6 @@
           ddns_domain: "{{ ddns_domain }}"
           letsencrypt_email: "{{ letsencrypt_email }}"
           cloudflare_zone_id: "{{ cloudflare_zone_id }}"
-          timestamp: "{{ ansible_date_time.iso8601 }}"
       no_log: true
 
     - name: Write handoff file with DNS credentials
