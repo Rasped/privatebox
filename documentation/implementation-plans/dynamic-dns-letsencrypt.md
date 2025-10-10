@@ -118,28 +118,62 @@ PrivateBox actively recommends **deSEC** as the default DNS provider for the fol
 
 ---
 
-### 3. OPNsense DynDNS Configuration - **NEXT STEP**
+### 3. OPNsense DynDNS Configuration - **⚠️ BLOCKED**
+
+**Status:** API calls succeed but service does not start. Configuration not persisted.
 
 **Objective:** Configure OPNsense to update DNS records when WAN IP changes.
 
-**Playbook:** `ansible/playbooks/services/ddns-2-configure-opnsense.yml`
+**Playbooks:**
+- `ansible/playbooks/services/ddns-2a-prepare-config.yml` ✅ Working
+- `ansible/playbooks/services/ddns-2b-configure-opnsense.yml` ⚠️ Blocked
 
-**vars_prompt:**
+**Implementation Approach:**
+Two-playbook handoff pattern (required because Semaphore templates can only reference one environment):
+1. **Playbook 2a**: Reads DNS credentials from `DynamicDNS` environment, writes to `/tmp/ddns-handoff.json`
+2. **Playbook 2b**: Reads handoff file, uses `OPNsenseAPI` environment to configure OPNsense, deletes handoff
+
+**Current API Call Sequence (Playbook 2b):**
 ```yaml
-- domain         # Must match DynamicDNS environment
-- dns_provider   # Must match DynamicDNS environment
+1. POST /api/dyndns/accounts/addItem          # Add DynDNS account ✅
+2. POST /api/dyndns/service/reconfigure        # Apply account config ✅
+3. POST /api/dyndns/settings/set               # Enable service ✅
+   Body: {"dyndns": {"general": {"enabled": "1"}}}
+4. POST /api/dyndns/service/reconfigure        # Apply settings ✅
+5. POST /api/dyndns/service/start              # Start service ✅
+6. GET  /api/dyndns/service/status             # Check status ✅ Returns "running"
 ```
 
-**Tasks:**
-1. Retrieve DNS credentials from Semaphore DynamicDNS environment
-2. Retrieve OPNsense API credentials from OPNsenseAPI environment
-3. Configure DynDNS service via OPNsense API (provider-specific settings)
-4. Set update interval (e.g., 5 minutes)
-5. Trigger initial update
-6. Verify DNS record created/updated via DNS query
+**The Problem:**
+All API calls return HTTP 200/201 (success), but actual OPNsense system state shows:
+- `ddclient_enable="NO"` in `/etc/rc.conf.d/ddclient` (should be YES)
+- `service ddclient status` → "ddclient is not running"
+- `/usr/local/etc/ddclient.conf` → only 2 default lines (no account configuration)
+- DynDNS section missing from `/conf/config.xml`
 
-**OPNsense API Endpoints:**
-- Configuration via XML-RPC or REST API (TBD: research OPNsense DynDNS API)
+**Root Cause Analysis:**
+- API returns success codes but does not persist configuration to disk
+- `settings/set` with `enabled: "1"` does not update rc.conf
+- `service/reconfigure` does not generate ddclient configuration file
+- `service/start` claims success but service not actually running
+- Configuration exists only in memory, lost on reboot
+
+**Attempted Fixes:**
+1. ✅ Added `/api/dyndns/settings/set` with `enabled: "1"` (based on DynDNS.xml model)
+2. ✅ Added reconfigure call after account creation (standard OPNsense API pattern)
+3. ✅ Added reconfigure call after settings enable (apply changes pattern)
+4. ❌ None of these fixed the issue
+
+**Next Investigation Steps:**
+1. Test configuration via OPNsense GUI to capture browser network requests
+2. Check if API requires additional parameters (savepoint mechanism?)
+3. Verify os-ddclient plugin is fully installed and configured
+4. Check configd actions for DynDNS service triggers
+5. Consider alternative: direct SSH to OPNsense with CLI commands instead of API
+
+**Commits:**
+- `8a0ba92`: Add settings/set to enable service before start
+- `acd54e5`: Add reconfigure after account creation
 
 **Provider Notes:**
 - **deSEC**: Supports RFC2136 (DNS UPDATE) or HTTPS API, DNSSEC enabled
