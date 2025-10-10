@@ -63,7 +63,8 @@ class SemaphoreOrchestrator:
             "Subnet Router 2: Configure VPN Connection",
             "Subnet Router 3: Approve Routes",
             "Headplane 1: Deploy Headscale Web UI",
-            "Homer 1: Deploy Dashboard Service"
+            "Homer 1: Deploy Dashboard Service",
+            "Caddy 1: Deploy Reverse Proxy Service"
         ]
 
         if not self.api_token:
