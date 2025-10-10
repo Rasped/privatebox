@@ -210,6 +210,27 @@
     # Phase 4: Enable and Start DynDNS Service
     # ============================================
 
+    - name: Enable DynDNS service in settings
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/settings/set"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          dyndns:
+            general:
+              enabled: "1"
+        status_code: [200, 201]
+      register: enable_result
+
+    - name: Display service enable result
+      debug:
+        msg: "✓ DynDNS service enabled"
+      when: enable_debug | bool
+
     - name: Reconfigure DynDNS service
       uri:
         url: "{{ opnsense_api_url }}/api/dyndns/service/reconfigure"
