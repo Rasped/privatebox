@@ -133,8 +133,8 @@
           block:
             - name: Download Go binary
               get_url:
-                url: "https://go.dev/dl/go1.21.5.linux-amd64.tar.gz"
-                dest: "/tmp/go1.21.5.linux-amd64.tar.gz"
+                url: "https://go.dev/dl/go1.25.2.linux-amd64.tar.gz"
+                dest: "/tmp/go1.25.2.linux-amd64.tar.gz"
                 mode: '0644'
 
             - name: Remove old Go installation
@@ -144,7 +144,7 @@
 
             - name: Extract Go binary
               unarchive:
-                src: "/tmp/go1.21.5.linux-amd64.tar.gz"
+                src: "/tmp/go1.25.2.linux-amd64.tar.gz"
                 dest: /usr/local
                 remote_src: yes
 
