@@ -58,13 +58,14 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - **Proxmox Host** - at 10.10.20.20:8006 (not a VM, hypervisor itself)
 
 ### Services (all on Management VM)
-- **Portainer** - https://portainer.lan - container management
-- **Semaphore** - https://semaphore.lan - Ansible automation
-- **Caddy** - reverse proxy (HTTPS for .lan domains, HTTP health endpoint at /health)
-- **AdGuard** - https://adguard.lan (web UI), 10.10.20.10:53 (DNS) - DNS + ad blocking
-- **Headscale** - https://10.10.20.10:4443 - VPN control server API (no web UI)
-- **Headplane** - https://headplane.lan - Headscale web UI
-- **Homer** - https://homer.lan - service dashboard
+**Web services:** All accessible via `https://*.lan` domains (portainer, semaphore, adguard, headplane, homer)
+- See `ansible/files/caddy/Caddyfile.j2` for complete proxy configuration
+- Caddy reverse proxy terminates TLS with self-signed certs
+- Caddy health endpoint: `http://10.10.20.10/health` (monitoring)
+
+**Non-web services:**
+- **Headscale API** - `https://10.10.20.10:4443` - VPN control server (no web UI, accessed via Headplane)
+- **AdGuard DNS** - `10.10.20.10:53` - DNS filtering (web UI at adguard.lan)
 
 ### Domain Access
 - Current: all services use `.lan` domains (e.g., portainer.lan, semaphore.lan)
