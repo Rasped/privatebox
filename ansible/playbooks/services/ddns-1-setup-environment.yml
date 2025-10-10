@@ -1,7 +1,8 @@
 ---
 - name: "DynDNS 1: Setup Environment"
-  hosts: proxmox
-  gather_facts: yes
+  hosts: localhost
+  connection: local
+  gather_facts: no
 
   environment:
     ANSIBLE_JINJA2_NATIVE: "True"
@@ -69,6 +70,7 @@
     # Template configuration for Semaphore
     template_config:
       semaphore_environment: "SemaphoreAPI"
+      semaphore_inventory: "localhost"
       semaphore_category: "services"
 
     # Semaphore configuration
