@@ -194,7 +194,7 @@
                   respond "Service not configured" 404
               }
           }
-        dest: "{{ caddy_config_dir }}/custom-domains.conf"
+        dest: "{{ caddy_config_dir }}/config/custom-domains.conf"
         mode: '0644'
         owner: root
         group: root
@@ -202,7 +202,7 @@
 
     - name: Display custom domains config status
       debug:
-        msg: "✓ Custom domains configuration created at {{ caddy_config_dir }}/custom-domains.conf"
+        msg: "✓ Custom domains configuration created at {{ caddy_config_dir }}/config/custom-domains.conf"
 
     # ============================================
     # Phase 5: Update Main Caddyfile with Import
@@ -218,7 +218,7 @@
       when: import_check.rc != 0
       lineinfile:
         path: "{{ caddy_config_dir }}/Caddyfile"
-        line: "\n# Import custom domain configuration\nimport {{ caddy_config_dir }}/custom-domains.conf"
+        line: "\n# Import custom domain configuration\nimport /config/custom-domains.conf"
         insertafter: EOF
       register: caddyfile_updated
 
@@ -388,7 +388,7 @@
           - ""
           - "Configuration Files:"
           - "  • Main Caddyfile: {{ caddy_config_dir }}/Caddyfile"
-          - "  • Custom domains: {{ caddy_config_dir }}/custom-domains.conf"
+          - "  • Custom domains: {{ caddy_config_dir }}/config/custom-domains.conf"
           - "  • DNS credentials: /etc/privatebox/ddns-config.env"
           - "  • Certificates: {{ caddy_data_dir }}/caddy/certificates/"
           - ""
