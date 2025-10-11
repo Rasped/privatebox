@@ -329,17 +329,7 @@
           {% endif %}
 
     # ============================================
-    # Phase 6: Cleanup
-    # ============================================
-
-    - name: Delete handoff file (success path)
-      file:
-        path: "{{ handoff_file }}"
-        state: absent
-      no_log: true
-
-    # ============================================
-    # Phase 7: Summary
+    # Phase 6: Summary
     # ============================================
 
     - name: Display completion summary
@@ -354,11 +344,12 @@
           - "Service: {{ 'Running' if service_status.status == 200 else 'Check OPNsense GUI' }}"
           - "DNS Record: {{ dns_check.stdout_lines[0] if dns_check.rc == 0 and dns_check.stdout else 'Pending propagation' }}"
           - ""
+          - "Configuration:"
+          - "  Config file: {{ handoff_file }}"
+          - "  Available for use by subsequent DynDNS playbooks"
+          - ""
           - "Next Steps:"
           - "  1. Run 'DynDNS 3: Configure AdGuard' to add DNS rewrites"
-          - "  2. Run 'DynDNS 4: Configure Caddy Let's Encrypt' to get certificates"
-          - ""
-          - "Note:"
-          - "  Handoff file has been securely deleted"
+          - "  2. Run 'DynDNS 4: Configure Caddy' to get Let's Encrypt certificates"
           - ""
           - "========================================"
