@@ -311,7 +311,7 @@
     - name: Check for certificate files
       find:
         paths: "{{ caddy_data_dir }}/certificates/acme-v02.api.letsencrypt.org-directory"
-        patterns: "*.{{ ddns_domain }}/*.crt"
+        patterns: "*{{ ddns_domain }}.crt"
         recurse: yes
       register: cert_files
 
