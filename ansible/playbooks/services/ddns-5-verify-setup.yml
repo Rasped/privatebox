@@ -7,22 +7,17 @@
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "DynamicDNS+ServicePasswords"
-      semaphore_inventory: "privatebox"
+      semaphore_environment: "OPNsenseAPI"
+      semaphore_inventory: "container-host"
       semaphore_category: "services"
 
     # Configuration
     management_vm_ip: "{{ ansible_default_ipv4.address }}"
     adguard_ip: "{{ ansible_default_ipv4.address }}"
-    opnsense_ip: "10.10.20.1"
+    opnsense_api_url: "{{ OPNSENSE_API_URL }}"
+    opnsense_api_key: "{{ OPNSENSE_API_KEY }}"
+    opnsense_api_secret: "{{ OPNSENSE_API_SECRET }}"
     caddy_data_dir: "/opt/caddy/data"
-
-    # Load from DynamicDNS environment
-    ddns_domain: "{{ DDNS_DOMAIN | default('') }}"
-
-    # Load OPNsense API credentials
-    opnsense_api_key: "{{ OPNSENSE_API_KEY | default('') }}"
-    opnsense_api_secret: "{{ OPNSENSE_API_SECRET | default('') }}"
 
     # Test services
     test_services:
@@ -34,7 +29,26 @@
 
   tasks:
     # ============================================
-    # Phase 1: Header
+    # Phase 1: Read Config File from Semaphore Container
+    # ============================================
+
+    - name: Read DynDNS config from Semaphore container
+      shell: podman exec semaphore cat /tmp/ddns-handoff.json
+      register: ddns_config_raw
+      changed_when: false
+      no_log: true
+
+    - name: Parse DynDNS config
+      set_fact:
+        ddns_config: "{{ ddns_config_raw.stdout | from_json }}"
+      no_log: true
+
+    - name: Set domain from config
+      set_fact:
+        ddns_domain: "{{ ddns_config.ddns_domain }}"
+
+    # ============================================
+    # Phase 2: Header
     # ============================================
 
     - name: Display verification header
@@ -46,14 +60,8 @@
           - "Domain: {{ ddns_domain }}"
           - "Management VM: {{ management_vm_ip }}"
 
-    - name: Validate domain is set
-      assert:
-        that:
-          - ddns_domain | length > 0
-        fail_msg: "DDNS_DOMAIN not found. Run 'DynDNS 1: Setup Environment' first."
-
     # ============================================
-    # Phase 2: DNS Resolution Tests
+    # Phase 3: DNS Resolution Tests
     # ============================================
 
     - name: Test DNS resolution for .lan domains
@@ -94,13 +102,13 @@
         label: "{{ item.item }}"
 
     # ============================================
-    # Phase 3: Certificate Verification
+    # Phase 4: Certificate Verification
     # ============================================
 
     - name: Check for Let's Encrypt certificates
       find:
-        paths: "{{ caddy_data_dir }}/caddy/certificates/acme-v02.api.letsencrypt.org-directory"
-        patterns: "*.{{ ddns_domain }}/*.crt"
+        paths: "{{ caddy_data_dir }}/certificates/acme-v02.api.letsencrypt.org-directory"
+        patterns: "*{{ ddns_domain }}.crt"
         recurse: yes
       register: letsencrypt_certs
       become: true
@@ -141,7 +149,7 @@
               else 'EXPIRES SOON - less than 60 days remaining' }}
 
     # ============================================
-    # Phase 4: HTTPS Service Access Tests
+    # Phase 5: HTTPS Service Access Tests
     # ============================================
 
     - name: Test HTTPS access via .lan domains
@@ -196,15 +204,14 @@
           {{ https_failures | length }} failed
 
     # ============================================
-    # Phase 5: DynDNS Status Check
+    # Phase 6: DynDNS Status Check
     # ============================================
 
     - name: Check OPNsense DynDNS service status
-      when: opnsense_api_key | length > 0 and opnsense_api_secret | length > 0
       block:
         - name: Get DynDNS service status
           uri:
-            url: "https://{{ opnsense_ip }}/api/dyndns/service/status"
+            url: "{{ opnsense_api_url }}/api/dyndns/service/status"
             method: GET
             user: "{{ opnsense_api_key }}"
             password: "{{ opnsense_api_secret }}"
@@ -221,7 +228,7 @@
 
         - name: Get DynDNS accounts
           uri:
-            url: "https://{{ opnsense_ip }}/api/dyndns/accounts/get"
+            url: "{{ opnsense_api_url }}/api/dyndns/accounts/get"
             method: GET
             user: "{{ opnsense_api_key }}"
             password: "{{ opnsense_api_secret }}"
@@ -237,7 +244,7 @@
           when: dyndns_accounts.status == 200
 
     # ============================================
-    # Phase 6: Caddy Service Health
+    # Phase 7: Caddy Service Health
     # ============================================
 
     - name: Check Caddy health endpoint
@@ -264,7 +271,7 @@
         msg: "Caddy service: {{ caddy_service.status.ActiveState }} ({{ caddy_service.status.SubState }})"
 
     # ============================================
-    # Phase 7: Final Summary
+    # Phase 8: Final Summary
     # ============================================
 
     - name: Calculate test results
