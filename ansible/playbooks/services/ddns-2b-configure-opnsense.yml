@@ -250,6 +250,27 @@
         msg: "✓ DynDNS account created for {{ ddns_config.ddns_domain }}"
       when: enable_debug | bool
 
+    - name: Display add account API response
+      debug:
+        var: add_account_result.json
+      when: enable_debug | bool
+
+    - name: Call setItem with returned UUID
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/accounts/setItem/{{ add_account_result.json.uuid }}"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          account: "{{ dyndns_account }}"
+        status_code: [200, 201]
+      register: set_account_result
+      when: add_account_result.json.uuid is defined
+      no_log: true
+
     - name: Reconfigure to commit account configuration
       uri:
         url: "{{ opnsense_api_url }}/api/dyndns/service/reconfigure"
