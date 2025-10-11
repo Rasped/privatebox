@@ -152,8 +152,10 @@
           *.{{ ddns_domain }} {
               # Let's Encrypt via DNS-01 challenge
               tls {
-                  dns {{ caddy_dns_module }} {env.{{ dns_token_env_var }}}
-                  email {env.LETSENCRYPT_EMAIL}
+                  dns {{ caddy_dns_module }} {
+                      token "{${{ dns_token_env_var }}}"
+                  }
+                  email {$LETSENCRYPT_EMAIL}
               }
 
           {% for service in default_services %}
