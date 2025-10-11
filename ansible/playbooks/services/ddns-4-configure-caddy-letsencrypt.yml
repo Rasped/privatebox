@@ -151,11 +151,10 @@
           # Wildcard certificate for custom domain
           *.{{ ddns_domain }} {
               # Let's Encrypt via DNS-01 challenge
-              tls {
+              tls {$LETSENCRYPT_EMAIL} {
                   dns {{ caddy_dns_module }} {
                       token "{${{ dns_token_env_var }}}"
                   }
-                  email {$LETSENCRYPT_EMAIL}
               }
 
           {% for service in default_services %}
