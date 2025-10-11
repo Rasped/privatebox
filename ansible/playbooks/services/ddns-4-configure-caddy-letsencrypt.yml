@@ -60,7 +60,6 @@
       shell: podman exec semaphore-semaphore cat /tmp/ddns-handoff.json
       register: ddns_config_raw
       changed_when: false
-      no_log: true
 
     - name: Parse DynDNS config
       set_fact:
