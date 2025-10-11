@@ -302,7 +302,7 @@
 
     - name: Wait for certificate issuance
       pause:
-        seconds: 60
+        seconds: 90
 
     # ============================================
     # Phase 9: Verify Certificate
@@ -310,7 +310,7 @@
 
     - name: Check for certificate files
       find:
-        paths: "{{ caddy_data_dir }}/caddy/certificates/acme-v02.api.letsencrypt.org-directory"
+        paths: "{{ caddy_data_dir }}/certificates/acme-v02.api.letsencrypt.org-directory"
         patterns: "*.{{ ddns_domain }}/*.crt"
         recurse: yes
       register: cert_files
@@ -391,7 +391,7 @@
           - "  • Main Caddyfile: {{ caddy_config_dir }}/Caddyfile"
           - "  • Custom domains: {{ caddy_config_dir }}/config/custom-domains.conf"
           - "  • DNS credentials: /etc/privatebox/ddns-config.env"
-          - "  • Certificates: {{ caddy_data_dir }}/caddy/certificates/"
+          - "  • Certificates: {{ caddy_data_dir }}/certificates/"
           - ""
           - "Next Steps:"
           - "  1. Test access: https://portainer.{{ ddns_domain }}"
@@ -400,7 +400,7 @@
           - ""
           - "Troubleshooting:"
           - "  • Caddy logs: journalctl -u caddy.service -f"
-          - "  • Certificate status: ls -lh {{ caddy_data_dir }}/caddy/certificates/"
+          - "  • Certificate status: ls -lh {{ caddy_data_dir }}/certificates/"
           - "  • DNS resolution: dig @10.10.20.10 portainer.{{ ddns_domain }}"
           - ""
           - "========================================"
