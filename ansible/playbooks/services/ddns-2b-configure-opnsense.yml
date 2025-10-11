@@ -235,9 +235,13 @@
         validate_certs: no
         body_format: json
         body:
-          dyndns:
+          ddclient:  # Fixed: was "dyndns"
             general:
               enabled: "1"
+              backend: "opnsense"  # Use native backend to avoid known bug
+              daemon_delay: "300"
+              verbose: "0"
+              allowipv6: "0"
         status_code: [200, 201]
       register: enable_result
 
@@ -261,16 +265,7 @@
       pause:
         seconds: 5
 
-    - name: Start DynDNS service
-      uri:
-        url: "{{ opnsense_api_url }}/api/dyndns/service/start"
-        method: POST
-        user: "{{ opnsense_api_key }}"
-        password: "{{ opnsense_api_secret }}"
-        force_basic_auth: yes
-        validate_certs: no
-        status_code: [200, 201]
-      register: start_result
+    # Note: Removed redundant /service/start call - reconfigure already starts the service
 
     - name: Check DynDNS service status
       uri:
