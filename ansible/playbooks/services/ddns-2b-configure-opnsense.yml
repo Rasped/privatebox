@@ -194,7 +194,7 @@
           password: "{{ ddns_config.dns_api_token }}"
           zone: "{{ ddns_config.cloudflare_zone_id if ddns_config.dns_provider == 'cloudflare' else '' }}"
           hostnames: "{{ duckdns_subdomain if ddns_config.dns_provider == 'duckdns' else ddns_config.ddns_domain }}"
-          checkip: "if"
+          checkip: "web_ipify_ipv4"
           interface: "wan"
           force_ssl: "1"
           description: "Managed by PrivateBox - {{ ddns_config.dns_provider }}"
