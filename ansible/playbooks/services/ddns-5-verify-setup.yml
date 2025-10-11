@@ -1,0 +1,312 @@
+---
+- name: "DynDNS 5: Verify Complete Setup"
+  hosts: container-host
+  become: false
+  gather_facts: true
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "DynamicDNS+ServicePasswords"
+      semaphore_inventory: "privatebox"
+      semaphore_category: "services"
+
+    # Configuration
+    management_vm_ip: "{{ ansible_default_ipv4.address }}"
+    adguard_ip: "{{ ansible_default_ipv4.address }}"
+    opnsense_ip: "10.10.20.1"
+    caddy_data_dir: "/opt/caddy/data"
+
+    # Load from DynamicDNS environment
+    ddns_domain: "{{ DDNS_DOMAIN | default('') }}"
+
+    # Load OPNsense API credentials
+    opnsense_api_key: "{{ OPNSENSE_API_KEY | default('') }}"
+    opnsense_api_secret: "{{ OPNSENSE_API_SECRET | default('') }}"
+
+    # Test services
+    test_services:
+      - portainer
+      - semaphore
+      - adguard
+
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Header
+    # ============================================
+
+    - name: Display verification header
+      debug:
+        msg:
+          - "========================================"
+          - "   DYNAMIC DNS + LET'S ENCRYPT VERIFICATION"
+          - "========================================"
+          - "Domain: {{ ddns_domain }}"
+          - "Management VM: {{ management_vm_ip }}"
+
+    - name: Validate domain is set
+      assert:
+        that:
+          - ddns_domain | length > 0
+        fail_msg: "DDNS_DOMAIN not found. Run 'DynDNS 1: Setup Environment' first."
+
+    # ============================================
+    # Phase 2: DNS Resolution Tests
+    # ============================================
+
+    - name: Test DNS resolution for .lan domains
+      command: "dig @{{ adguard_ip }} +short {{ item }}.lan"
+      register: lan_dns_tests
+      loop: "{{ test_services }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Display .lan DNS results
+      debug:
+        msg:
+          - "DNS Resolution - .lan domains:"
+          - "{% for result in lan_dns_tests.results %}  {{ result.item }}.lan → {{ result.stdout | trim if result.rc == 0 else 'FAILED' }}{% endfor %}"
+
+    - name: Test DNS resolution for custom domains
+      command: "dig @{{ adguard_ip }} +short {{ item }}.{{ ddns_domain }}"
+      register: custom_dns_tests
+      loop: "{{ test_services }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Display custom domain DNS results
+      debug:
+        msg:
+          - "DNS Resolution - {{ ddns_domain }}:"
+          - "{% for result in custom_dns_tests.results %}  {{ result.item }}.{{ ddns_domain }} → {{ result.stdout | trim if result.rc == 0 else 'FAILED' }}{% endfor %}"
+
+    - name: Verify all DNS queries resolved correctly
+      assert:
+        that:
+          - item.rc == 0
+          - management_vm_ip in item.stdout
+        fail_msg: "DNS resolution failed for {{ item.item }}"
+        success_msg: "✓ DNS resolution working"
+      loop: "{{ lan_dns_tests.results + custom_dns_tests.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # ============================================
+    # Phase 3: Certificate Verification
+    # ============================================
+
+    - name: Check for Let's Encrypt certificates
+      find:
+        paths: "{{ caddy_data_dir }}/caddy/certificates/acme-v02.api.letsencrypt.org-directory"
+        patterns: "*.{{ ddns_domain }}/*.crt"
+        recurse: yes
+      register: letsencrypt_certs
+      become: true
+
+    - name: Display certificate count
+      debug:
+        msg: "Found {{ letsencrypt_certs.matched }} Let's Encrypt certificate(s)"
+
+    - name: Get certificate details
+      when: letsencrypt_certs.matched > 0
+      become: true
+      block:
+        - name: Extract certificate information
+          command: >
+            openssl x509 -in {{ letsencrypt_certs.files[0].path }}
+            -noout -issuer -subject -dates
+          register: cert_info
+          changed_when: false
+
+        - name: Display certificate details
+          debug:
+            msg:
+              - "Certificate Details:"
+              - "{{ cert_info.stdout_lines }}"
+
+        - name: Check certificate expiry
+          command: >
+            openssl x509 -in {{ letsencrypt_certs.files[0].path }}
+            -noout -checkend {{ 60 * 24 * 3600 }}
+          register: cert_expiry_check
+          changed_when: false
+          failed_when: false
+
+        - name: Display certificate expiry status
+          debug:
+            msg: >-
+              Certificate expiry: {{ 'Valid for more than 60 days' if cert_expiry_check.rc == 0
+              else 'EXPIRES SOON - less than 60 days remaining' }}
+
+    # ============================================
+    # Phase 4: HTTPS Service Access Tests
+    # ============================================
+
+    - name: Test HTTPS access via .lan domains
+      uri:
+        url: "https://{{ item }}.lan"
+        method: GET
+        validate_certs: no
+        follow_redirects: yes
+        status_code: [200, 302, 401]
+        timeout: 10
+      register: lan_https_tests
+      loop: "{{ test_services }}"
+      failed_when: false
+
+    - name: Display .lan HTTPS results
+      debug:
+        msg:
+          - "HTTPS Access - .lan domains:"
+          - "{% for result in lan_https_tests.results %}  https://{{ result.item }}.lan → HTTP {{ result.status | default('FAILED') }}{% endfor %}"
+
+    - name: Test HTTPS access via custom domains
+      uri:
+        url: "https://{{ item }}.{{ ddns_domain }}"
+        method: GET
+        validate_certs: yes  # Validate cert for custom domains
+        follow_redirects: yes
+        status_code: [200, 302, 401]
+        timeout: 10
+      register: custom_https_tests
+      loop: "{{ test_services }}"
+      failed_when: false
+
+    - name: Display custom domain HTTPS results
+      debug:
+        msg:
+          - "HTTPS Access - {{ ddns_domain }}:"
+          - "{% for result in custom_https_tests.results %}  https://{{ result.item }}.{{ ddns_domain }} → HTTP {{ result.status | default('FAILED') }}{% endfor %}"
+
+    - name: Check if any HTTPS tests failed
+      set_fact:
+        https_failures: >-
+          {{
+            (lan_https_tests.results + custom_https_tests.results) |
+            rejectattr('status', 'defined') |
+            list
+          }}
+
+    - name: Display HTTPS test summary
+      debug:
+        msg: >-
+          HTTPS Tests: {{ lan_https_tests.results | length + custom_https_tests.results | length }} total,
+          {{ https_failures | length }} failed
+
+    # ============================================
+    # Phase 5: DynDNS Status Check
+    # ============================================
+
+    - name: Check OPNsense DynDNS service status
+      when: opnsense_api_key | length > 0 and opnsense_api_secret | length > 0
+      block:
+        - name: Get DynDNS service status
+          uri:
+            url: "https://{{ opnsense_ip }}/api/dyndns/service/status"
+            method: GET
+            user: "{{ opnsense_api_key }}"
+            password: "{{ opnsense_api_secret }}"
+            force_basic_auth: true
+            validate_certs: no
+            status_code: 200
+          register: dyndns_status
+          failed_when: false
+
+        - name: Display DynDNS status
+          debug:
+            msg: "OPNsense DynDNS service: {{ dyndns_status.json.status | default('UNKNOWN') }}"
+          when: dyndns_status.status == 200
+
+        - name: Get DynDNS accounts
+          uri:
+            url: "https://{{ opnsense_ip }}/api/dyndns/accounts/get"
+            method: GET
+            user: "{{ opnsense_api_key }}"
+            password: "{{ opnsense_api_secret }}"
+            force_basic_auth: true
+            validate_certs: no
+            status_code: 200
+          register: dyndns_accounts
+          failed_when: false
+
+        - name: Display DynDNS accounts
+          debug:
+            msg: "DynDNS accounts configured: {{ dyndns_accounts.json | default({}) | length }}"
+          when: dyndns_accounts.status == 200
+
+    # ============================================
+    # Phase 6: Caddy Service Health
+    # ============================================
+
+    - name: Check Caddy health endpoint
+      uri:
+        url: "http://{{ management_vm_ip }}/health"
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: caddy_health
+
+    - name: Display Caddy health status
+      debug:
+        msg: "✓ Caddy health check: OK"
+      when: caddy_health.status == 200
+
+    - name: Get Caddy service status
+      become: true
+      systemd:
+        name: caddy.service
+      register: caddy_service
+
+    - name: Display Caddy service status
+      debug:
+        msg: "Caddy service: {{ caddy_service.status.ActiveState }} ({{ caddy_service.status.SubState }})"
+
+    # ============================================
+    # Phase 7: Final Summary
+    # ============================================
+
+    - name: Calculate test results
+      set_fact:
+        dns_pass: "{{ (lan_dns_tests.results + custom_dns_tests.results) | selectattr('rc', 'equalto', 0) | list | length }}"
+        dns_total: "{{ (lan_dns_tests.results + custom_dns_tests.results) | length }}"
+        https_pass: "{{ (lan_https_tests.results + custom_https_tests.results) | selectattr('status', 'defined') | list | length }}"
+        https_total: "{{ (lan_https_tests.results + custom_https_tests.results) | length }}"
+        cert_valid: "{{ letsencrypt_certs.matched > 0 }}"
+        caddy_running: "{{ caddy_service.status.ActiveState == 'active' }}"
+
+    - name: Display final verification summary
+      debug:
+        msg:
+          - "========================================"
+          - "   VERIFICATION SUMMARY"
+          - "========================================"
+          - ""
+          - "DNS Resolution:"
+          - "  ✓ .lan domains: {{ lan_dns_tests.results | selectattr('rc', 'equalto', 0) | list | length }}/{{ lan_dns_tests.results | length }} passed"
+          - "  ✓ Custom domains: {{ custom_dns_tests.results | selectattr('rc', 'equalto', 0) | list | length }}/{{ custom_dns_tests.results | length }} passed"
+          - ""
+          - "HTTPS Access:"
+          - "  ✓ .lan domains: {{ lan_https_tests.results | selectattr('status', 'defined') | list | length }}/{{ lan_https_tests.results | length }} accessible"
+          - "  ✓ Custom domains: {{ custom_https_tests.results | selectattr('status', 'defined') | list | length }}/{{ custom_https_tests.results | length }} accessible"
+          - ""
+          - "Certificates:"
+          - "  ✓ Let's Encrypt certs: {{ 'ISSUED' if cert_valid else 'NOT FOUND' }}"
+          - "  ✓ Certificate expiry: {{ 'Valid (>60 days)' if cert_expiry_check.rc == 0 else 'Check required' }}"
+          - ""
+          - "Services:"
+          - "  ✓ Caddy: {{ 'RUNNING' if caddy_running else 'NOT RUNNING' }}"
+          - "  ✓ DynDNS: {{ dyndns_status.json.status | default('NOT CHECKED') }}"
+          - ""
+          - "Overall Status: {{ 'ALL CHECKS PASSED ✓' if (dns_pass | int == dns_total | int and https_pass | int == https_total | int and cert_valid and caddy_running) else 'SOME CHECKS FAILED - Review above' }}"
+          - ""
+          - "Access URLs:"
+          - "  - https://portainer.lan (self-signed cert)"
+          - "  - https://portainer.{{ ddns_domain }} (Let's Encrypt cert)"
+          - ""
+          - "========================================"
+
+    - name: Mark verification as complete
+      debug:
+        msg: "✓ Dynamic DNS + Let's Encrypt setup verification complete"
