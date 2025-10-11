@@ -178,7 +178,7 @@
         custom_rewrites: >-
           {{
             updated_rewrites.json |
-            selectattr('domain', 'match', '.*\\.' + ddns_domain | regex_escape) |
+            selectattr('domain', 'search', ddns_domain) |
             list
           }}
 
