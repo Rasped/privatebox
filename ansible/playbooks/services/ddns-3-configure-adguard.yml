@@ -1,25 +1,25 @@
 ---
-- name: "DynDNS 3: Configure AdGuard DNS Rewrites"
-  hosts: container-host
-  become: false
-  gather_facts: true
+- name: "DynDNS 3: Configure AdGuard"
+  hosts: localhost
+  connection: local
+  gather_facts: no
 
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "DynamicDNS+ServicePasswords"
-      semaphore_inventory: "privatebox"
+      semaphore_environment: "ServicePasswords"
+      semaphore_inventory: "localhost"
       semaphore_category: "services"
 
+    # Config file location (from ddns-2b)
+    ddns_config_file: "/tmp/ddns-handoff.json"
+
     # AdGuard configuration
-    adguard_ip: "{{ ansible_default_ipv4.address }}"
+    adguard_ip: "10.10.20.10"
     adguard_port: 3443
     adguard_url: "https://{{ adguard_ip }}:{{ adguard_port }}"
     adguard_username: "admin"
     adguard_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
-
-    # Load domain from DynamicDNS environment
-    ddns_domain: "{{ DDNS_DOMAIN | default('') }}"
 
     # Default services to configure
     default_services:
@@ -33,7 +33,38 @@
 
   tasks:
     # ============================================
-    # Phase 1: Validation
+    # Phase 1: Read Config File
+    # ============================================
+
+    - name: Check if config file exists
+      stat:
+        path: "{{ ddns_config_file }}"
+      register: config_stat
+
+    - name: Fail if config file not found
+      fail:
+        msg: |
+          DynDNS config file not found at {{ ddns_config_file }}
+          Please run 'DynDNS 2b: Configure OPNsense' first.
+      when: not config_stat.stat.exists
+
+    - name: Read DynDNS config
+      slurp:
+        src: "{{ ddns_config_file }}"
+      register: ddns_config_raw
+      no_log: true
+
+    - name: Parse DynDNS config
+      set_fact:
+        ddns_config: "{{ ddns_config_raw.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Set domain from config
+      set_fact:
+        ddns_domain: "{{ ddns_config.ddns_domain }}"
+
+    # ============================================
+    # Phase 2: Validation
     # ============================================
 
     - name: Display configuration header
@@ -45,13 +76,6 @@
           - "Domain: {{ ddns_domain }}"
           - "AdGuard: {{ adguard_url }}"
 
-    - name: Validate domain is set
-      fail:
-        msg: |
-          DDNS_DOMAIN not found in DynamicDNS environment.
-          Please run 'DynDNS 1: Setup Environment' first.
-      when: ddns_domain | length == 0
-
     - name: Validate SERVICES_PASSWORD is set
       fail:
         msg: |
@@ -60,7 +84,7 @@
       when: adguard_password == 'changeme'
 
     # ============================================
-    # Phase 2: Check AdGuard API Connectivity
+    # Phase 3: Check AdGuard API Connectivity
     # ============================================
 
     - name: Test AdGuard API authentication
@@ -80,7 +104,7 @@
       when: enable_debug | bool
 
     # ============================================
-    # Phase 3: Get Existing DNS Rewrites
+    # Phase 4: Get Existing DNS Rewrites
     # ============================================
 
     - name: Get existing DNS rewrites
@@ -100,7 +124,7 @@
       when: enable_debug | bool
 
     # ============================================
-    # Phase 4: Add DNS Rewrites for Custom Domain
+    # Phase 5: Add DNS Rewrites for Custom Domain
     # ============================================
 
     - name: Display rewrites to add
@@ -135,7 +159,7 @@
       when: enable_debug | bool
 
     # ============================================
-    # Phase 5: Verification
+    # Phase 6: Verification
     # ============================================
 
     - name: Get updated DNS rewrites list
@@ -173,7 +197,7 @@
         success_msg: "✓ All expected rewrites verified"
 
     # ============================================
-    # Phase 6: Test DNS Resolution
+    # Phase 7: Test DNS Resolution
     # ============================================
 
     - name: Test DNS resolution for first service
@@ -189,7 +213,7 @@
           ({{ 'PASS' if adguard_ip in dns_test.stdout else 'FAIL - check AdGuard logs' }})
 
     # ============================================
-    # Phase 7: Display Summary
+    # Phase 8: Display Summary
     # ============================================
 
     - name: Display final summary
