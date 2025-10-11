@@ -1,5 +1,5 @@
 ---
-- name: "DynDNS 4: Configure Caddy Let's Encrypt"
+- name: "DynDNS 4: Configure Caddy"
   hosts: container-host
   become: true
   gather_facts: true
@@ -7,7 +7,7 @@
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "DynamicDNS+ServicePasswords"
+      semaphore_environment: "Empty"
       semaphore_inventory: "privatebox"
       semaphore_category: "services"
 
@@ -16,13 +16,6 @@
     caddy_data_dir: "/opt/caddy/data"
     management_vm_ip: "{{ ansible_default_ipv4.address }}"
     quadlet_system_path: "/etc/containers/systemd"
-
-    # Load from DynamicDNS environment
-    dns_provider: "{{ DNS_PROVIDER | default('') }}"
-    ddns_domain: "{{ DDNS_DOMAIN | default('') }}"
-    letsencrypt_email: "{{ LETSENCRYPT_EMAIL | default('') }}"
-    dns_api_token: "{{ DNS_API_TOKEN | default('') }}"
-    cloudflare_zone_id: "{{ CLOUDFLARE_ZONE_ID | default('') }}"
 
     # Services to configure
     default_services:
@@ -60,7 +53,31 @@
 
   tasks:
     # ============================================
-    # Phase 1: Validation
+    # Phase 1: Read Config File from Semaphore Container
+    # ============================================
+
+    - name: Read DynDNS config from Semaphore container
+      shell: podman exec semaphore-semaphore cat /tmp/ddns-handoff.json
+      register: ddns_config_raw
+      changed_when: false
+      no_log: true
+
+    - name: Parse DynDNS config
+      set_fact:
+        ddns_config: "{{ ddns_config_raw.stdout | from_json }}"
+      no_log: true
+
+    - name: Set variables from config
+      set_fact:
+        dns_provider: "{{ ddns_config.dns_provider }}"
+        ddns_domain: "{{ ddns_config.ddns_domain }}"
+        letsencrypt_email: "{{ ddns_config.letsencrypt_email }}"
+        dns_api_token: "{{ ddns_config.dns_api_token }}"
+        cloudflare_zone_id: "{{ ddns_config.cloudflare_zone_id | default('') }}"
+      no_log: true
+
+    # ============================================
+    # Phase 2: Validation
     # ============================================
 
     - name: Display configuration header
@@ -72,17 +89,6 @@
           - "Provider: {{ dns_provider }}"
           - "Domain: {{ ddns_domain }}"
           - "Email: {{ letsencrypt_email }}"
-
-    - name: Validate required variables
-      assert:
-        that:
-          - dns_provider | length > 0
-          - ddns_domain | length > 0
-          - letsencrypt_email | length > 0
-          - dns_api_token | length > 0
-        fail_msg: |
-          Missing required variables from DynamicDNS environment.
-          Please run 'DynDNS 1: Setup Environment' first.
 
     - name: Validate DNS provider is supported
       assert:
@@ -96,7 +102,7 @@
         dns_token_env_var: "{{ dns_env_var_names[dns_provider] }}"
 
     # ============================================
-    # Phase 2: Write DNS Credentials to Env File
+    # Phase 3: Write DNS Credentials to Env File
     # ============================================
 
     - name: Ensure /etc/privatebox directory exists
@@ -132,7 +138,7 @@
         msg: "✓ DNS credentials written to /etc/privatebox/ddns-config.env"
 
     # ============================================
-    # Phase 3: Create Custom Domains Configuration
+    # Phase 4: Create Custom Domains Configuration
     # ============================================
 
     - name: Generate custom domains Caddyfile snippet
@@ -199,7 +205,7 @@
         msg: "✓ Custom domains configuration created at {{ caddy_config_dir }}/custom-domains.conf"
 
     # ============================================
-    # Phase 4: Update Main Caddyfile with Import
+    # Phase 5: Update Main Caddyfile with Import
     # ============================================
 
     - name: Check if import already exists in Caddyfile
@@ -223,7 +229,7 @@
           else 'Import directive already present in Caddyfile' }}
 
     # ============================================
-    # Phase 5: Update Caddy Quadlet with Env File
+    # Phase 6: Update Caddy Quadlet with Env File
     # ============================================
 
     - name: Check if EnvironmentFile already exists in Quadlet
@@ -248,7 +254,7 @@
           else 'EnvironmentFile already present in Caddy Quadlet' }}
 
     # ============================================
-    # Phase 6: Reload Systemd and Restart Caddy
+    # Phase 7: Reload Systemd and Restart Caddy
     # ============================================
 
     - name: Reload systemd daemon
@@ -284,7 +290,7 @@
       when: caddy_status.status.ActiveState != "active"
 
     # ============================================
-    # Phase 7: Wait for Certificate Issuance
+    # Phase 8: Wait for Certificate Issuance
     # ============================================
 
     - name: Display certificate issuance wait message
@@ -298,7 +304,7 @@
         seconds: 60
 
     # ============================================
-    # Phase 8: Verify Certificate
+    # Phase 9: Verify Certificate
     # ============================================
 
     - name: Check for certificate files
@@ -336,7 +342,7 @@
       when: cert_files.matched > 0
 
     # ============================================
-    # Phase 9: Test HTTPS Access
+    # Phase 10: Test HTTPS Access
     # ============================================
 
     - name: Test HTTPS access to first service
@@ -357,7 +363,7 @@
           ({{ 'PASS' if https_test.status is defined and https_test.status in [200, 302, 401] else 'FAIL - check DNS and Caddy logs' }})
 
     # ============================================
-    # Phase 10: Display Summary
+    # Phase 11: Display Summary
     # ============================================
 
     - name: Display final summary
