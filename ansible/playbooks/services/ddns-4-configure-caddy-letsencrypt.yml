@@ -8,7 +8,7 @@
     # Template configuration for Semaphore
     template_config:
       semaphore_environment: "Empty"
-      semaphore_inventory: "privatebox"
+      semaphore_inventory: "container-host"
       semaphore_category: "services"
 
     # Caddy configuration
