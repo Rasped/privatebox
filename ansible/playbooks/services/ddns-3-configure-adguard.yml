@@ -197,23 +197,7 @@
         success_msg: "✓ All expected rewrites verified"
 
     # ============================================
-    # Phase 7: Test DNS Resolution
-    # ============================================
-
-    - name: Test DNS resolution for first service
-      command: "dig @{{ adguard_ip }} +short portainer.{{ ddns_domain }}"
-      register: dns_test
-      changed_when: false
-      failed_when: false
-
-    - name: Display DNS test result
-      debug:
-        msg: >-
-          DNS test: portainer.{{ ddns_domain }} → {{ dns_test.stdout | trim }}
-          ({{ 'PASS' if adguard_ip in dns_test.stdout else 'FAIL - check AdGuard logs' }})
-
-    # ============================================
-    # Phase 8: Display Summary
+    # Phase 7: Display Summary
     # ============================================
 
     - name: Display final summary
