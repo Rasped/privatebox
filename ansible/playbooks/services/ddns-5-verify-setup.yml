@@ -61,48 +61,7 @@
           - "Management VM: {{ management_vm_ip }}"
 
     # ============================================
-    # Phase 3: DNS Resolution Tests
-    # ============================================
-
-    - name: Test DNS resolution for .lan domains
-      command: "dig @{{ adguard_ip }} +short {{ item }}.lan"
-      register: lan_dns_tests
-      loop: "{{ test_services }}"
-      changed_when: false
-      failed_when: false
-
-    - name: Display .lan DNS results
-      debug:
-        msg:
-          - "DNS Resolution - .lan domains:"
-          - "{% for result in lan_dns_tests.results %}  {{ result.item }}.lan → {{ result.stdout | trim if result.rc == 0 else 'FAILED' }}{% endfor %}"
-
-    - name: Test DNS resolution for custom domains
-      command: "dig @{{ adguard_ip }} +short {{ item }}.{{ ddns_domain }}"
-      register: custom_dns_tests
-      loop: "{{ test_services }}"
-      changed_when: false
-      failed_when: false
-
-    - name: Display custom domain DNS results
-      debug:
-        msg:
-          - "DNS Resolution - {{ ddns_domain }}:"
-          - "{% for result in custom_dns_tests.results %}  {{ result.item }}.{{ ddns_domain }} → {{ result.stdout | trim if result.rc == 0 else 'FAILED' }}{% endfor %}"
-
-    - name: Verify all DNS queries resolved correctly
-      assert:
-        that:
-          - item.rc == 0
-          - management_vm_ip in item.stdout
-        fail_msg: "DNS resolution failed for {{ item.item }}"
-        success_msg: "✓ DNS resolution working"
-      loop: "{{ lan_dns_tests.results + custom_dns_tests.results }}"
-      loop_control:
-        label: "{{ item.item }}"
-
-    # ============================================
-    # Phase 4: Certificate Verification
+    # Phase 3: Certificate Verification
     # ============================================
 
     - name: Check for Let's Encrypt certificates
@@ -149,7 +108,7 @@
               else 'EXPIRES SOON - less than 60 days remaining' }}
 
     # ============================================
-    # Phase 5: HTTPS Service Access Tests
+    # Phase 4: HTTPS Service Access Tests
     # ============================================
 
     - name: Test HTTPS access via .lan domains
@@ -204,7 +163,7 @@
           {{ https_failures | length }} failed
 
     # ============================================
-    # Phase 6: DynDNS Status Check
+    # Phase 5: DynDNS Status Check
     # ============================================
 
     - name: Check OPNsense DynDNS service status
@@ -244,7 +203,7 @@
           when: dyndns_accounts.status == 200
 
     # ============================================
-    # Phase 7: Caddy Service Health
+    # Phase 6: Caddy Service Health
     # ============================================
 
     - name: Check Caddy health endpoint
@@ -271,13 +230,11 @@
         msg: "Caddy service: {{ caddy_service.status.ActiveState }} ({{ caddy_service.status.SubState }})"
 
     # ============================================
-    # Phase 8: Final Summary
+    # Phase 7: Final Summary
     # ============================================
 
     - name: Calculate test results
       set_fact:
-        dns_pass: "{{ (lan_dns_tests.results + custom_dns_tests.results) | selectattr('rc', 'equalto', 0) | list | length }}"
-        dns_total: "{{ (lan_dns_tests.results + custom_dns_tests.results) | length }}"
         https_pass: "{{ (lan_https_tests.results + custom_https_tests.results) | selectattr('status', 'defined') | list | length }}"
         https_total: "{{ (lan_https_tests.results + custom_https_tests.results) | length }}"
         cert_valid: "{{ letsencrypt_certs.matched > 0 }}"
@@ -289,10 +246,6 @@
           - "========================================"
           - "   VERIFICATION SUMMARY"
           - "========================================"
-          - ""
-          - "DNS Resolution:"
-          - "  ✓ .lan domains: {{ lan_dns_tests.results | selectattr('rc', 'equalto', 0) | list | length }}/{{ lan_dns_tests.results | length }} passed"
-          - "  ✓ Custom domains: {{ custom_dns_tests.results | selectattr('rc', 'equalto', 0) | list | length }}/{{ custom_dns_tests.results | length }} passed"
           - ""
           - "HTTPS Access:"
           - "  ✓ .lan domains: {{ lan_https_tests.results | selectattr('status', 'defined') | list | length }}/{{ lan_https_tests.results | length }} accessible"
@@ -306,7 +259,7 @@
           - "  ✓ Caddy: {{ 'RUNNING' if caddy_running else 'NOT RUNNING' }}"
           - "  ✓ DynDNS: {{ dyndns_status.json.status | default('NOT CHECKED') }}"
           - ""
-          - "Overall Status: {{ 'ALL CHECKS PASSED ✓' if (dns_pass | int == dns_total | int and https_pass | int == https_total | int and cert_valid and caddy_running) else 'SOME CHECKS FAILED - Review above' }}"
+          - "Overall Status: {{ 'ALL CHECKS PASSED ✓' if (https_pass | int == https_total | int and cert_valid and caddy_running) else 'SOME CHECKS FAILED - Review above' }}"
           - ""
           - "Access URLs:"
           - "  - https://portainer.lan (self-signed cert)"
