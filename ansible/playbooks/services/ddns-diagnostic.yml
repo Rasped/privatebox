@@ -1,0 +1,86 @@
+---
+- name: "DynDNS Diagnostic: Check API Responses"
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    opnsense_api_url: "{{ OPNSENSE_API_URL }}"
+    opnsense_api_key: "{{ OPNSENSE_API_KEY }}"
+    opnsense_api_secret: "{{ OPNSENSE_API_SECRET }}"
+
+  tasks:
+    - name: Test 1 - Check current DynDNS settings
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/settings/get"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200, 201]
+      register: current_settings
+
+    - name: Display current settings
+      debug:
+        var: current_settings.json
+
+    - name: Test 2 - Try to set DynDNS settings with our payload
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/settings/set"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          ddclient:
+            general:
+              enabled: "1"
+              backend: "opnsense"
+              daemon_delay: "300"
+              verbose: "0"
+              allowipv6: "0"
+        status_code: [200, 201]
+      register: settings_result
+
+    - name: Display settings API response
+      debug:
+        var: settings_result.json
+
+    - name: Check for validation errors
+      debug:
+        msg: "VALIDATION ERRORS FOUND: {{ settings_result.json.validations }}"
+      when: "'validations' in settings_result.json"
+
+    - name: Test 3 - List existing accounts
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/accounts/searchItem"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: 200
+      register: accounts_list
+
+    - name: Display existing accounts
+      debug:
+        var: accounts_list.json
+
+    - name: Test 4 - Check service status
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/service/status"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: 200
+      register: service_status
+      ignore_errors: true
+
+    - name: Display service status
+      debug:
+        var: service_status
