@@ -132,8 +132,9 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
   - `curl -sSk --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' https://10.10.20.10:2443/api/auth/login`
 - Get project id (PID):
   - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/projects`
-- List environments (contains passwords):
+- List environments (metadata only, secrets hidden):
   - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/project/1/environment`
+  - NOTE: Semaphore API does NOT expose secret values via API for security. Only names and structure are visible.
 - List templates for a project:
   - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/project/<PID>/templates`
 - Find a template id (TID) by name with jq:
