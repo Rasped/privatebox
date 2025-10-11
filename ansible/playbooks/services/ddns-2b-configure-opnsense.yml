@@ -129,7 +129,51 @@
             msg: "Warning: Could not verify plugin installation. Continuing..."
 
     # ============================================
-    # Phase 3: Configure DynDNS Account
+    # Phase 3: Enable DynDNS Service
+    # ============================================
+
+    - name: Enable DynDNS service in settings
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/settings/set"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        body_format: json
+        body:
+          ddclient:
+            general:
+              enabled: "1"
+              backend: "opnsense"
+              daemon_delay: "300"
+              verbose: "0"
+              allowipv6: "0"
+        status_code: [200, 201]
+      register: enable_result
+
+    - name: Display service enable result
+      debug:
+        msg: "✓ DynDNS service enabled"
+      when: enable_debug | bool
+
+    - name: Reconfigure to commit service enablement
+      uri:
+        url: "{{ opnsense_api_url }}/api/dyndns/service/reconfigure"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: yes
+        validate_certs: no
+        status_code: [200, 201]
+      register: reconfigure_enable_result
+
+    - name: Wait after enabling service
+      pause:
+        seconds: 3
+
+    # ============================================
+    # Phase 4: Configure DynDNS Account
     # ============================================
 
     - name: Determine OPNsense service name
@@ -206,7 +250,7 @@
         msg: "✓ DynDNS account created for {{ ddns_config.ddns_domain }}"
       when: enable_debug | bool
 
-    - name: Apply account configuration
+    - name: Reconfigure to commit account configuration
       uri:
         url: "{{ opnsense_api_url }}/api/dyndns/service/reconfigure"
         method: POST
@@ -217,55 +261,9 @@
         status_code: [200, 201]
       register: reconfigure_account_result
 
-    - name: Wait after account configuration
-      pause:
-        seconds: 3
-
-    # ============================================
-    # Phase 4: Enable and Start DynDNS Service
-    # ============================================
-
-    - name: Enable DynDNS service in settings
-      uri:
-        url: "{{ opnsense_api_url }}/api/dyndns/settings/set"
-        method: POST
-        user: "{{ opnsense_api_key }}"
-        password: "{{ opnsense_api_secret }}"
-        force_basic_auth: yes
-        validate_certs: no
-        body_format: json
-        body:
-          ddclient:  # Fixed: was "dyndns"
-            general:
-              enabled: "1"
-              backend: "opnsense"  # Use native backend to avoid known bug
-              daemon_delay: "300"
-              verbose: "0"
-              allowipv6: "0"
-        status_code: [200, 201]
-      register: enable_result
-
-    - name: Display service enable result
-      debug:
-        msg: "✓ DynDNS service enabled"
-      when: enable_debug | bool
-
-    - name: Reconfigure DynDNS service
-      uri:
-        url: "{{ opnsense_api_url }}/api/dyndns/service/reconfigure"
-        method: POST
-        user: "{{ opnsense_api_key }}"
-        password: "{{ opnsense_api_secret }}"
-        force_basic_auth: yes
-        validate_certs: no
-        status_code: [200, 201]
-      register: reconfigure_result
-
     - name: Wait for reconfiguration
       pause:
         seconds: 5
-
-    # Note: Removed redundant /service/start call - reconfigure already starts the service
 
     - name: Check DynDNS service status
       uri:
