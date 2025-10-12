@@ -180,11 +180,6 @@
       set_fact:
         opnsense_service: "{{ provider_service_map[ddns_config.dns_provider] }}"
 
-    - name: Extract subdomain for DuckDNS
-      set_fact:
-        duckdns_subdomain: "{{ ddns_config.ddns_domain | regex_replace('\\.duckdns\\.org$', '') }}"
-      when: ddns_config.dns_provider == 'duckdns'
-
     - name: Build DynDNS account configuration
       set_fact:
         dyndns_account:
@@ -193,7 +188,7 @@
           username: ""
           password: "{{ ddns_config.dns_api_token }}"
           zone: "{{ ddns_config.cloudflare_zone_id if ddns_config.dns_provider == 'cloudflare' else '' }}"
-          hostnames: "{{ duckdns_subdomain if ddns_config.dns_provider == 'duckdns' else ddns_config.ddns_domain }}"
+          hostnames: "{{ ddns_config.duckdns_subdomain if ddns_config.dns_provider == 'duckdns' else ddns_config.ddns_domain }}"
           checkip: "web_ipify-ipv4"
           interface: "wan"
           force_ssl: "1"
