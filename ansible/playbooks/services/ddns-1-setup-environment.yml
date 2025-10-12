@@ -452,11 +452,11 @@
         fail_msg: "Environment verification failed"
         success_msg: "✓ Environment verified successfully"
 
-    - name: Display final summary
+    - name: Display environment setup summary
       debug:
         msg:
           - "========================================"
-          - "   DYNAMIC DNS SETUP COMPLETE"
+          - "   DYNAMIC DNS ENVIRONMENT READY"
           - "========================================"
           - ""
           - "Environment Details:"
@@ -474,9 +474,89 @@
           - "  ✓ Credentials stored securely in Semaphore"
           - "  ✓ Environment ready for use"
           - ""
-          - "Next Steps:"
-          - "  1. Run 'DynDNS 2: Configure OPNsense' to enable DynDNS updates"
-          - "  2. Run 'DynDNS 3: Configure AdGuard' to add DNS rewrites"
-          - "  3. Run 'DynDNS 4: Configure Caddy Let's Encrypt' to get certificates"
-          - ""
           - "========================================"
+
+    # ============================================
+    # Phase 5: Trigger Orchestration
+    # ============================================
+
+    - name: Find Orchestrate DynDNS template
+      uri:
+        url: "{{ semaphore_url }}/api/project/{{ project_id }}/templates"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ semaphore_token }}"
+        validate_certs: no
+        status_code: 200
+      register: all_templates
+
+    - name: Extract Orchestrate DynDNS template ID
+      set_fact:
+        orchestrate_template: "{{ all_templates.json | selectattr('name', 'equalto', 'Orchestrate DynDNS') | list | first | default(false) }}"
+
+    - name: Trigger Orchestrate DynDNS template
+      when: orchestrate_template
+      block:
+        - name: Start orchestration task
+          uri:
+            url: "{{ semaphore_url }}/api/project/{{ project_id }}/tasks"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ semaphore_token }}"
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              template_id: "{{ orchestrate_template.id }}"
+              debug: false
+              dry_run: false
+            validate_certs: no
+            status_code: 201
+          register: orchestrate_task
+
+        - name: Display orchestration info
+          debug:
+            msg:
+              - ""
+              - "========================================"
+              - "   STARTING DYNDNS ORCHESTRATION"
+              - "========================================"
+              - ""
+              - "Task ID: {{ orchestrate_task.json.id }}"
+              - "Template: Orchestrate DynDNS"
+              - ""
+              - "The following templates will run automatically:"
+              - "  1. DynDNS 2a: Prepare Config"
+              - "  2. DynDNS 2b: Configure OPNsense"
+              - "  3. DynDNS 3: Configure AdGuard"
+              - "  4. DynDNS 4: Configure Caddy Let's Encrypt"
+              - "  5. DynDNS 5: Verify Setup"
+              - ""
+              - "Monitor progress in Semaphore UI under Tasks"
+              - ""
+              - "========================================"
+
+      rescue:
+        - name: Orchestration trigger failed (non-critical)
+          debug:
+            msg:
+              - "⚠ Could not trigger Orchestrate DynDNS automatically"
+              - "  Please run 'Orchestrate DynDNS' template manually in Semaphore"
+              - ""
+              - "Manual steps:"
+              - "  1. Run 'DynDNS 2a: Prepare Config'"
+              - "  2. Run 'DynDNS 2b: Configure OPNsense'"
+              - "  3. Run 'DynDNS 3: Configure AdGuard'"
+              - "  4. Run 'DynDNS 4: Configure Caddy Let's Encrypt'"
+              - "  5. Run 'DynDNS 5: Verify Setup'"
+
+    - name: Orchestrate template not found warning
+      when: not orchestrate_template
+      debug:
+        msg:
+          - "⚠ 'Orchestrate DynDNS' template not found"
+          - "  Please run templates manually in sequence:"
+          - "  1. DynDNS 2a: Prepare Config"
+          - "  2. DynDNS 2b: Configure OPNsense"
+          - "  3. DynDNS 3: Configure AdGuard"
+          - "  4. DynDNS 4: Configure Caddy Let's Encrypt"
+          - "  5. DynDNS 5: Verify Setup"
