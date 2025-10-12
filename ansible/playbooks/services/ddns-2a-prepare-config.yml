@@ -65,12 +65,18 @@
     # Phase 2: Create Handoff Configuration
     # ============================================
 
+    - name: Extract DuckDNS subdomain if applicable
+      when: dns_provider == 'duckdns'
+      set_fact:
+        duckdns_subdomain: "{{ ddns_domain | regex_replace('\\.duckdns\\.org$', '') }}"
+
     - name: Prepare handoff configuration
       set_fact:
         handoff_config:
           dns_provider: "{{ dns_provider }}"
           dns_api_token: "{{ dns_api_token }}"
           ddns_domain: "{{ ddns_domain }}"
+          duckdns_subdomain: "{{ duckdns_subdomain | default('') }}"
           letsencrypt_email: "{{ letsencrypt_email }}"
           cloudflare_zone_id: "{{ cloudflare_zone_id }}"
       no_log: true
