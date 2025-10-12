@@ -3,7 +3,7 @@
 # Deploys new config from repo and restarts service
 
 - name: "Homer Update: Deploy New Configuration"
-  hosts: container-host
+  hosts: privatebox-management
   gather_facts: no
   vars:
     config_dir: "/opt/homer"

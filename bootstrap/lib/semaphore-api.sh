@@ -116,7 +116,7 @@ create_api_token() {
     return 1
 }
 
-# Create SemaphoreAPI environment with token
+# Create privatebox-env-semaphore environment with token
 create_semaphore_api_environment() {
     local project_id="$1"
     local api_token="$2"
@@ -133,10 +133,10 @@ create_semaphore_api_environment() {
         vm_ip="$STATIC_IP"
     fi
     
-    log_info "Creating SemaphoreAPI environment for project $project_id..."
+    log_info "Creating privatebox-env-semaphore environment for project $project_id..."
 
     local env_payload=$(jq -n \
-        --arg name "SemaphoreAPI" \
+        --arg name "privatebox-env-semaphore" \
         --argjson pid "$project_id" \
         --arg url "https://${vm_ip}:2443" \
         --arg token "$api_token" \
@@ -155,7 +155,7 @@ create_semaphore_api_environment() {
     
     local api_result=$(make_api_request "POST" \
         "https://localhost:2443/api/project/$project_id/environment" \
-        "$env_payload" "$admin_session" "Creating SemaphoreAPI environment")
+        "$env_payload" "$admin_session" "Creating privatebox-env-semaphore environment")
     
     if [ $? -ne 0 ]; then
         log_error "API request failed for environment creation"
@@ -168,7 +168,7 @@ create_semaphore_api_environment() {
     if is_api_success "$status_code"; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
-            log_info "✓ SemaphoreAPI environment created successfully with ID: $env_id"
+            log_info "✓ privatebox-env-semaphore environment created successfully with ID: $env_id"
             echo "$env_id"
             return 0
         fi
@@ -176,15 +176,15 @@ create_semaphore_api_environment() {
     
     # Check if already exists
     if echo "$response_body" | grep -q "already exists"; then
-        log_info "SemaphoreAPI environment already exists, looking up ID..."
+        log_info "privatebox-env-semaphore environment already exists, looking up ID..."
         local existing_env=$(make_api_request "GET" \
             "https://localhost:2443/api/project/$project_id/environment" \
             "" "$admin_session" "Getting existing environments")
         if [ $? -eq 0 ]; then
             local envs=$(echo "$existing_env" | cut -d'|' -f2-)
-            local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="SemaphoreAPI") | .id' 2>/dev/null)
+            local found_id=$(echo "$envs" | jq -r '.[] | select(.name=="privatebox-env-semaphore") | .id' 2>/dev/null)
             if [ -n "$found_id" ] && [ "$found_id" != "null" ]; then
-                log_info "Using existing SemaphoreAPI environment with ID: $found_id"
+                log_info "Using existing privatebox-env-semaphore environment with ID: $found_id"
                 echo "$found_id"
                 return 0
             fi
@@ -283,7 +283,7 @@ create_orchestrate_services_task() {
         "$@"
 }
 
-# Create ProxmoxAPI environment
+# Create privatebox-env-proxmox environment
 create_proxmox_api_environment() {
     local project_id="$1"
     local admin_session="$2"
@@ -295,7 +295,7 @@ create_proxmox_api_environment() {
     
     # Debug: Write values to file for verification
     {
-        echo "=== ProxmoxAPI Environment Debug ==="
+        echo "=== privatebox-env-proxmox Environment Debug ==="
         echo "Timestamp: $(date)"
         echo "PROXMOX_TOKEN_ID: '${token_id}'"
         echo "PROXMOX_TOKEN_SECRET: '${token_secret}'"
@@ -308,19 +308,19 @@ create_proxmox_api_environment() {
     
     # Skip if no token configured
     if [[ -z "$token_id" ]] || [[ -z "$token_secret" ]]; then
-        log_info "No Proxmox API token found, skipping ProxmoxAPI environment"
+        log_info "No Proxmox API token found, skipping privatebox-env-proxmox environment"
         echo "SKIPPED: Empty tokens" >> /tmp/proxmox-api-debug.log
         return 0
     fi
     
-    log_info "Creating ProxmoxAPI environment for project $project_id..."
+    log_info "Creating privatebox-env-proxmox environment for project $project_id..."
     echo "PROCEEDING: Creating environment" >> /tmp/proxmox-api-debug.log
     
     # Escape the exclamation mark in token_id for Semaphore API
     local escaped_token_id="${token_id//!/\\u0021}"
     
     local env_payload=$(jq -n \
-        --arg name "ProxmoxAPI" \
+        --arg name "privatebox-env-proxmox" \
         --argjson pid "$project_id" \
         --arg token_id "$escaped_token_id" \
         --arg token_secret "$token_secret" \
@@ -360,7 +360,7 @@ create_proxmox_api_environment() {
         }')
     
     # Debug: Write payload to file
-    echo "=== ProxmoxAPI Payload Debug ===" >> /tmp/proxmox-api-debug.log
+    echo "=== privatebox-env-proxmox Payload Debug ===" >> /tmp/proxmox-api-debug.log
     echo "Original token_id: $token_id" >> /tmp/proxmox-api-debug.log
     echo "Escaped token_id: $escaped_token_id" >> /tmp/proxmox-api-debug.log
     echo "$env_payload" | jq '.' >> /tmp/proxmox-api-debug.log 2>&1
@@ -368,10 +368,10 @@ create_proxmox_api_environment() {
     
     local api_result=$(make_api_request "POST" \
         "https://localhost:2443/api/project/$project_id/environment" \
-        "$env_payload" "$admin_session" "Creating ProxmoxAPI environment")
+        "$env_payload" "$admin_session" "Creating privatebox-env-proxmox environment")
     
     if [ $? -ne 0 ]; then
-        log_error "API request failed for ProxmoxAPI environment creation"
+        log_error "API request failed for privatebox-env-proxmox environment creation"
         return 1
     fi
     
@@ -382,7 +382,7 @@ create_proxmox_api_environment() {
     if [[ "$status_code" == "201" ]] || [[ "$status_code" == "204" ]]; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
-            log_info "✓ ProxmoxAPI environment created successfully with ID: $env_id"
+            log_info "✓ privatebox-env-proxmox environment created successfully with ID: $env_id"
             echo "$env_id"
             return 0
         fi
@@ -390,11 +390,11 @@ create_proxmox_api_environment() {
     
     # Check if already exists
     if echo "$response_body" | grep -q "already exists"; then
-        log_info "ProxmoxAPI environment already exists"
+        log_info "privatebox-env-proxmox environment already exists"
         return 0
     fi
     
-    log_error "Failed to create ProxmoxAPI environment. Status: $status_code"
+    log_error "Failed to create privatebox-env-proxmox environment. Status: $status_code"
     return 1
 }
 
@@ -411,10 +411,10 @@ create_password_environment() {
         return 1
     fi
     
-    log_info "Creating ServicePasswords environment for project $project_id..."
+    log_info "Creating privatebox-env-passwords environment for project $project_id..."
     
     local env_payload=$(jq -n \
-        --arg name "ServicePasswords" \
+        --arg name "privatebox-env-passwords" \
         --argjson pid "$project_id" \
         --arg admin_pass "$admin_password" \
         --arg services_pass "$services_password" \
@@ -441,7 +441,7 @@ create_password_environment() {
     
     local api_result=$(make_api_request "POST" \
         "https://localhost:2443/api/project/$project_id/environment" \
-        "$env_payload" "$admin_session" "Creating ServicePasswords environment")
+        "$env_payload" "$admin_session" "Creating privatebox-env-passwords environment")
     
     if [ $? -ne 0 ]; then
         log_error "API request failed for password environment creation"
@@ -454,7 +454,7 @@ create_password_environment() {
     if is_api_success "$status_code"; then
         local env_id=$(echo "$response_body" | jq -r '.id' 2>/dev/null)
         if [ -n "$env_id" ] && [ "$env_id" != "null" ]; then
-            log_info "✓ ServicePasswords environment created successfully with ID: $env_id"
+            log_info "✓ privatebox-env-passwords environment created successfully with ID: $env_id"
             echo "$env_id"
             return 0
         fi
@@ -462,7 +462,7 @@ create_password_environment() {
     
     # Check if already exists
     if echo "$response_body" | grep -q "already exists"; then
-        log_info "ServicePasswords environment already exists"
+        log_info "privatebox-env-passwords environment already exists"
         return 0
     fi
     
@@ -487,11 +487,11 @@ setup_template_synchronization() {
     fi
     log_info "✓ API token created"
 
-    # Create SemaphoreAPI environment
-    log_info "Step 2/6: Creating SemaphoreAPI environment..."
+    # Create privatebox-env-semaphore environment
+    log_info "Step 2/6: Creating privatebox-env-semaphore environment..."
     local env_id=$(create_semaphore_api_environment "$project_id" "$api_token" "$admin_session")
     if [ -z "$env_id" ]; then
-        log_error "Failed to create SemaphoreAPI environment"
+        log_error "Failed to create privatebox-env-semaphore environment"
         return 1
     fi
     log_info "✓ Environment created with ID: $env_id"
@@ -1019,13 +1019,13 @@ create_default_inventory() {
     if [ -n "$vm_ssh_key_id" ] && [[ "$vm_ssh_key_id" =~ ^[0-9]+$ ]]; then
         local vm_inventory="all:
   hosts:
-    container-host:
+    privatebox-management:
       ansible_host: ${vm_ip}
       ansible_user: debian
       ansible_become: true
       ansible_become_method: sudo"
-        
-        create_inventory "$project_id" "$admin_session" "container-host" "$vm_inventory" "$vm_ssh_key_id"
+
+        create_inventory "$project_id" "$admin_session" "privatebox-management" "$vm_inventory" "$vm_ssh_key_id"
     else
         log_warn "No valid VM SSH key ID provided, skipping VM inventory creation"
     fi
@@ -1035,8 +1035,8 @@ create_default_inventory() {
   hosts:
     localhost:
       ansible_connection: local"
-    
-    create_inventory "$project_id" "$admin_session" "localhost" "$localhost_inventory" ""
+
+    create_inventory "$project_id" "$admin_session" "privatebox-local" "$localhost_inventory" ""
     
     # Check if Proxmox host IP was discovered and create Proxmox inventory
     if [[ -f /etc/privatebox-proxmox-host ]]; then
@@ -1044,16 +1044,16 @@ create_default_inventory() {
         if [ -n "$proxmox_ip" ]; then
             log_info "Found Proxmox host IP: $proxmox_ip"
             
-            local proxmox_key_id=$(get_ssh_key_id_by_name "$project_id" "proxmox" "$admin_session")
+            local proxmox_key_id=$(get_ssh_key_id_by_name "$project_id" "privatebox-proxmox" "$admin_session")
             
             if [ -n "$proxmox_key_id" ] && [[ "$proxmox_key_id" =~ ^[0-9]+$ ]]; then
                 local proxmox_inventory="all:
   hosts:
-    proxmox:
+    privatebox-proxmox:
       ansible_host: ${proxmox_ip}
       ansible_user: root"
-                
-                create_inventory "$project_id" "$admin_session" "proxmox" "$proxmox_inventory" "$proxmox_key_id"
+
+                create_inventory "$project_id" "$admin_session" "privatebox-proxmox" "$proxmox_inventory" "$proxmox_key_id"
             else
                 log_warn "No Proxmox SSH key found, cannot create Proxmox inventory"
             fi
@@ -1108,7 +1108,7 @@ create_infrastructure_project_with_ssh_key() {
             if [ -f "/root/.credentials/proxmox_ssh_key" ]; then
                 echo "PROGRESS:Uploading SSH keys" >> /etc/privatebox-install-complete
                 local ssh_payload=$(jq -n \
-                    --arg name "proxmox" \
+                    --arg name "privatebox-proxmox" \
                     --arg type "ssh" \
                     --argjson pid "$project_id" \
                     --arg priv "$(cat /root/.credentials/proxmox_ssh_key)" \
@@ -1139,7 +1139,7 @@ create_infrastructure_project_with_ssh_key() {
             local vm_key_id=""
             if [ -f "/root/.credentials/semaphore_vm_key" ]; then
                 local ssh_payload=$(jq -n \
-                    --arg name "container-host" \
+                    --arg name "privatebox-management" \
                     --arg type "ssh" \
                     --argjson pid "$project_id" \
                     --arg priv "$(cat /root/.credentials/semaphore_vm_key)" \
@@ -1181,9 +1181,9 @@ create_infrastructure_project_with_ssh_key() {
                 log_error "Failed to create password environment"
             fi
 
-            # Create ProxmoxAPI environment
+            # Create privatebox-env-proxmox environment
             if ! create_proxmox_api_environment "$project_id" "$admin_session"; then
-                log_error "Failed to create ProxmoxAPI environment"
+                log_error "Failed to create privatebox-env-proxmox environment"
             fi
 
             # Setup template synchronization and run service orchestration

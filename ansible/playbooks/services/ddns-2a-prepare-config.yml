@@ -10,11 +10,11 @@
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "DynamicDNS"
-      semaphore_inventory: "localhost"
+      semaphore_environment: "privatebox-env-dns"
+      semaphore_inventory: "privatebox-local"
       semaphore_category: "services"
 
-    # Load variables from DynamicDNS environment
+    # Load variables from privatebox-env-dns environment
     dns_provider: "{{ DNS_PROVIDER }}"
     dns_api_token: "{{ DNS_API_TOKEN }}"
     ddns_domain: "{{ DDNS_DOMAIN }}"

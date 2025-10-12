@@ -1,11 +1,11 @@
 ---
 - name: "OPNsense 1: Configure Secure Access"
-  hosts: proxmox
+  hosts: privatebox-proxmox
   gather_facts: yes
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "ServicePasswords"
+      semaphore_environment: "privatebox-env-passwords"
       semaphore_category: "infrastructure"
     
     # Fixed internal IP for OPNsense on Services VLAN

@@ -7,8 +7,8 @@
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "ServicePasswords"
-      semaphore_inventory: "localhost"
+      semaphore_environment: "privatebox-env-passwords"
+      semaphore_inventory: "privatebox-local"
       semaphore_category: "services"
 
     # Config file location (from ddns-2b)
@@ -79,8 +79,8 @@
     - name: Validate SERVICES_PASSWORD is set
       fail:
         msg: |
-          SERVICES_PASSWORD not found in ServicePasswords environment.
-          This playbook requires the ServicePasswords environment.
+          SERVICES_PASSWORD not found in privatebox-env-passwords environment.
+          This playbook requires the privatebox-env-passwords environment.
       when: adguard_password == 'changeme'
 
     # ============================================

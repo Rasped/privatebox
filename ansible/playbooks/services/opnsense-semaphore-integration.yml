@@ -1,6 +1,6 @@
 ---
 - name: "OPNsense 2: Configure Semaphore Integration"
-  hosts: proxmox
+  hosts: privatebox-proxmox
   gather_facts: yes
 
   environment:
@@ -9,7 +9,7 @@
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "SemaphoreAPI"
+      semaphore_environment: "privatebox-env-semaphore"
       semaphore_category: "infrastructure"
     
     # Fixed internal IPs
@@ -17,7 +17,7 @@
     semaphore_ip: "10.10.20.10"
     semaphore_url: "https://{{ semaphore_ip }}:2443"
     
-    # Get API token from SemaphoreAPI environment
+    # Get API token from privatebox-env-semaphore environment
     semaphore_token: "{{ SEMAPHORE_API_TOKEN | default('') }}"
     
     # Project configuration
@@ -28,8 +28,8 @@
     ssh_key_path: "{{ credentials_dir }}/id_ed25519"
     
     # Resource names in Semaphore
-    key_name: "opnsense-internal"
-    inventory_name: "opnsense-internal"
+    key_name: "privatebox-opnsense"
+    inventory_name: "privatebox-opnsense"
     
     enable_debug: true
 
@@ -66,7 +66,7 @@
       fail:
         msg: |
           SEMAPHORE_API_TOKEN not found in environment.
-          This playbook must be run from Semaphore with the SemaphoreAPI environment selected.
+          This playbook must be run from Semaphore with the privatebox-env-semaphore environment selected.
       when: semaphore_token | length == 0
 
     - name: Test Semaphore API connectivity
@@ -88,7 +88,7 @@
     # Phase 2: OPNsense API Key Management
     # ============================================
 
-    - name: Check if OPNsenseAPI environment exists
+    - name: Check if privatebox-env-opnsense environment exists
       uri:
         url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
         method: GET
@@ -98,9 +98,9 @@
         status_code: 200
       register: existing_environments
 
-    - name: Find OPNsenseAPI environment
+    - name: Find privatebox-env-opnsense environment
       set_fact:
-        opnsense_api_env: "{{ existing_environments.json | selectattr('name', 'equalto', 'OPNsenseAPI') | list | first | default(false) }}"
+        opnsense_api_env: "{{ existing_environments.json | selectattr('name', 'equalto', 'privatebox-env-opnsense') | list | first | default(false) }}"
 
     - name: Generate new OPNsense API key
       when: not opnsense_api_env
@@ -148,10 +148,10 @@
             status_code: 200
           register: api_test_result
 
-        - name: Create OPNsenseAPI environment in Semaphore (using jq for proper JSON types)
+        - name: Create privatebox-env-opnsense environment in Semaphore (using jq for proper JSON types)
           shell: |
             jq -n \
-              --arg name "OPNsenseAPI" \
+              --arg name "privatebox-env-opnsense" \
               --argjson pid {{ project_id }} \
               --arg api_url "https://{{ opnsense_ip }}" \
               --arg api_key "{{ apikey_json.key }}" \
@@ -261,7 +261,7 @@
         inventory_yaml: |
           all:
             hosts:
-              opnsense:
+              privatebox-opnsense:
                 ansible_host: {{ opnsense_ip }}
                 ansible_user: root
                 ansible_python_interpreter: /usr/local/bin/python3

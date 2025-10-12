@@ -10,8 +10,8 @@
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "SemaphoreAPI"
-      semaphore_inventory: "localhost"
+      semaphore_environment: "privatebox-env-semaphore"
+      semaphore_inventory: "privatebox-local"
       semaphore_category: "services"
       semaphore_survey_vars:
         - name: "semaphore_dns_provider"
@@ -70,7 +70,7 @@
       - duckdns
 
     # Environment name
-    environment_name: "DynamicDNS"
+    environment_name: "privatebox-env-dns"
 
     enable_debug: true
 
@@ -124,7 +124,7 @@
       fail:
         msg: |
           SEMAPHORE_API_TOKEN not found in environment.
-          This playbook must be run from Semaphore with the SemaphoreAPI environment selected.
+          This playbook must be run from Semaphore with the privatebox-env-semaphore environment selected.
       when: semaphore_token | length == 0
 
     - name: Test Semaphore API connectivity
@@ -308,7 +308,7 @@
     # Phase 3: Create Semaphore Environment
     # ============================================
 
-    - name: Check if DynamicDNS environment already exists
+    - name: Check if privatebox-env-dns environment already exists
       uri:
         url: "{{ semaphore_url }}/api/project/{{ project_id }}/environment"
         method: GET
@@ -318,7 +318,7 @@
         status_code: 200
       register: existing_environments
 
-    - name: Find existing DynamicDNS environment
+    - name: Find existing privatebox-env-dns environment
       set_fact:
         existing_ddns_env: "{{ existing_environments.json | selectattr('name', 'equalto', environment_name) | list | first | default(false) }}"
 
@@ -334,7 +334,7 @@
       set_fact:
         env_json_data: "{{ env_json_data | combine({'CLOUDFLARE_ZONE_ID': final_cloudflare_zone_id}) }}"
 
-    - name: Create DynamicDNS environment in Semaphore
+    - name: Create privatebox-env-dns environment in Semaphore
       when: not existing_ddns_env
       block:
         - name: Create environment with jq
@@ -379,9 +379,9 @@
 
         - name: Report environment creation success
           debug:
-            msg: "✓ DynamicDNS environment created successfully (ID: {{ env_result.id }})"
+            msg: "✓ privatebox-env-dns environment created successfully (ID: {{ env_result.id }})"
 
-    - name: Update existing DynamicDNS environment
+    - name: Update existing privatebox-env-dns environment
       when: existing_ddns_env
       block:
         - name: Update environment with jq
@@ -424,7 +424,7 @@
 
         - name: Report environment update success
           debug:
-            msg: "✓ DynamicDNS environment updated successfully (ID: {{ existing_ddns_env.id }})"
+            msg: "✓ privatebox-env-dns environment updated successfully (ID: {{ existing_ddns_env.id }})"
 
     # ============================================
     # Phase 4: Verification
@@ -440,7 +440,7 @@
         status_code: 200
       register: final_environments
 
-    - name: Find DynamicDNS environment
+    - name: Find privatebox-env-dns environment
       set_fact:
         final_ddns_env: "{{ final_environments.json | selectattr('name', 'equalto', environment_name) | list | first }}"
 

@@ -30,7 +30,7 @@ show_usage() {
     echo ""
     echo "Environment variables:"
     echo "  OPNSENSE_VMID         VM ID (default: 100)"
-    echo "  OPNSENSE_VM_NAME      VM name (default: opnsense)"
+    echo "  OPNSENSE_VM_NAME      VM name (default: privatebox-opnsense)"
     echo "  OPNSENSE_VM_STORAGE   Storage pool (default: local-lvm)"
     echo "  OPNSENSE_START        Start after restore (default: true)"
 }
@@ -51,7 +51,7 @@ fi
 
 # VM Configuration (after sourcing config)
 VMID="${OPNSENSE_VMID:-100}"
-VM_NAME="${OPNSENSE_VM_NAME:-opnsense}"
+VM_NAME="${OPNSENSE_VM_NAME:-privatebox-opnsense}"
 VM_STORAGE="${OPNSENSE_VM_STORAGE:-local-lvm}"
 START_AFTER_RESTORE="${OPNSENSE_START:-true}"
 WAN_BRIDGE="${WAN_BRIDGE:-vmbr0}"  # From prepare-host.sh config
