@@ -57,6 +57,7 @@ class DynDNSOrchestrator:
         # Define the template sequence
         # Note: "DynDNS 1: Setup Environment" is excluded - user must run that first
         self.template_sequence = [
+            "Generate Templates",  # Regenerate templates with new DNS environment
             "DynDNS 2a: Prepare Configuration",
             "DynDNS 2b: Configure OPNsense",
             "DynDNS 3: Configure AdGuard",
