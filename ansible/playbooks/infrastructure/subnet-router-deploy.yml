@@ -1,6 +1,6 @@
 ---
 - name: "Subnet Router 1: Create Alpine VM"
-  hosts: proxmox
+  hosts: privatebox-proxmox
   gather_facts: true
 
   environment:
@@ -34,8 +34,8 @@
 
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "SemaphoreAPI"
-      semaphore_inventory: "proxmox"
+      semaphore_environment: "privatebox-env-semaphore"
+      semaphore_inventory: "privatebox-proxmox"
 
   tasks:
     - name: Display deployment header
@@ -296,12 +296,12 @@
 
     - name: Parse existing key ID
       set_fact:
-        existing_key_id: "{{ (existing_keys.json | selectattr('name', 'equalto', 'subnet-router') | first).id | default(0) }}"
+        existing_key_id: "{{ (existing_keys.json | selectattr('name', 'equalto', 'privatebox-subnet-router') | first).id | default(0) }}"
 
     - name: Register SSH key in Semaphore (using jq for proper JSON types)
       shell: |
         jq -n \
-          --arg name "subnet-router" \
+          --arg name "privatebox-subnet-router" \
           --arg type "ssh" \
           --argjson pid {{ project_id }} \
           --arg key "{{ private_key_file.content | b64decode }}" \
@@ -332,21 +332,21 @@
 
     - name: Parse existing inventory ID
       set_fact:
-        existing_inventory_id: "{{ (existing_inventories.json | selectattr('name', 'equalto', 'subnet-router') | first).id | default(0) }}"
+        existing_inventory_id: "{{ (existing_inventories.json | selectattr('name', 'equalto', 'privatebox-subnet-router') | first).id | default(0) }}"
 
     - name: Build inventory YAML
       set_fact:
         inventory_yaml: |
           all:
             hosts:
-              subnet-router:
+              privatebox-subnet-router:
                 ansible_host: {{ services_ip }}
                 ansible_user: debian
 
     - name: Create subnet-router inventory in Semaphore (using jq for proper JSON types)
       shell: |
         jq -n \
-          --arg name "subnet-router" \
+          --arg name "privatebox-subnet-router" \
           --arg type "static" \
           --argjson pid {{ project_id }} \
           --arg inv "{{ inventory_yaml }}" \
@@ -386,9 +386,9 @@
           - "  IP Forwarding: Enabled"
           - ""
           - "Semaphore Integration:"
-          - "  SSH Key: Registered as 'subnet-router'"
+          - "  SSH Key: Registered as 'privatebox-subnet-router'"
           - "  SSH Key ID: {{ ssh_key_id }}"
-          - "  Inventory: Created as 'subnet-router'"
+          - "  Inventory: Created as 'privatebox-subnet-router'"
           - "  Public Key: {{ public_key_content.stdout }}"
           - ""
           - "Security Status:"

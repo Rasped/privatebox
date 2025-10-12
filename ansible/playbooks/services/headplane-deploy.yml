@@ -1,6 +1,6 @@
 ---
 - name: "Headplane 1: Deploy Headscale Web UI"
-  hosts: container-host
+  hosts: privatebox-management
   become: true
   gather_facts: true
 
@@ -11,7 +11,7 @@
 
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "HeadscaleAPI"
+      semaphore_environment: "privatebox-env-headscale"
 
     # Headplane default configuration - can be overridden by group_vars
     headplane_image: "tale/headplane"
@@ -170,7 +170,7 @@
             that:
               - HEADSCALE_API_KEY is defined
               - HEADSCALE_API_KEY | length > 0
-            fail_msg: "HEADSCALE_API_KEY not found in environment. Check HeadscaleAPI environment in Semaphore."
+            fail_msg: "HEADSCALE_API_KEY not found in environment. Check privatebox-env-headscale environment in Semaphore."
 
         - name: Generate Headplane configuration file
           copy:

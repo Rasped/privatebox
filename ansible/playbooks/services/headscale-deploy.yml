@@ -1,6 +1,6 @@
 ---
 - name: "Headscale 1: Deploy VPN Control Server"
-  hosts: container-host
+  hosts: privatebox-management
   become: true
   gather_facts: true
 
@@ -11,7 +11,7 @@
 
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "SemaphoreAPI"
+      semaphore_environment: "privatebox-env-semaphore"
 
     # Headscale default configuration - can be overridden by group_vars
     headscale_image: "headscale/headscale"
@@ -381,7 +381,7 @@
             mode: '0600'
           when: preauth_key.rc == 0
 
-        - name: Check if HeadscalePreauthKey environment exists in Semaphore
+        - name: Check if privatebox-env-headscale-preauth environment exists in Semaphore
           uri:
             url: "https://localhost:2443/api/project/1/environment"
             validate_certs: no
@@ -394,13 +394,13 @@
 
         - name: Parse existing preauth environment ID
           set_fact:
-            preauth_env_id: "{{ (preauth_env_list.json | selectattr('name', 'equalto', 'HeadscalePreauthKey') | first).id | default(0) }}"
+            preauth_env_id: "{{ (preauth_env_list.json | selectattr('name', 'equalto', 'privatebox-env-headscale-preauth') | first).id | default(0) }}"
           when: preauth_key.rc == 0
 
-        - name: Create HeadscalePreauthKey environment in Semaphore
+        - name: Create privatebox-env-headscale-preauth environment in Semaphore
           shell: |
             jq -n \
-              --arg name "HeadscalePreauthKey" \
+              --arg name "privatebox-env-headscale-preauth" \
               --argjson pid 1 \
               --arg preauth_key "{{ preauth_key.stdout | trim }}" \
               '{
@@ -423,7 +423,7 @@
 
         - name: Display preauth key registration result
           debug:
-            msg: "✓ Headscale pre-auth key registered in Semaphore environment 'HeadscalePreauthKey'"
+            msg: "✓ Headscale pre-auth key registered in Semaphore environment 'privatebox-env-headscale-preauth'"
           when: preauth_key.rc == 0
 
         - name: Generate API key for Headplane
@@ -437,10 +437,10 @@
             headscale_api_key: "{{ api_key.stdout | trim }}"
           when: api_key.rc == 0
 
-        - name: Submit HeadscaleAPI environment to Semaphore
+        - name: Submit privatebox-env-headscale environment to Semaphore
           shell: |
             jq -n \
-              --arg name "HeadscaleAPI" \
+              --arg name "privatebox-env-headscale" \
               --argjson pid 1 \
               --arg api_key "{{ headscale_api_key }}" \
               --arg grpc_url "{{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}" \
@@ -464,7 +464,7 @@
 
         - name: Display API key registration result
           debug:
-            msg: "✓ Headscale API key registered in Semaphore environment 'HeadscaleAPI'"
+            msg: "✓ Headscale API key registered in Semaphore environment 'privatebox-env-headscale'"
           when: api_key.rc == 0
 
     # Display access information
@@ -496,7 +496,7 @@
               - ""
               - "Default User: {{ headscale_admin_user }}"
               - "Pre-Auth Key: Saved to /opt/privatebox/headscale-preauth-key.txt"
-              - "API Key (Headplane): Registered in Semaphore environment 'HeadscaleAPI'"
+              - "API Key (Headplane): Registered in Semaphore environment 'privatebox-env-headscale'"
               - ""
               - "Client Setup:"
               - "  1. Install Tailscale on client device"
@@ -538,7 +538,7 @@
 
           Default User: {{ headscale_admin_user }}
           Pre-Auth Key: /opt/privatebox/headscale-preauth-key.txt
-          API Key (Headplane): Registered in Semaphore environment 'HeadscaleAPI'
+          API Key (Headplane): Registered in Semaphore environment 'privatebox-env-headscale'
         dest: "/opt/privatebox/deployment-info-headscale.txt"
         mode: '0644'
 

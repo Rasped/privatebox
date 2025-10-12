@@ -1,6 +1,6 @@
 ---
 - name: "Subnet Router 3: Approve Routes"
-  hosts: container-host
+  hosts: privatebox-management
   become: true
   gather_facts: true
 
@@ -15,7 +15,7 @@
 
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "SemaphoreAPI"
+      semaphore_environment: "privatebox-env-semaphore"
 
   tasks:
     - name: Display approval header

@@ -1,14 +1,14 @@
 ---
 - name: "DynDNS 5: Verify Complete Setup"
-  hosts: container-host
+  hosts: privatebox-management
   become: false
   gather_facts: true
 
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "OPNsenseAPI"
-      semaphore_inventory: "container-host"
+      semaphore_environment: "privatebox-env-opnsense"
+      semaphore_inventory: "privatebox-management"
       semaphore_category: "services"
 
     # Configuration

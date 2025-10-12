@@ -164,16 +164,42 @@ All API calls return HTTP 200/201 (success), but actual OPNsense system state sh
 3. ✅ Added reconfigure call after settings enable (apply changes pattern)
 4. ❌ None of these fixed the issue
 
-**Next Investigation Steps:**
-1. Test configuration via OPNsense GUI to capture browser network requests
-2. Check if API requires additional parameters (savepoint mechanism?)
-3. Verify os-ddclient plugin is fully installed and configured
-4. Check configd actions for DynDNS service triggers
-5. Consider alternative: direct SSH to OPNsense with CLI commands instead of API
+**Detailed Investigation:**
+- 📄 **See:** `documentation/investigations/opnsense-dyndns-api-blocker.md` for complete technical analysis
+  - Known bug in ddclient backend (GitHub #4649) with malformed template generation
+  - Two separate backend implementations (ddclient vs native/opnsense)
+  - Model structure analysis showing `"ddclient"` vs `"dyndns"` key issue
+  - Missing `"backend": "opnsense"` parameter in settings payload
+  - Controller implementation details and template generation mechanism
+  - Diagnostic commands and recommended solutions
+  - **Alternatives evaluated:** Custom cron jobs, SSH/XML manipulation, configctl commands
+  - **Final recommendation:** Fix the API (95% confidence) - See "Final Recommendation" section in investigation doc
+
+**Solution Approach (DECIDED):**
+- ✅ **Fix the API** - Root cause is configuration error in playbook, not API bug
+- ❌ **Not using custom cron jobs** - Would need to implement 4 provider integrations (unnecessary complexity)
+- ❌ **Not using SSH/XML manipulation** - Too fragile and risky for consumer appliance
+- ❌ **Not using configctl** - Configuration commands don't exist (only start/stop/restart)
+
+**Required Playbook Changes:**
+```yaml
+# Fix 1: Change "dyndns" to "ddclient"
+# Fix 2: Add "backend": "opnsense" (use native backend)
+# Fix 3: Add all required general settings (daemon_delay, verbose, allowipv6)
+# Fix 4: Add API response validation
+```
+
+**Next Steps:**
+1. ✅ **Completed:** Deep dive into plugin architecture and API workflow
+2. ✅ **Completed:** Evaluated all alternative approaches
+3. **TODO:** Update `ddns-2b-configure-opnsense.yml` with fixes
+4. **TODO:** Test updated playbook and verify configuration persists
+5. **If still fails:** Use browser DevTools to capture exact GUI payloads (fallback diagnostic)
 
 **Commits:**
 - `8a0ba92`: Add settings/set to enable service before start
 - `acd54e5`: Add reconfigure after account creation
+- `10b0514`: Document OPNsense DynDNS API blocker in implementation plan
 
 **Provider Notes:**
 - **deSEC**: Supports RFC2136 (DNS UPDATE) or HTTPS API, DNSSEC enabled

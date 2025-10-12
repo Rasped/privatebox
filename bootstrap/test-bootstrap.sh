@@ -165,7 +165,7 @@ if [[ -f /tmp/sem-cookie ]] && grep -q "semaphore" /tmp/sem-cookie; then
     
     # Check SSH keys
     KEYS=$(curl -s -b /tmp/sem-cookie "https://${VM_IP}:2443/api/project/1/keys" 2>/dev/null)
-    if echo "$KEYS" | grep -q "proxmox\|container-host"; then
+    if echo "$KEYS" | grep -q "privatebox-proxmox\|privatebox-management"; then
         print_status "success" "SSH keys configured in Semaphore"
     else
         print_status "warning" "SSH keys not found"
@@ -174,7 +174,7 @@ if [[ -f /tmp/sem-cookie ]] && grep -q "semaphore" /tmp/sem-cookie; then
     
     # Check inventories
     INVENTORIES=$(curl -s -b /tmp/sem-cookie "https://${VM_IP}:2443/api/project/1/inventory" 2>/dev/null)
-    if echo "$INVENTORIES" | grep -q "container-host"; then
+    if echo "$INVENTORIES" | grep -q "privatebox-management"; then
         print_status "success" "Inventories configured in Semaphore"
     else
         print_status "warning" "Inventories not found"

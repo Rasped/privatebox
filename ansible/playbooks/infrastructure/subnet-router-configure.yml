@@ -1,6 +1,6 @@
 ---
 - name: "Subnet Router 2: Configure VPN Connection"
-  hosts: subnet-router
+  hosts: privatebox-subnet-router
   gather_facts: false
   become: true
 
@@ -13,8 +13,8 @@
 
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "HeadscalePreauthKey"
-      semaphore_inventory: "subnet-router"
+      semaphore_environment: "privatebox-env-headscale-preauth"
+      semaphore_inventory: "privatebox-subnet-router"
 
   tasks:
     - name: Display configuration header

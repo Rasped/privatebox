@@ -1,6 +1,6 @@
 ---
 - name: "Portainer 1: Deploy Container Management UI"
-  hosts: container-host
+  hosts: privatebox-management
   become: true
   gather_facts: true
 
@@ -11,7 +11,7 @@
 
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "ServicePasswords"
+      semaphore_environment: "privatebox-env-passwords"
 
     # Portainer default configuration - can be overridden by group_vars
     portainer_image: "portainer/portainer-ce"
