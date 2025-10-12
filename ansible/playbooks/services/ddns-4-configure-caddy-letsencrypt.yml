@@ -1,6 +1,6 @@
 ---
 - name: "DynDNS 4: Configure Caddy"
-  hosts: container-host
+  hosts: privatebox-management
   become: true
   gather_facts: true
 
@@ -8,7 +8,7 @@
     # Template configuration for Semaphore
     template_config:
       semaphore_environment: "Empty"
-      semaphore_inventory: "container-host"
+      semaphore_inventory: "privatebox-management"
       semaphore_category: "services"
 
     # Caddy configuration

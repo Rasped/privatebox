@@ -5,7 +5,7 @@
 #   - SERVICES_PASSWORD (for display purposes only)
 
 - name: "Homer 1: Deploy Dashboard Service"
-  hosts: container-host
+  hosts: privatebox-management
   gather_facts: yes
   vars:
     # Service configuration
@@ -31,7 +31,7 @@
           - "=========================================="
           - "     HOMER DASHBOARD DEPLOYMENT"
           - "=========================================="
-          - "Target: Management VM (container-host)"
+          - "Target: Management VM (privatebox-management)"
           - "Port: {{ homer_port }}"
           - "Config: {{ config_dir }}/config.yml"
 

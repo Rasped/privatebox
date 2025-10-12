@@ -1,6 +1,6 @@
 ---
 - name: "Caddy 1: Deploy Reverse Proxy Service"
-  hosts: container-host
+  hosts: privatebox-management
   become: true
   gather_facts: true
 

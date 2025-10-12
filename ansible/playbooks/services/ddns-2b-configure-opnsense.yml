@@ -10,8 +10,8 @@
   vars:
     # Template configuration for Semaphore
     template_config:
-      semaphore_environment: "OPNsenseAPI"
-      semaphore_inventory: "localhost"
+      semaphore_environment: "privatebox-env-opnsense"
+      semaphore_inventory: "privatebox-local"
       semaphore_category: "services"
 
     # OPNsense API configuration

@@ -4,7 +4,7 @@
 # and ensures Unbound is properly configured on port 5353
 
 - name: "OPNsense 3: Apply Post-Configuration"
-  hosts: proxmox
+  hosts: privatebox-proxmox
   gather_facts: yes
   vars:
     opnsense_ip: "10.10.20.1"

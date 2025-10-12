@@ -116,7 +116,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Check for existing cookie first: `ssh root@192.168.1.10 "test -f /tmp/sem.cookies && echo EXISTS"`
 - If no cookie or expired, check for password:
   - From Proxmox: look in `/tmp/privatebox-config.conf` for SERVICES_PASSWORD
-  - From workstation: may need to retrieve from Semaphore ServicePasswords environment (if already have access)
+  - From workstation: may need to retrieve from Semaphore privatebox-env-passwords environment (if already have access)
   - Last resort: check bootstrap logs or ask user
 - Login to get session cookie (from Proxmox):
   - `curl -sSk --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' https://10.10.20.10:2443/api/auth/login`
@@ -146,8 +146,8 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 
 Notes
 - Semaphore NOT accessible from workstation directly (blocked by VLAN isolation).
-- In Management VM: use `localhost:3000` and `source /etc/privatebox/config.env`.
-- In Ansible playbooks on Proxmox: delegate to localhost or use shell commands with stored cookies.
+- In Management VM: use `privatebox-local:3000` and `source /etc/privatebox/config.env`.
+- In Ansible playbooks on Proxmox: delegate to privatebox-local or use shell commands with stored cookies.
 
 ## Coding Checklist
 - Idempotent? Retries/timeouts? Clear errors?
