@@ -57,11 +57,11 @@ class DynDNSOrchestrator:
         # Define the template sequence
         # Note: "DynDNS 1: Setup Environment" is excluded - user must run that first
         self.template_sequence = [
-            "DynDNS 2a: Prepare Config",
+            "DynDNS 2a: Prepare Configuration",
             "DynDNS 2b: Configure OPNsense",
             "DynDNS 3: Configure AdGuard",
-            "DynDNS 4: Configure Caddy Let's Encrypt",
-            "DynDNS 5: Verify Setup"
+            "DynDNS 4: Configure Caddy",
+            "DynDNS 5: Verify Complete Setup"
         ]
 
         if not self.api_token:
