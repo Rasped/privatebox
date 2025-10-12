@@ -283,6 +283,15 @@ create_orchestrate_services_task() {
         "$@"
 }
 
+# Create Setup Dynamic DNS task
+create_setup_ddns_task() {
+    create_python_template \
+        "Setup Dynamic DNS" \
+        "tools/setup-ddns.py" \
+        "Interactive setup for Dynamic DNS configuration" \
+        "$@"
+}
+
 # Create privatebox-env-proxmox environment
 create_proxmox_api_environment() {
     local project_id="$1"
@@ -479,7 +488,7 @@ setup_template_synchronization() {
     echo "PROGRESS:Setting up template synchronization" >> /etc/privatebox-install-complete
 
     # Create API token
-    log_info "Step 1/6: Creating API token..."
+    log_info "Step 1/8: Creating API token..."
     local api_token=$(create_api_token "$admin_session")
     if [ -z "$api_token" ]; then
         log_error "Failed to create API token for template sync"
@@ -488,7 +497,7 @@ setup_template_synchronization() {
     log_info "✓ API token created"
 
     # Create privatebox-env-semaphore environment
-    log_info "Step 2/6: Creating privatebox-env-semaphore environment..."
+    log_info "Step 2/8: Creating privatebox-env-semaphore environment..."
     local env_id=$(create_semaphore_api_environment "$project_id" "$api_token" "$admin_session")
     if [ -z "$env_id" ]; then
         log_error "Failed to create privatebox-env-semaphore environment"
@@ -497,13 +506,13 @@ setup_template_synchronization() {
     log_info "✓ Environment created with ID: $env_id"
 
     # Use default resource IDs
-    log_info "Step 3/6: Using default resource IDs..."
+    log_info "Step 3/8: Using default resource IDs..."
     local repo_id=1
     local inv_id=1
     log_info "✓ Using repository ID: $repo_id and inventory ID: $inv_id"
 
     # Create Generate Templates task
-    log_info "Step 4/7: Creating Generate Templates task..."
+    log_info "Step 4/8: Creating Generate Templates task..."
     local template_id=$(create_template_generator_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$template_id" ]; then
         log_error "Failed to create template generator task"
@@ -512,7 +521,7 @@ setup_template_synchronization() {
     log_info "✓ Task created with ID: $template_id"
 
     # Create Orchestrate Services task
-    log_info "Step 5/7: Creating Orchestrate Services task..."
+    log_info "Step 5/8: Creating Orchestrate Services task..."
     local orchestrate_id=$(create_orchestrate_services_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$orchestrate_id" ]; then
         log_error "Failed to create orchestrate services task"
@@ -520,8 +529,17 @@ setup_template_synchronization() {
     fi
     log_info "✓ Orchestrate Services task created with ID: $orchestrate_id"
 
+    # Create Setup Dynamic DNS task
+    log_info "Step 6/8: Creating Setup Dynamic DNS task..."
+    local setup_ddns_id=$(create_setup_ddns_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
+    if [ -z "$setup_ddns_id" ]; then
+        log_error "Failed to create setup dynamic DNS task"
+        return 1
+    fi
+    log_info "✓ Setup Dynamic DNS task created with ID: $setup_ddns_id"
+
     # Auto-run the Generate Templates task once to sync templates
-    log_info "Step 6/7: Running Generate Templates task..."
+    log_info "Step 7/8: Running Generate Templates task..."
     echo "PROGRESS:Generating service templates" >> /etc/privatebox-install-complete
     local gen_task_id=$(run_generate_templates_task "$project_id" "$template_id" "$admin_session")
     if [ -n "$gen_task_id" ]; then
@@ -532,7 +550,7 @@ setup_template_synchronization() {
             log_info "✓ Templates generated successfully"
 
             # Run service orchestration
-            log_info "Step 7/7: Running service orchestration..."
+            log_info "Step 8/8: Running service orchestration..."
             if run_service_orchestration "$project_id" "$admin_session"; then
                 log_info "✅ Service orchestration completed successfully"
                 log_info "Template synchronization setup COMPLETED"
