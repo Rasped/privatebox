@@ -154,7 +154,7 @@
               tls {$LETSENCRYPT_EMAIL} {
           {% if dns_provider == 'desec' %}
                   dns desec {
-                      token "{$DESEC_TOKEN}"
+                      token {$DESEC_TOKEN}
                   }
           {% elif dns_provider == 'cloudflare' %}
                   dns cloudflare {$CLOUDFLARE_API_TOKEN}
