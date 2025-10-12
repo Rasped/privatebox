@@ -152,9 +152,19 @@
           *.{{ ddns_domain }} {
               # Let's Encrypt via DNS-01 challenge
               tls {$LETSENCRYPT_EMAIL} {
-                  dns {{ caddy_dns_module }} {
-                      token "{${{ dns_token_env_var }}}"
+          {% if dns_provider == 'desec' %}
+                  dns desec {
+                      token "{$DESEC_TOKEN}"
                   }
+          {% elif dns_provider == 'cloudflare' %}
+                  dns cloudflare {$CLOUDFLARE_API_TOKEN}
+          {% elif dns_provider == 'dynu' %}
+                  dns dynu {$DYNU_API_KEY} {
+                      own_domain {$DDNS_DOMAIN}
+                  }
+          {% elif dns_provider == 'duckdns' %}
+                  dns duckdns {$DUCKDNS_TOKEN}
+          {% endif %}
               }
 
           {% for service in default_services %}
