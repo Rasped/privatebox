@@ -283,12 +283,12 @@ create_orchestrate_services_task() {
         "$@"
 }
 
-# Create Setup Dynamic DNS task
-create_setup_ddns_task() {
+# Create Orchestrate DynDNS task
+create_orchestrate_ddns_task() {
     create_python_template \
-        "Setup Dynamic DNS" \
-        "tools/setup-ddns.py" \
-        "Interactive setup for Dynamic DNS configuration" \
+        "Orchestrate DynDNS" \
+        "tools/orchestrate-ddns.py" \
+        "Orchestrate DynDNS configuration templates in sequence" \
         "$@"
 }
 
@@ -529,14 +529,14 @@ setup_template_synchronization() {
     fi
     log_info "✓ Orchestrate Services task created with ID: $orchestrate_id"
 
-    # Create Setup Dynamic DNS task
-    log_info "Step 6/8: Creating Setup Dynamic DNS task..."
-    local setup_ddns_id=$(create_setup_ddns_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
-    if [ -z "$setup_ddns_id" ]; then
-        log_error "Failed to create setup dynamic DNS task"
+    # Create Orchestrate DynDNS task
+    log_info "Step 6/8: Creating Orchestrate DynDNS task..."
+    local orchestrate_ddns_id=$(create_orchestrate_ddns_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
+    if [ -z "$orchestrate_ddns_id" ]; then
+        log_error "Failed to create orchestrate DynDNS task"
         return 1
     fi
-    log_info "✓ Setup Dynamic DNS task created with ID: $setup_ddns_id"
+    log_info "✓ Orchestrate DynDNS task created with ID: $orchestrate_ddns_id"
 
     # Auto-run the Generate Templates task once to sync templates
     log_info "Step 7/8: Running Generate Templates task..."
