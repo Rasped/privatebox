@@ -27,7 +27,7 @@
       - semaphore
       - adguard
       - headplane
-      - homer
+      - privatebox
 
     enable_debug: true
 
