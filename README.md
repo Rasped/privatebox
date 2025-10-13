@@ -67,7 +67,7 @@ The script deploys the following services, which are containerized on the manage
 | **Headplane** | Web UI for Headscale | `https://headplane.lan/admin` |
 | **Semaphore** | Ansible Automation UI | `https://semaphore.lan` |
 | **Portainer** | Container Management UI | `https://portainer.lan` |
-| **Homer** | Service Dashboard | `https://homer.lan` |
+| **PrivateBox Dashboard** | Service Dashboard | `https://privatebox.lan` |
 
 All services are accessible via `.lan` domains (self-signed certificates) or optionally via custom domains with Let's Encrypt certificates (configured via Semaphore).
 

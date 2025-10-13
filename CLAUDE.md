@@ -58,7 +58,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - **Proxmox Host** - at 10.10.20.20:8006 (not a VM, hypervisor itself)
 
 ### Services (all on Management VM)
-**Web services:** All accessible via `https://*.lan` domains (portainer, semaphore, adguard, headplane, homer)
+**Web services:** All accessible via `https://*.lan` domains (privatebox, portainer, semaphore, adguard, headplane)
 - See `ansible/files/caddy/Caddyfile.j2` for complete proxy configuration
 - Caddy reverse proxy terminates TLS with self-signed certs
 - Caddy health endpoint: `http://10.10.20.10/health` (monitoring)

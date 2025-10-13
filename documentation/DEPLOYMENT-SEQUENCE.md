@@ -1536,7 +1536,7 @@ This document maps the **exact, actual deployment sequence** from a clean Proxmo
        OPNsense firewall: 10.10.20.1
        AdGuard DNS: 10.10.20.10:53
        AdGuard web UI: https://adguard.lan
-       Homer dashboard: https://homer.lan
+       PrivateBox dashboard: https://privatebox.lan
      ```
    - Progress marker: `PROGRESS:All services deployed successfully` → `/etc/privatebox-install-complete`
 
@@ -1591,7 +1591,7 @@ This document maps the **exact, actual deployment sequence** from a clean Proxmo
   - Portainer: https://portainer.lan
   - Semaphore: https://semaphore.lan
   - AdGuard web UI: https://adguard.lan
-  - Homer dashboard: https://homer.lan
+  - PrivateBox dashboard: https://privatebox.lan
 - Network infrastructure:
   - OPNsense gateway: 10.10.20.1
   - AdGuard DNS: 10.10.20.10:53 → Quad9 → Unbound fallback

@@ -42,7 +42,7 @@ Commercial appliance for consumers. Adds commercial features, recovery infrastru
 - **Headplane** - Headscale management UI at https://headplane.lan
 
 #### Access & Monitoring
-- **Homer Dashboard** - Service directory at https://homer.lan
+- **PrivateBox Dashboard** - Service directory at https://privatebox.lan
 - **Caddy Reverse Proxy** - TLS termination for all services
   - Self-signed certificates for .lan domains
   - ACME certificates (Let's Encrypt/ZeroSSL) for custom domains
@@ -94,7 +94,7 @@ These features are deferred to Product release:
 
 ### Core Functionality
 - ✅ Single-command deployment (`quickstart.sh`)
-- ✅ All services accessible via dashboard (https://homer.lan)
+- ✅ All services accessible via dashboard (https://privatebox.lan)
 - ✅ DNS filtering functional (AdGuard → Quad9 → Unbound)
 - ✅ TLS certificates working (.lan self-signed + custom domain ACME)
 - ⚠️ VPN access (Headscale deployed, needs live testing)

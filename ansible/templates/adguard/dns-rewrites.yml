@@ -3,9 +3,9 @@
 # These are automatically configured in AdGuard during deployment
 
 rewrites:
-  - domain: "homer.lan"
+  - domain: "privatebox.lan"
     answer: "10.10.20.10"
-    comment: "Homer Dashboard"
+    comment: "PrivateBox Dashboard"
 
   - domain: "portainer.lan"
     answer: "10.10.20.10"
