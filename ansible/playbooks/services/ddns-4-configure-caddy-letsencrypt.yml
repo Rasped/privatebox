@@ -31,7 +31,7 @@
       - name: headplane
         port: 8080
         protocol: http
-      - name: homer
+      - name: privatebox
         port: 8081
         protocol: http
 
