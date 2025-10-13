@@ -55,7 +55,7 @@
       debug:
         msg:
           - "========================================"
-          - "   DYNAMIC DNS + LET'S ENCRYPT VERIFICATION"
+          - "   DYNAMIC DNS + ACME TLS VERIFICATION"
           - "========================================"
           - "Domain: {{ ddns_domain }}"
           - "Management VM: {{ management_vm_ip }}"
@@ -64,9 +64,9 @@
     # Phase 3: Certificate Verification
     # ============================================
 
-    - name: Check for Let's Encrypt certificates
+    - name: Check for ACME certificates
       find:
-        paths: "{{ caddy_data_dir }}/certificates/acme-v02.api.letsencrypt.org-directory"
+        paths: "{{ caddy_data_dir }}/certificates"
         patterns: "*{{ ddns_domain }}.crt"
         recurse: yes
       register: letsencrypt_certs
@@ -74,7 +74,7 @@
 
     - name: Display certificate count
       debug:
-        msg: "Found {{ letsencrypt_certs.matched }} Let's Encrypt certificate(s)"
+        msg: "Found {{ letsencrypt_certs.matched }} ACME certificate(s)"
 
     - name: Get certificate details
       when: letsencrypt_certs.matched > 0
@@ -252,8 +252,8 @@
           - "  ✓ Custom domains: {{ custom_https_tests.results | selectattr('status', 'defined') | list | length }}/{{ custom_https_tests.results | length }} accessible"
           - ""
           - "Certificates:"
-          - "  ✓ Let's Encrypt certs: {{ 'ISSUED' if cert_valid else 'NOT FOUND' }}"
-          - "  ✓ Certificate expiry: {{ 'Valid (>60 days)' if cert_expiry_check.rc == 0 else 'Check required' }}"
+          - "  ✓ ACME certs: {{ 'ISSUED' if cert_valid else 'NOT FOUND' }}"
+          - "  ✓ Certificate expiry: {{ 'Valid (>60 days)' if cert_expiry_check is defined and cert_expiry_check.rc == 0 else 'Check required' }}"
           - ""
           - "Services:"
           - "  ✓ Caddy: {{ 'RUNNING' if caddy_running else 'NOT RUNNING' }}"
@@ -263,10 +263,10 @@
           - ""
           - "Access URLs:"
           - "  - https://portainer.lan (self-signed cert)"
-          - "  - https://portainer.{{ ddns_domain }} (Let's Encrypt cert)"
+          - "  - https://portainer.{{ ddns_domain }} (ACME cert)"
           - ""
           - "========================================"
 
     - name: Mark verification as complete
       debug:
-        msg: "✓ Dynamic DNS + Let's Encrypt setup verification complete"
+        msg: "✓ Dynamic DNS + ACME TLS setup verification complete"
