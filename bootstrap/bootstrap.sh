@@ -329,7 +329,7 @@ main() {
     display "  Password: $ADMIN_PASSWORD"
     display ""
     display "Service Access:"
-    display "  Dashboard: https://homer.lan"
+    display "  Dashboard: https://privatebox.lan"
     display ""
     display "Network Services:"
     display "  AdGuard Home: https://adguard.lan"

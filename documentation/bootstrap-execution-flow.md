@@ -303,7 +303,7 @@ create_default_projects()
     - Playbook: `ansible/playbooks/services/caddy-deploy.yml`
     - Purpose: Deploy reverse proxy for .lan domain access
     - Target: Management VM (container-host)
-    - Proxies: homer.lan, portainer.lan, semaphore.lan, adguard.lan, headplane.lan, opnsense.lan, proxmox.lan
+    - Proxies: privatebox.lan, portainer.lan, semaphore.lan, adguard.lan, headplane.lan, opnsense.lan, proxmox.lan
     - Ports: 80 (HTTP), 443 (HTTPS)
 
 **Actions for each service:**

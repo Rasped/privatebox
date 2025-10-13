@@ -351,7 +351,7 @@
               - "Caddy is now running on {{ ansible_default_ipv4.address }}"
               - ""
               - "Access URLs (.lan domains):"
-              - "  - homer.lan (Homer Dashboard)"
+              - "  - privatebox.lan (PrivateBox Dashboard)"
               - "  - headplane.lan (Headscale Web UI)"
               - "  - portainer.lan (Container Management)"
               - "  - semaphore.lan (Ansible Automation)"
@@ -373,7 +373,7 @@
               - ""
               - "Next Steps:"
               - "  1. Add DNS records for *.lan domains → {{ ansible_default_ipv4.address }}"
-              - "  2. Access services via https://homer.lan"
+              - "  2. Access services via https://privatebox.lan"
               - "  3. Accept self-signed certificate on first visit"
               - ""
 
@@ -387,7 +387,7 @@
 
           Access URLs:
           - Health Check: http://{{ ansible_default_ipv4.address }}/health
-          - Homer: https://homer.lan
+          - PrivateBox Dashboard: https://privatebox.lan
           - Headplane: https://headplane.lan
           - Portainer: https://portainer.lan
           - Semaphore: https://semaphore.lan
