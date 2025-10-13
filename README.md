@@ -13,6 +13,7 @@ PrivateBox is a collection of shell scripts and Ansible playbooks that automate 
 -   **Automated OPNsense® Deployment**: Deploys and configures an OPNsense® VM to function as the network's primary firewall and router.
 -   **Network-Wide DNS Filtering**: Deploys AdGuard Home in a container for DNS-based ad and tracker blocking.
 -   **Self-Hosted VPN**: Deploys Headscale (a self-hosted Tailscale control server) for secure remote network access.
+-   **Automatic TLS Certificates**: Configures Let's Encrypt/ZeroSSL certificates via DNS-01 challenge for custom domains.
 -   **One-Command Setup**: A single `quickstart.sh` script orchestrates the entire deployment on a fresh Proxmox host.
 -   **Web-Based Management**: Includes Portainer for container management and Semaphore for Ansible automation, both accessible via HTTPS.
 
@@ -67,6 +68,8 @@ The script deploys the following services, which are containerized on the manage
 | **Semaphore** | Ansible Automation UI | `https://semaphore.lan` |
 | **Portainer** | Container Management UI | `https://portainer.lan` |
 | **Homer** | Service Dashboard | `https://homer.lan` |
+
+All services are accessible via `.lan` domains (self-signed certificates) or optionally via custom domains with Let's Encrypt certificates (configured via Semaphore).
 
 **Default Credentials:**
 -   **Username**: `admin`
