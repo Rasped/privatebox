@@ -1,6 +1,14 @@
 your data is not a product.
 
+<div align="center">
+  <img src="assets/rose-logo.svg" alt="Sub Rosa Logo" width="150">
+</div>
+
 # PrivateBox
+
+[![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Version](https://img.shields.io/badge/Version-1.0.0-informational.svg)]()
 
 PrivateBox is a project that uses shell scripts, Python, and Ansible to turn a bare-metal Proxmox server into a production-ready, open-source firewall and network manager in about 15 minutes.
 
@@ -9,6 +17,37 @@ PrivateBox is a project that uses shell scripts, Python, and Ansible to turn a b
 ## Why PrivateBox?
 
 Manually setting up a secure network stack with a firewall, DNS filtering, and a VPN is a repetitive and time-consuming task. PrivateBox automates the entire process, providing a consistent, secure, and repeatable deployment with a single command. It is designed for developers and tech enthusiasts who value their time but refuse to compromise on control or transparency.
+
+### Architecture Overview
+
+PrivateBox runs three core virtual machines on a single Proxmox host. The Management VM, in turn, runs all the containerized services.
+
+```mermaid
+graph TD
+    subgraph Proxmox VE Host
+        A(OPNsense VM);
+        B(Subnet Router VM);
+        subgraph Management VM
+            direction TB
+            D[AdGuard Home];
+            E[Homer Dashboard];
+            F[Headplane UI];
+            G[Semaphore];
+            H[Portainer];
+        end
+    end
+```
+
+### Network Layout
+
+Each component is deliberately placed in a specific network zone for security and performance:
+
+| Component | Network Zone |
+| :--- | :--- |
+| Proxmox Host | Services VLAN |
+| OPNsense VM | Services VLAN |
+| Management VM | Services VLAN |
+| **Subnet Router VM** | **Trusted LAN** |
 
 ## Key Features
 
@@ -51,6 +90,9 @@ After the script completes, your PrivateBox is running.
 -   Your credentials for the various services are displayed on screen at the end of the installation.
 
 **IMPORTANT:** You must set up your Portainer admin account within 5 minutes of the first boot or after a restart. Navigate to **`https://portainer.lan`** to create your account.
+
+### Homer Dashboard Screenshot
+*(Placeholder for a screenshot of the final Homer dashboard. This is valuable for transparency, even if the UI is simple.)*
 
 ## Deployed Services
 
