@@ -1,39 +1,39 @@
 your data is not a product.
 
-***
-
 # PrivateBox
 
-## What is it?
-
-PrivateBox is a collection of shell scripts and Ansible playbooks that automate the deployment of a production-ready network security stack on a Proxmox VE host. It uses a single command to provision a Debian management VM and deploy containerized services, including an OPNsense® firewall, AdGuard Home for DNS filtering, and a Headscale VPN control server. The objective is to provide a repeatable, self-hosted, and fully open-source alternative to commercial firewall appliances.
-
-### Core Components
-
--   **Automated OPNsense® Deployment**: Deploys and configures an OPNsense® VM to function as the network's primary firewall and router.
--   **Network-Wide DNS Filtering**: Deploys AdGuard Home in a container for DNS-based ad and tracker blocking.
--   **Self-Hosted VPN**: Deploys Headscale (a self-hosted Tailscale control server) for secure remote network access.
--   **Automatic TLS Certificates**: Configures Let's Encrypt/ZeroSSL certificates via DNS-01 challenge for custom domains.
--   **One-Command Setup**: A single `quickstart.sh` script orchestrates the entire deployment on a fresh Proxmox host.
--   **Web-Based Management**: Includes Portainer for container management and Semaphore for Ansible automation, both accessible via HTTPS.
+PrivateBox is a project that uses shell scripts, Python, and Ansible to turn a bare-metal Proxmox server into a production-ready, open-source firewall and network manager in about 15 minutes.
 
 ---
 
+## Why PrivateBox?
+
+Manually setting up a secure network stack with a firewall, DNS filtering, and a VPN is a repetitive and time-consuming task. PrivateBox automates the entire process, providing a consistent, secure, and repeatable deployment with a single command. It is designed for developers and tech enthusiasts who value their time but refuse to compromise on control or transparency.
+
+## Key Features
+
+-   **OPNsense® Firewall**: Deploys and configures a full OPNsense® VM for routing and security.
+-   **Network-Wide DNS Filtering**: Deploys AdGuard Home for blocking ads and trackers on all devices.
+-   **Self-Hosted VPN**: Deploys Headscale to provide a secure WireGuard-based VPN for remote access.
+-   **Fully Automated**: A single script orchestrates the entire deployment on a fresh Proxmox host.
+-   **Web-Based Management**: Includes Portainer, Semaphore, and Headplane for easy management of your stack.
+-   **Optional TLS Certificates**: Includes a playbook to automatically acquire Let's Encrypt certificates for a custom domain.
+
 ## System Requirements
 
--   **Hardware**: A dual-NIC system (e.g., Intel N100 mini-PC) with 8GB+ RAM and 20GB+ available storage.
--   **Software**: Proxmox VE 7.0 or higher.
+-   **Hardware**: A dual-NIC system with 8GB+ RAM and 20GB+ available storage.
+-   **Software**: Proxmox VE 9.0 or higher.
 -   **Network**: A stable internet connection for the initial installation.
 
 ## Quick Start
 
-Execute the following command on your Proxmox VE host. This will download and run the bootstrap script.
+Execute the following command on your Proxmox VE host. We recommend reviewing the script before running it.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh -o quickstart.sh
+bash quickstart.sh
 ```
 
----
 ## See it in Action
 
 Watch the 2-minute video to see the entire deployment process, from the `curl` command to the final dashboard.
@@ -41,39 +41,29 @@ Watch the 2-minute video to see the entire deployment process, from the `curl` c
 [![Watch the 2-minute Demo](https://privatebox.com/images/youtube-placeholder.jpg)](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
 > *(Link to a 2-minute technical demo video is pending.)*
 
-The script will perform pre-flight checks, configure network bridges, and begin the automated deployment, which takes approximately 15-20 minutes.
-
 ---
 
-## Hardware Appliance
+## What Now? Your First Login
 
-We also offer a pre-configured hardware appliance for those who prefer a turnkey solution. The appliance runs the same open-source PrivateBox stack on optimized hardware.
+After the script completes, your PrivateBox is running. 
 
-**Specifications:** Intel N100 CPU, 16GB RAM, 256GB NVMe, Dual 2.5GbE NICs.
+-   The main dashboard is available at: **`https://privatebox.lan`**
+-   Your credentials for the various services are displayed on screen at the end of the installation.
 
-[**➡️ View Pre-Order & Pricing Information**](https://privatebox.com/preorder)
-
----
+**IMPORTANT:** You must set up your Portainer admin account within 5 minutes of the first boot or after a restart. Navigate to **`https://portainer.lan`** to create your account.
 
 ## Deployed Services
 
-The script deploys the following services, which are containerized on the management VM unless otherwise noted.
+The script deploys the following services, accessible from your trusted network:
 
 | Service | Purpose | Access |
 | :--- | :--- | :--- |
 | **OPNsense®** | Firewall / Router (VM) | `https://opnsense.lan` |
 | **AdGuard Home** | DNS Filtering & Ad-Blocking | `https://adguard.lan` |
-| **Headscale** | Self-Hosted VPN Server | (CLI / API) |
-| **Headplane** | Web UI for Headscale | `https://headplane.lan/admin` |
+| **Headplane** | Web UI for Headscale VPN | `https://headplane.lan/admin` |
 | **Semaphore** | Ansible Automation UI | `https://semaphore.lan` |
 | **Portainer** | Container Management UI | `https://portainer.lan` |
-| **PrivateBox Dashboard** | Service Dashboard | `https://privatebox.lan` |
-
-All services are accessible via `.lan` domains (self-signed certificates) or optionally via custom domains with Let's Encrypt certificates (configured via Semaphore).
-
-**Default Credentials:**
--   **Username**: `admin`
--   **Password**: The `SERVICES_PASSWORD` is auto-generated and output at the end of the installation. It is also stored at `/etc/privatebox/config.env` on the management VM.
+| **Homer Dashboard** | Service Dashboard | `https://privatebox.lan` |
 
 <details>
 <summary><b>View Deployment Process & Advanced Options</b></summary>
@@ -103,6 +93,14 @@ bash quickstart.sh --help         # Display all available arguments.
 ```
 
 </details>
+
+---
+
+## Supporting the Project
+
+This project is and always will be free and open source. If you find it useful and would like to support its continued development, we also offer a pre-configured hardware appliance running the exact same software.
+
+[**➡️ Learn More About the Hardware**](https://privatebox.com/preorder)
 
 ## Contributing
 
