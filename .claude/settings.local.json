@@ -38,7 +38,9 @@
       "Bash(find:*)",
       "Bash({} ;)",
       "Bash(ansible/playbooks/services/ddns-1-setup-environment.yml:*)",
-      "Bash(CLAUDE.md)"
+      "Bash(CLAUDE.md)",
+      "Bash(ls:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": [],
