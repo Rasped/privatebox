@@ -1,5 +1,5 @@
 ---
-- name: "Applications VM 1: Create Debian VM with Docker"
+- name: "Applications VM 1: Create Debian VM with Docker and Portainer"
   hosts: privatebox-proxmox
   gather_facts: true
 
@@ -9,7 +9,7 @@
   vars:
     # VM configuration
     vmid: 102
-    vm_name: "privatebox-applications"
+    vm_name: "applications-vm"
     vm_memory: 2048
     vm_cores: 2
     vm_disk_size: "15G"
@@ -44,7 +44,7 @@
           - "=========================================="
           - "VMID: {{ vmid }}"
           - "Services IP: {{ services_ip }}"
-          - "Container Runtime: Docker"
+          - "Container Runtime: Docker + Portainer"
 
     # Pre-flight checks
     - name: Check if VM already exists
@@ -94,6 +94,11 @@
         src: /etc/privatebox/certs/privatebox.crt
       register: privatebox_ca_cert
 
+    - name: Read PrivateBox CA private key from Proxmox
+      slurp:
+        src: /etc/privatebox/certs/privatebox.key
+      register: privatebox_ca_key
+
     - name: Generate cloud-init user-data
       copy:
         dest: "/var/lib/vz/snippets/applications-vm-{{ vmid }}.yml"
@@ -132,8 +137,19 @@
               encoding: b64
               content: {{ privatebox_ca_cert.content }}
 
+            - path: /etc/privatebox/certs/privatebox.crt
+              permissions: '0644'
+              encoding: b64
+              content: {{ privatebox_ca_cert.content }}
+
+            - path: /etc/privatebox/certs/privatebox.key
+              permissions: '0600'
+              encoding: b64
+              content: {{ privatebox_ca_key.content }}
+
           runcmd:
             # Install PrivateBox CA certificate
+            - mkdir -p /etc/privatebox/certs
             - update-ca-certificates
             # Wait for network and DNS
             - timeout 30 sh -c 'until ping -c1 8.8.8.8 >/dev/null 2>&1; do sleep 1; done'
@@ -149,6 +165,13 @@
             # Enable and start Docker
             - systemctl enable docker
             - systemctl start docker
+            # Deploy Portainer
+            - docker volume create portainer_data
+            - docker run -d -p 8000:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data -v /etc/privatebox/certs/privatebox.crt:/certs/cert.pem:ro -v /etc/privatebox/certs/privatebox.key:/certs/key.pem:ro portainer/portainer-ce:latest --sslcert /certs/cert.pem --sslkey /certs/key.pem
+            # Wait for Portainer to start
+            - timeout 60 sh -c 'until curl -k https://localhost:9443/api/system/status >/dev/null 2>&1; do sleep 2; done'
+            # Initialize Portainer admin user
+            - 'curl -k -X POST https://localhost:9443/api/users/admin/init -H "Content-Type: application/json" -d "{\"Username\":\"admin\",\"Password\":\"{{ SERVICES_PASSWORD }}\"}" || true'
             # Generate SSH key for Ansible access
             - mkdir -p /home/debian/.ssh
             - ssh-keygen -t ed25519 -f /home/debian/.ssh/id_ed25519 -N '' -C 'applications-vm@privatebox'
@@ -158,7 +181,7 @@
             - chown -R debian:debian /home/debian/.ssh
             - echo "Applications VM ready"
 
-          final_message: "Debian applications VM deployed after $UPTIME seconds"
+          final_message: "Applications VM deployed after $UPTIME seconds"
 
     # Create VM
     - name: Create VM {{ vmid }}
@@ -240,10 +263,10 @@
       register: cloudinit_status
       changed_when: false
 
-    - name: Verify Docker installation
+    - name: Verify Docker and Portainer installation
       command: >
         sshpass -p {{ ADMIN_PASSWORD }} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null debian@{{ services_ip }}
-        "docker --version && docker ps"
+        "docker --version && docker ps --filter 'name=portainer' --format 'table {{.Names}}\t{{.Status}}'"
       register: docker_check
       changed_when: false
 
@@ -253,6 +276,7 @@
           - "✓ Cloud-init completed"
           - "✓ Docker installed"
           - "✓ Docker version: {{ docker_check.stdout_lines[0] }}"
+          - "✓ Portainer: {{ docker_check.stdout_lines[1] if docker_check.stdout_lines | length > 1 else 'Running' }}"
           - "✓ SSH key generated"
 
     - name: Retrieve private key from applications VM
@@ -289,12 +313,12 @@
 
     - name: Parse existing key ID
       set_fact:
-        existing_key_id: "{{ (existing_keys.json | selectattr('name', 'equalto', 'privatebox-applications') | first).id | default(0) }}"
+        existing_key_id: "{{ (existing_keys.json | selectattr('name', 'equalto', 'applications-vm') | first).id | default(0) }}"
 
     - name: Register SSH key in Semaphore (using jq for proper JSON types)
       shell: |
         jq -n \
-          --arg name "privatebox-applications" \
+          --arg name "applications-vm" \
           --arg type "ssh" \
           --argjson pid {{ project_id }} \
           --arg key "{{ private_key_file.content | b64decode }}" \
@@ -325,21 +349,21 @@
 
     - name: Parse existing inventory ID
       set_fact:
-        existing_inventory_id: "{{ (existing_inventories.json | selectattr('name', 'equalto', 'privatebox-applications') | first).id | default(0) }}"
+        existing_inventory_id: "{{ (existing_inventories.json | selectattr('name', 'equalto', 'applications-vm') | first).id | default(0) }}"
 
     - name: Build inventory YAML
       set_fact:
         inventory_yaml: |
           all:
             hosts:
-              privatebox-applications:
+              applications-vm:
                 ansible_host: {{ services_ip }}
                 ansible_user: debian
 
     - name: Create applications inventory in Semaphore (using jq for proper JSON types)
       shell: |
         jq -n \
-          --arg name "privatebox-applications" \
+          --arg name "applications-vm" \
           --arg type "static" \
           --argjson pid {{ project_id }} \
           --arg inv "{{ inventory_yaml }}" \
@@ -375,21 +399,23 @@
           - ""
           - "Installed Services:"
           - "  Docker: {{ docker_check.stdout_lines[0] }}"
-          - "  Container Runtime: Active"
+          - "  Portainer: Running on https://{{ services_ip }}:9443"
+          - "  Portainer URL: https://application.lan"
           - ""
           - "Semaphore Integration:"
-          - "  SSH Key: Registered as 'privatebox-applications'"
+          - "  SSH Key: Registered as 'applications-vm'"
           - "  SSH Key ID: {{ ssh_key_id }}"
-          - "  Inventory: Created as 'privatebox-applications'"
+          - "  Inventory: Created as 'applications-vm'"
           - "  Public Key: {{ public_key_content.stdout }}"
           - ""
           - "Access:"
           - "  SSH: ssh debian@{{ services_ip }}"
           - "  Password: (using ADMIN_PASSWORD)"
-          - "  Docker: Ready for containers"
+          - "  Portainer: https://application.lan"
+          - "  Portainer Admin: admin / SERVICES_PASSWORD"
           - ""
           - "Next Steps:"
-          - "  1. Connect Portainer to this VM's Docker socket"
-          - "  2. Deploy user containers via Portainer"
-          - "  3. Access containers at {{ services_ip }}:<port>"
+          - "  1. Access Portainer at https://application.lan"
+          - "  2. Deploy user containers via Portainer UI"
+          - "  3. All containers accessible at {{ services_ip }}:<port>"
           - ""
