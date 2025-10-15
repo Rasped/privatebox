@@ -266,7 +266,7 @@
     - name: Verify Docker and Portainer installation
       command: >
         sshpass -p {{ ADMIN_PASSWORD }} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null debian@{{ services_ip }}
-        "docker --version && docker ps --filter 'name=portainer' --format 'table {{.Names}}\t{{.Status}}'"
+        "docker --version && docker ps --filter 'name=portainer'"
       register: docker_check
       changed_when: false
 
