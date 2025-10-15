@@ -218,10 +218,6 @@
       command: qm set {{ vmid }} --ide2 {{ vm_storage }}:cloudinit
       when: vm_created is succeeded
 
-    - name: Enable auto-start
-      command: qm set {{ vmid }} --onboot 1
-      when: vm_created is succeeded
-
     - name: Configure cloud-init network
       command: >
         qm set {{ vmid }}
