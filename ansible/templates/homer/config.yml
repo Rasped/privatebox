@@ -96,3 +96,11 @@ services:
         url: "https://proxmox.lan"
         target: "_blank"
 
+      - name: "Applications"
+        logo: "assets/tools/portainer.png"
+        subtitle: "User Applications"
+        tag: "apps"
+        url: "https://application.lan"
+        type: "Ping"
+        target: "_blank"
+

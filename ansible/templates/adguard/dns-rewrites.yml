@@ -30,3 +30,7 @@ rewrites:
   - domain: "proxmox.lan"
     answer: "10.10.20.20"
     comment: "Proxmox Hypervisor"
+
+  - domain: "application.lan"
+    answer: "10.10.20.30"
+    comment: "Applications VM Portainer"
