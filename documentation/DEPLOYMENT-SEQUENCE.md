@@ -133,17 +133,17 @@ This document maps the **exact, actual deployment sequence** from a clean Proxmo
 ### Step 7: SSH Key Generation
 
 **What happens:**
-1. Checks if `/root/.ssh/id_rsa` exists
+1. Checks if `/root/.ssh/id_ed25519` exists
 2. If not exists:
    - Creates `/root/.ssh/` directory (mode 700)
-   - Generates 4096-bit RSA key: `ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N "" -C "privatebox@$(hostname)"`
+   - Generates Ed25519 key: `ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N "" -C "privatebox@$(hostname)"`
    - Sets permissions: 600 on private key, 644 on public key
 
 **Files created:**
-- `/root/.ssh/id_rsa` (private key, mode 600)
-- `/root/.ssh/id_rsa.pub` (public key, mode 644)
+- `/root/.ssh/id_ed25519` (private key, mode 600)
+- `/root/.ssh/id_ed25519.pub` (public key, mode 644)
 
-**State after step:** SSH keypair available at `/root/.ssh/id_rsa`
+**State after step:** SSH keypair available at `/root/.ssh/id_ed25519` (modern Ed25519 cryptography, compliant with post-2025 ENISA/EUCC standards)
 
 ### Step 8: Network Detection and Bridge Configuration
 
@@ -211,7 +211,8 @@ This document maps the **exact, actual deployment sequence** from a clean Proxmo
 1. Creates directory: `/etc/privatebox/certs/`
 2. Generates self-signed certificate (10 year validity):
    ```
-   openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
+   openssl req -x509 -nodes -days 3650 -newkey ec \
+     -pkeyopt ec_paramgen_curve:prime256v1 \
      -subj "/C=DK/O=PrivateBox/CN=privatebox.local" \
      -keyout /etc/privatebox/certs/privatebox.key \
      -out /etc/privatebox/certs/privatebox.crt
@@ -379,8 +380,8 @@ This document maps the **exact, actual deployment sequence** from a clean Proxmo
    - Creates directory: `mkdir -p /var/lib/vz/snippets`
 
 2. **Load SSH Keys:**
-   - Reads Proxmox public key: `/root/.ssh/id_rsa.pub` (for VM access)
-   - Reads Proxmox private key: `/root/.ssh/id_rsa` (for Semaphore to access Proxmox)
+   - Reads Proxmox public key: `/root/.ssh/id_ed25519.pub` (for VM access)
+   - Reads Proxmox private key: `/root/.ssh/id_ed25519` (for Semaphore to access Proxmox)
    - Indents private key with 6 spaces for YAML embedding
 
 3. **Load Semaphore API Library:**
