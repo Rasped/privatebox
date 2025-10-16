@@ -133,17 +133,24 @@ This document maps the **exact, actual deployment sequence** from a clean Proxmo
 ### Step 7: SSH Key Generation
 
 **What happens:**
-1. Checks if `/root/.ssh/id_ed25519` exists
-2. If not exists:
+1. Cleans old PrivateBox keys from `/root/.ssh/authorized_keys` (removes lines with `privatebox@`)
+2. Checks if `/root/.ssh/id_ed25519` exists
+3. If not exists:
    - Creates `/root/.ssh/` directory (mode 700)
    - Generates Ed25519 key: `ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N "" -C "privatebox@$(hostname)"`
    - Sets permissions: 600 on private key, 644 on public key
+4. Adds Proxmox's own public key to its authorized_keys:
+   - `cat /root/.ssh/id_ed25519.pub >> /root/.ssh/authorized_keys`
+   - This allows Semaphore (running in Management VM) to SSH back to Proxmox using the embedded private key
 
 **Files created:**
 - `/root/.ssh/id_ed25519` (private key, mode 600)
 - `/root/.ssh/id_ed25519.pub` (public key, mode 644)
 
-**State after step:** SSH keypair available at `/root/.ssh/id_ed25519` (modern Ed25519 cryptography, compliant with post-2025 ENISA/EUCC standards)
+**Files modified:**
+- `/root/.ssh/authorized_keys` (Proxmox's public key appended for self-access)
+
+**State after step:** SSH keypair available at `/root/.ssh/id_ed25519` (modern Ed25519 cryptography, compliant with post-2025 ENISA/EUCC standards). Proxmox authorized to accept connections from its own key for Semaphore → Proxmox SSH access.
 
 ### Step 8: Network Detection and Bridge Configuration
 
