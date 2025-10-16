@@ -127,18 +127,18 @@ generate_cloud_init() {
     
     # Get host SSH public key if available
     local ssh_key=""
-    if [[ -f /root/.ssh/id_rsa.pub ]]; then
-        ssh_key=$(cat /root/.ssh/id_rsa.pub)
-        log "Including host SSH public key"
+    if [[ -f /root/.ssh/id_ed25519.pub ]]; then
+        ssh_key=$(cat /root/.ssh/id_ed25519.pub)
+        log "Including host SSH public key (Ed25519)"
     else
         log "No SSH public key found, password auth only"
     fi
-    
+
     # Get Proxmox private SSH key for Semaphore
     local proxmox_private_key=""
-    if [[ -f /root/.ssh/id_rsa ]]; then
-        proxmox_private_key=$(cat /root/.ssh/id_rsa | sed 's/^/      /')
-        log "Including Proxmox private SSH key for Semaphore"
+    if [[ -f /root/.ssh/id_ed25519 ]]; then
+        proxmox_private_key=$(cat /root/.ssh/id_ed25519 | sed 's/^/      /')
+        log "Including Proxmox private SSH key for Semaphore (Ed25519)"
     else
         log "No Proxmox private SSH key found"
     fi

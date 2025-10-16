@@ -21,7 +21,7 @@ source "$CONFIG_FILE"
 VMID="${VMID:-9000}"
 TIMEOUT="${VERIFY_TIMEOUT:-900}"  # 15 minutes default
 CHECK_INTERVAL=10
-SSH_KEY_PATH="${SSH_KEY_PATH:-/root/.ssh/id_rsa}"  # Default to root's key
+SSH_KEY_PATH="${SSH_KEY_PATH:-/root/.ssh/id_ed25519}"  # Default to root's Ed25519 key
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" >&2
