@@ -327,7 +327,13 @@ EOF
 # Generate SSH keys if they don't exist
 generate_ssh_keys() {
     display "Checking SSH keys..."
-    
+
+    # Clean slate: Remove old PrivateBox-generated keys from authorized_keys
+    if [[ -f /root/.ssh/authorized_keys ]]; then
+        log "Removing old PrivateBox SSH keys from authorized_keys"
+        sed -i '/privatebox@/d' /root/.ssh/authorized_keys 2>/dev/null || true
+    fi
+
     if [[ ! -f /root/.ssh/id_ed25519 ]]; then
         log "SSH key not found at /root/.ssh/id_ed25519, generating new key pair"
         display "  Generating SSH key pair for VM access..."
@@ -350,6 +356,15 @@ generate_ssh_keys() {
     else
         display "  ✓ SSH key pair already exists"
         log "SSH key pair already exists at /root/.ssh/id_ed25519"
+    fi
+
+    # Add Proxmox's public key to its own authorized_keys for Semaphore access
+    if [[ -f /root/.ssh/id_ed25519.pub ]]; then
+        log "Adding Proxmox public key to authorized_keys for self-access"
+        cat /root/.ssh/id_ed25519.pub >> /root/.ssh/authorized_keys
+        chmod 600 /root/.ssh/authorized_keys
+        display "  ✓ Public key authorized for Semaphore → Proxmox access"
+        log "Proxmox can now accept SSH connections from Semaphore using embedded private key"
     fi
 }
 
