@@ -180,8 +180,9 @@ generate_https_certificate() {
     # Create certificate directory
     mkdir -p "$cert_dir"
 
-    # Generate self-signed certificate (10 year validity)
-    openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
+    # Generate self-signed certificate (10 year validity) - ECDSA P-256 for modern crypto
+    openssl req -x509 -nodes -days 3650 -newkey ec \
+      -pkeyopt ec_paramgen_curve:prime256v1 \
       -subj "/C=DK/O=PrivateBox/CN=privatebox.local" \
       -keyout "$cert_dir/privatebox.key" \
       -out "$cert_dir/privatebox.crt" \
@@ -327,28 +328,28 @@ EOF
 generate_ssh_keys() {
     display "Checking SSH keys..."
     
-    if [[ ! -f /root/.ssh/id_rsa ]]; then
-        log "SSH key not found at /root/.ssh/id_rsa, generating new key pair"
+    if [[ ! -f /root/.ssh/id_ed25519 ]]; then
+        log "SSH key not found at /root/.ssh/id_ed25519, generating new key pair"
         display "  Generating SSH key pair for VM access..."
-        
+
         # Create .ssh directory if it doesn't exist
         mkdir -p /root/.ssh
         chmod 700 /root/.ssh
-        
-        # Generate SSH key pair (no passphrase)
-        ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N "" -C "privatebox@$(hostname)" >/dev/null 2>&1
-        
-        if [[ -f /root/.ssh/id_rsa ]]; then
-            chmod 600 /root/.ssh/id_rsa
-            chmod 644 /root/.ssh/id_rsa.pub
-            display "  ✓ SSH key pair generated successfully"
-            log "SSH key pair generated at /root/.ssh/id_rsa"
+
+        # Generate SSH key pair (no passphrase) - Ed25519 for modern crypto
+        ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N "" -C "privatebox@$(hostname)" >/dev/null 2>&1
+
+        if [[ -f /root/.ssh/id_ed25519 ]]; then
+            chmod 600 /root/.ssh/id_ed25519
+            chmod 644 /root/.ssh/id_ed25519.pub
+            display "  ✓ SSH key pair generated successfully (Ed25519)"
+            log "SSH key pair generated at /root/.ssh/id_ed25519"
         else
             error_exit "Failed to generate SSH key pair"
         fi
     else
         display "  ✓ SSH key pair already exists"
-        log "SSH key pair already exists at /root/.ssh/id_rsa"
+        log "SSH key pair already exists at /root/.ssh/id_ed25519"
     fi
 }
 
