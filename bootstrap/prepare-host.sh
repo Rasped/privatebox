@@ -305,7 +305,7 @@ STATIC_IP="$mgmt_vm_ip"
 GATEWAY="$services_gateway"
 NETMASK="24"
 CONTAINER_HOST_IP="$mgmt_vm_ip"
-PROXMOX_HOST="$proxmox_ip"
+PROXMOX_HOST="$proxmox_services_ip"
 EOF
 
     log "Configuration generated successfully"
