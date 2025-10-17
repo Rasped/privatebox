@@ -45,7 +45,7 @@ CPUQuota={{ portainer_cpu_quota }}
 {% endif %}
 
 # Health check
-HealthCmd=/bin/sh -c 'wget -q --spider --no-check-certificate https://127.0.0.1:9443/api/status || exit 1'
+HealthCmd=wget --spider --no-check-certificate -q -O /dev/null https://127.0.0.1:9443/api/status
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}
