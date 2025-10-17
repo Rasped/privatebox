@@ -31,16 +31,44 @@ error_exit() {
     exit 1
 }
 
+# Fix Proxmox enterprise repositories
+fix_proxmox_repos() {
+    log "Fixing Proxmox repository configuration..."
+
+    # Disable enterprise repositories (.list format - Proxmox 7.x/8.x)
+    if [[ -f /etc/apt/sources.list.d/pve-enterprise.list ]]; then
+        sed -i 's/^/#/' /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null || true
+        log "Disabled enterprise repository (.list)"
+    fi
+
+    if [[ -f /etc/apt/sources.list.d/ceph.list ]]; then
+        sed -i 's/^/#/' /etc/apt/sources.list.d/ceph.list 2>/dev/null || true
+        log "Disabled Ceph enterprise repository (.list)"
+    fi
+
+    # Disable enterprise repositories (.sources format - Debian Trixie/DEB822)
+    # We rename instead of commenting to avoid malformed stanza errors
+    if [[ -f /etc/apt/sources.list.d/pve-enterprise.sources ]]; then
+        mv /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/pve-enterprise.sources.disabled 2>/dev/null || true
+        log "Disabled enterprise repository (.sources)"
+    fi
+
+    if [[ -f /etc/apt/sources.list.d/ceph.sources ]]; then
+        mv /etc/apt/sources.list.d/ceph.sources /etc/apt/sources.list.d/ceph.sources.disabled 2>/dev/null || true
+        log "Disabled Ceph enterprise repository (.sources)"
+    fi
+}
+
 # Check and install required dependencies
 check_dependencies() {
     display "  Checking required dependencies..."
     local missing_deps=()
     local deps_to_install=()
-    
+
     # Check for required commands
     local required_commands=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl")
     local required_packages=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl")
-    
+
     for i in "${!required_commands[@]}"; do
         if ! command -v "${required_commands[$i]}" &> /dev/null; then
             missing_deps+=("${required_commands[$i]}")
@@ -50,12 +78,15 @@ check_dependencies() {
             log "✓ ${required_commands[$i]} is available"
         fi
     done
-    
+
     # Install missing dependencies
     if [[ ${#deps_to_install[@]} -gt 0 ]]; then
         display "  Installing missing dependencies: ${deps_to_install[*]}"
         log "Installing packages: ${deps_to_install[*]}"
-        
+
+        # Fix enterprise repos before apt-get update
+        fix_proxmox_repos
+
         # Update package list
         apt-get update >/dev/null 2>&1 || error_exit "Failed to update package list"
         
