@@ -34,7 +34,7 @@ DropCapability={{ cap }}
 {% endif %}
 
 # Health check
-HealthCmd=/bin/sh -c "wget -q --spider http://localhost:80/health || exit 1"
+HealthCmd=wget --spider -q -O /dev/null http://localhost/health
 HealthInterval={{ health_check_interval | default('30s') }}
 HealthRetries={{ health_check_retries | default(3) }}
 HealthStartPeriod={{ health_check_start_period | default('60s') }}
