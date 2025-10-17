@@ -167,13 +167,14 @@ run_preflight_checks() {
     fi
 
     # Disable enterprise repositories (.sources format - Debian Trixie/DEB822)
+    # We rename instead of commenting to avoid malformed stanza errors
     if [[ -f /etc/apt/sources.list.d/pve-enterprise.sources ]]; then
-        sed -i 's/^Types:/#Types:/' /etc/apt/sources.list.d/pve-enterprise.sources
+        mv /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/pve-enterprise.sources.disabled 2>/dev/null || true
         [[ "$VERBOSE" == true ]] && info_msg "  Disabled enterprise repository (.sources)"
     fi
 
     if [[ -f /etc/apt/sources.list.d/ceph.sources ]]; then
-        sed -i 's/^Types:/#Types:/' /etc/apt/sources.list.d/ceph.sources
+        mv /etc/apt/sources.list.d/ceph.sources /etc/apt/sources.list.d/ceph.sources.disabled 2>/dev/null || true
         [[ "$VERBOSE" == true ]] && info_msg "  Disabled Ceph enterprise repository (.sources)"
     fi
     
