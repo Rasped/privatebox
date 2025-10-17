@@ -137,20 +137,44 @@ run_preflight_checks() {
     if [[ ! -d /etc/pve ]]; then
         error_exit "This script must be run on a Proxmox VE host"
     fi
+
+    # Detect Proxmox version and recommend Proxmox 9
+    if [[ -f /etc/os-release ]]; then
+        local debian_version=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
+        if [[ "$debian_version" == "12" ]]; then
+            warning_msg "Detected Proxmox 8.x (Debian 12 Bookworm)"
+            warning_msg "PrivateBox recommends Proxmox 9.x (Debian 13 Trixie) or later"
+            warning_msg "Proxmox 8.x is supported but consider upgrading for best experience"
+            echo ""
+        elif [[ "$debian_version" == "13" ]]; then
+            success_msg "Detected Proxmox 9.x (Debian 13 Trixie) ✓"
+        fi
+    fi
     
     # Fix Proxmox repository configuration first
     # This prevents enterprise repository warnings/errors
     info_msg "Configuring Proxmox repositories..."
     
-    # Disable enterprise repositories
+    # Disable enterprise repositories (.list format - Proxmox 7.x/8.x)
     if [[ -f /etc/apt/sources.list.d/pve-enterprise.list ]]; then
         sed -i 's/^/#/' /etc/apt/sources.list.d/pve-enterprise.list
-        [[ "$VERBOSE" == true ]] && info_msg "  Disabled enterprise repository"
+        [[ "$VERBOSE" == true ]] && info_msg "  Disabled enterprise repository (.list)"
     fi
-    
+
     if [[ -f /etc/apt/sources.list.d/ceph.list ]]; then
         sed -i 's/^/#/' /etc/apt/sources.list.d/ceph.list
-        [[ "$VERBOSE" == true ]] && info_msg "  Disabled Ceph enterprise repository"
+        [[ "$VERBOSE" == true ]] && info_msg "  Disabled Ceph enterprise repository (.list)"
+    fi
+
+    # Disable enterprise repositories (.sources format - Debian Trixie/DEB822)
+    if [[ -f /etc/apt/sources.list.d/pve-enterprise.sources ]]; then
+        sed -i 's/^Types:/# Types:/' /etc/apt/sources.list.d/pve-enterprise.sources
+        [[ "$VERBOSE" == true ]] && info_msg "  Disabled enterprise repository (.sources)"
+    fi
+
+    if [[ -f /etc/apt/sources.list.d/ceph.sources ]]; then
+        sed -i 's/^Types:/# Types:/' /etc/apt/sources.list.d/ceph.sources
+        [[ "$VERBOSE" == true ]] && info_msg "  Disabled Ceph enterprise repository (.sources)"
     fi
     
     # Enable no-subscription repository if not already present
