@@ -167,6 +167,13 @@ Environment=TZ=UTC
 Exec=semaphore server --config=/etc/semaphore/config.json
 # Auto-update disabled - manual updates only
 
+# Health check
+HealthCmd=curl -k -f -s https://localhost:3000/api/ping
+HealthInterval=30s
+HealthRetries=3
+HealthStartPeriod=60s
+HealthTimeout=10s
+
 [Service]
 Restart=always
 TimeoutStartSec=300
