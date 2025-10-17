@@ -66,8 +66,8 @@ check_dependencies() {
     local deps_to_install=()
 
     # Check for required commands
-    local required_commands=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl")
-    local required_packages=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl")
+    local required_commands=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl" "jq")
+    local required_packages=("ethtool" "sshpass" "zstd" "curl" "wget" "openssl" "jq")
 
     for i in "${!required_commands[@]}"; do
         if ! command -v "${required_commands[$i]}" &> /dev/null; then
