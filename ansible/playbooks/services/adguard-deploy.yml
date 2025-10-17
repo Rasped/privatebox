@@ -529,19 +529,12 @@
                 label: "{{ item.name }}"
               ignore_errors: true  # Ignore if blocklist already exists
 
-            - name: Enable and update blocklists
-              uri:
-                url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}/control/filtering/refresh"
-                validate_certs: no
-                method: POST
-                user: "{{ adguard_admin_username }}"
-                password: "{{ adguard_admin_password }}"
-                force_basic_auth: true
-                body_format: json
-                body:
-                  whitelist: false
-                status_code: 200
-              register: refresh_result
+            # Note: Blocklists update automatically when added, no need to force refresh
+            # Forcing refresh immediately after adding causes 500 error: "filters update procedure is already running"
+            - name: Wait for blocklists to finish auto-updating
+              pause:
+                seconds: 5
+                prompt: "Waiting for AdGuard to finish updating blocklists..."
 
             - name: Load DNS rewrites configuration
               include_vars:
