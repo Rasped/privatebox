@@ -107,6 +107,7 @@ update_status_line() {
         local spinner_char="$1"
         tput sc 2>/dev/null || true                    # Save cursor position
         tput cup $(tput lines) 0 2>/dev/null || true   # Move to last line
+        tput sgr0 2>/dev/null || true                  # Reset colors/attributes
         tput el 2>/dev/null || true                    # Clear line
         printf "%s Configuring PrivateBox..." "$spinner_char"
         tput rc 2>/dev/null || true                    # Restore cursor
@@ -118,6 +119,7 @@ cleanup_status_line() {
     if [[ "$QUIET_MODE" == true ]]; then
         tput sc 2>/dev/null || true
         tput cup $(tput lines) 0 2>/dev/null || true
+        tput sgr0 2>/dev/null || true                  # Reset colors/attributes
         tput el 2>/dev/null || true
         tput rc 2>/dev/null || true
     fi
