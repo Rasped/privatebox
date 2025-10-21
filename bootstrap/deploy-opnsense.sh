@@ -86,7 +86,7 @@ log() {
 }
 
 display() {
-    if [[ "$VERBOSE" == "--verbose" ]] || [[ "$2" == "always" ]]; then
+    if [[ "$VERBOSE" == "--verbose" ]]; then
         echo "$1"
     fi
     log "$1"
