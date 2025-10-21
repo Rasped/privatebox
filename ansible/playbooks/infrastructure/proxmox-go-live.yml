@@ -1,0 +1,271 @@
+---
+# PrivateBox - Move Proxmox "Inside" Network (Go Live)
+#
+# DANGER: This playbook reconfigures Proxmox networking to use OPNsense as the gateway.
+# Only run this AFTER physically connecting OPNsense WAN to ISP modem in bridge mode.
+#
+# What this does:
+# 1. Backs up current network configuration
+# 2. Adds gateway 10.10.20.1 to vmbr1.20 (Services VLAN)
+# 3. Updates DNS to 10.10.20.10 (AdGuard)
+# 4. Creates rollback script in case something goes wrong
+# 5. Restarts networking (will briefly disconnect!)
+#
+# Run from Proxmox console (NOT via SSH):
+#   cd /root/privatebox
+#   ansible-playbook ansible/playbooks/infrastructure/proxmox-go-live.yml
+#
+# Or via Semaphore if already deployed
+#
+
+- name: PrivateBox - Move Proxmox Inside Network (Go Live)
+  hosts: localhost
+  gather_facts: true
+  become: false
+
+  vars:
+    services_vlan_ip: "10.10.20.20"
+    services_gateway: "10.10.20.1"
+    adguard_dns: "10.10.20.10"
+    backup_dir: "/root/privatebox-network-backup"
+    rollback_script: "/root/privatebox-network-rollback.sh"
+
+  tasks:
+    - name: Display WARNING banner
+      ansible.builtin.debug:
+        msg:
+          - "================================================================"
+          - "  WARNING: NETWORK RECONFIGURATION"
+          - "================================================================"
+          - ""
+          - "This playbook will reconfigure Proxmox to use OPNsense as the"
+          - "default gateway. This WILL disconnect existing SSH sessions."
+          - ""
+          - "Prerequisites:"
+          - "  1. OPNsense WAN physically connected to ISP modem (bridge mode)"
+          - "  2. ISP modem in bridge mode (not router mode)"
+          - "  3. You are running this from Proxmox console (NOT SSH)"
+          - ""
+          - "The playbook will pause for 10 seconds. Press Ctrl+C to abort."
+          - "================================================================"
+
+    - name: Pause for confirmation
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Continuing in 10 seconds... Press Ctrl+C to abort"
+
+    - name: Pre-flight checks started
+      ansible.builtin.debug:
+        msg: "Starting pre-flight checks..."
+
+    - name: Check if running on Proxmox
+      ansible.builtin.stat:
+        path: /usr/bin/pveversion
+      register: pve_check
+
+    - name: Fail if not running on Proxmox
+      ansible.builtin.fail:
+        msg: "This playbook must be run on a Proxmox host"
+      when: not pve_check.stat.exists
+
+    - name: Check if OPNsense is responding at Services gateway
+      ansible.builtin.wait_for:
+        host: "{{ services_gateway }}"
+        port: 22
+        timeout: 5
+      register: opnsense_check
+      ignore_errors: true
+
+    - name: Fail if OPNsense not accessible
+      ansible.builtin.fail:
+        msg: |
+          OPNsense not accessible at {{ services_gateway }}.
+          Make sure OPNsense is running and accessible on Services VLAN.
+      when: opnsense_check is failed
+
+    - name: Check if AdGuard DNS is responding
+      ansible.builtin.command:
+        cmd: "dig @{{ adguard_dns }} google.com +short +time=2 +tries=1"
+      register: adguard_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Fail if AdGuard not accessible
+      ansible.builtin.fail:
+        msg: |
+          AdGuard DNS not accessible at {{ adguard_dns }}.
+          Make sure AdGuard is running before proceeding.
+      when: adguard_check is failed or adguard_check.stdout == ""
+
+    - name: Pre-flight checks passed
+      ansible.builtin.debug:
+        msg:
+          - "✓ Running on Proxmox"
+          - "✓ OPNsense accessible at {{ services_gateway }}"
+          - "✓ AdGuard DNS accessible at {{ adguard_dns }}"
+
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0700'
+
+    - name: Backup current network configuration
+      ansible.builtin.copy:
+        src: /etc/network/interfaces
+        dest: "{{ backup_dir }}/interfaces.backup.{{ ansible_date_time.epoch }}"
+        remote_src: true
+        mode: '0600'
+
+    - name: Backup current resolv.conf
+      ansible.builtin.copy:
+        src: /etc/resolv.conf
+        dest: "{{ backup_dir }}/resolv.conf.backup.{{ ansible_date_time.epoch }}"
+        remote_src: true
+        mode: '0600'
+
+    - name: Read current /etc/network/interfaces
+      ansible.builtin.slurp:
+        src: /etc/network/interfaces
+      register: current_interfaces
+
+    - name: Check if vmbr1.20 exists in configuration
+      ansible.builtin.set_fact:
+        has_vmbr1_20: "{{ 'vmbr1.20' in (current_interfaces.content | b64decode) }}"
+
+    - name: Fail if vmbr1.20 not configured
+      ansible.builtin.fail:
+        msg: |
+          vmbr1.20 (Services VLAN) not found in /etc/network/interfaces.
+          Run bootstrap first to create the base configuration.
+      when: not has_vmbr1_20
+
+    - name: Check if gateway already configured
+      ansible.builtin.set_fact:
+        has_gateway: "{{ (current_interfaces.content | b64decode) | regex_search('gateway\\s+' + services_gateway) }}"
+
+    - name: Skip if already configured
+      ansible.builtin.debug:
+        msg: "Gateway already configured on vmbr1.20. Skipping network reconfiguration."
+      when: has_gateway
+
+    - name: Create rollback script
+      ansible.builtin.template:
+        src: proxmox-network-rollback.sh.j2
+        dest: "{{ rollback_script }}"
+        mode: '0700'
+      vars:
+        interfaces_backup: "{{ backup_dir }}/interfaces.backup.{{ ansible_date_time.epoch }}"
+        resolv_backup: "{{ backup_dir }}/resolv.conf.backup.{{ ansible_date_time.epoch }}"
+
+    - name: Display rollback instructions
+      ansible.builtin.debug:
+        msg:
+          - "Rollback script created at: {{ rollback_script }}"
+          - "If something goes wrong, run: {{ rollback_script }}"
+
+    - name: Update vmbr1.20 configuration to add gateway
+      ansible.builtin.blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} PRIVATEBOX GO-LIVE CONFIGURATION"
+        insertafter: "^iface vmbr1.20 inet static"
+        block: |
+                  gateway {{ services_gateway }}
+                  dns-nameservers {{ adguard_dns }}
+                  dns-search lan
+      when: not has_gateway
+
+    - name: Update /etc/resolv.conf for immediate DNS
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        content: |
+          # PrivateBox DNS Configuration
+          search lan
+          nameserver {{ adguard_dns }}
+        mode: '0644'
+
+    - name: Display network restart warning
+      ansible.builtin.debug:
+        msg:
+          - "================================================================"
+          - "  NETWORK RESTART IMMINENT"
+          - "================================================================"
+          - ""
+          - "The network will now be restarted. This will:"
+          - "  - Disconnect any SSH sessions"
+          - "  - Take 10-30 seconds to complete"
+          - "  - May require console access if something fails"
+          - ""
+          - "Rollback: {{ rollback_script }}"
+          - ""
+          - "Pausing 5 seconds before restart..."
+          - "================================================================"
+      when: not has_gateway
+
+    - name: Pause before network restart
+      ansible.builtin.pause:
+        seconds: 5
+      when: not has_gateway
+
+    - name: Apply network configuration
+      ansible.builtin.command:
+        cmd: ifreload -a
+      when: not has_gateway
+      register: network_restart
+      changed_when: true
+
+    - name: Wait for network to stabilize
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Verify gateway is reachable
+      ansible.builtin.command:
+        cmd: "ping -c 2 -W 5 {{ services_gateway }}"
+      register: gateway_ping
+      changed_when: false
+      failed_when: false
+
+    - name: Verify DNS resolution
+      ansible.builtin.command:
+        cmd: "dig @{{ adguard_dns }} google.com +short +time=3 +tries=2"
+      register: dns_test
+      changed_when: false
+      failed_when: false
+
+    - name: Verify internet connectivity
+      ansible.builtin.uri:
+        url: https://www.google.com
+        timeout: 10
+        status_code: [200, 301, 302]
+      register: internet_test
+      failed_when: false
+
+    - name: Display results
+      ansible.builtin.debug:
+        msg:
+          - "================================================================"
+          - "  GO-LIVE RESULTS"
+          - "================================================================"
+          - ""
+          - "Gateway ({{ services_gateway }}) reachable: {{ 'YES' if gateway_ping.rc == 0 else 'NO' }}"
+          - "DNS resolution working: {{ 'YES' if dns_test.rc == 0 else 'NO' }}"
+          - "Internet connectivity: {{ 'YES' if internet_test.status in [200, 301, 302] else 'NO' }}"
+          - ""
+          - "{% if gateway_ping.rc == 0 and dns_test.rc == 0 and internet_test.status in [200, 301, 302] %}"
+          - "✓ SUCCESS! Proxmox is now inside the PrivateBox network."
+          - "{% else %}"
+          - "⚠ WARNING: Some checks failed. You may need to rollback."
+          - "Run rollback script: {{ rollback_script }}"
+          - "{% endif %}"
+          - ""
+          - "Proxmox now accessible at: https://{{ services_vlan_ip }}:8006"
+          - "Default route through OPNsense: {{ services_gateway }}"
+          - "DNS server: {{ adguard_dns }}"
+          - "================================================================"
+
+    - name: Fail if critical checks failed
+      ansible.builtin.fail:
+        msg: |
+          Critical connectivity checks failed!
+          Run rollback: {{ rollback_script }}
+      when: gateway_ping.rc != 0 or dns_test.rc != 0
