@@ -34,6 +34,12 @@ error_exit() {
 # Note: Repository fixes are now handled by proxmox-optimize.sh
 # which runs early in the bootstrap process
 
+# Optimize Proxmox early (before password generator sources which overwrites SCRIPT_DIR)
+optimize_proxmox() {
+    display "  Optimizing Proxmox configuration..."
+    bash "${SCRIPT_DIR}/proxmox-optimize.sh"
+}
+
 # Check and install required dependencies
 check_dependencies() {
     display "  Checking required dependencies..."
@@ -602,8 +608,8 @@ main() {
     # Run pre-flight checks
     run_preflight_checks
 
-    # Optimize Proxmox (repos, nag removal, HA services)
-    bash "${SCRIPT_DIR}/proxmox-optimize.sh"
+    # Optimize Proxmox (before password generator which overwrites SCRIPT_DIR)
+    optimize_proxmox
 
     # Generate SSH keys if needed
     generate_ssh_keys
