@@ -305,12 +305,14 @@ run_bootstrap() {
         fi
     else
         bash $bootstrap_cmd 2>&1 | while IFS= read -r line; do
-            # Filter output for non-verbose mode
-            if [[ "$line" =~ ^Phase ]] || [[ "$line" =~ ^✓ ]] || [[ "$line" =~ ^✅ ]] || \
+            # Filter output for non-verbose mode - show important progress and results
+            if [[ "$line" =~ ^Phase ]] || [[ "$line" =~ ✓ ]] || [[ "$line" =~ ✅ ]] || \
+               [[ "$line" =~ ⏳ ]] || [[ "$line" =~ "Still configuring" ]] || \
                [[ "$line" =~ ERROR ]] || [[ "$line" =~ "Installation Complete" ]] || \
                [[ "$line" =~ "VM Details:" ]] || [[ "$line" =~ "Access Credentials:" ]] || \
                [[ "$line" =~ "Service Access:" ]] || [[ "$line" =~ "IP Address:" ]] || \
-               [[ "$line" =~ "Password:" ]] || [[ "$line" =~ "http://" ]]; then
+               [[ "$line" =~ "Password:" ]] || [[ "$line" =~ "Admin Password:" ]] || \
+               [[ "$line" =~ "http://" ]] || [[ "$line" =~ "https://" ]]; then
                 echo "$line"
             fi
         done
