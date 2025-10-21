@@ -8,6 +8,8 @@
     <optimization>normal</optimization>
     <hostname>OPNsense</hostname>
     <domain>internal</domain>
+    <dnsserver>9.9.9.9</dnsserver>
+    <dnsserver>149.112.112.112</dnsserver>
     <dnsallowoverride>1</dnsallowoverride>
     <dnsallowoverride_exclude/>
     <group uuid="444ca86a-ccb8-4d27-af5c-af0ae47a6762">
