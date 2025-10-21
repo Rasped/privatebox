@@ -791,7 +791,7 @@ wait_for_orchestration_with_progress() {
                             # Extract template name: "→ Executing: AdGuard 1: Deploy..."
                             local template_name=$(echo "$output_line" | sed 's/^→ Executing: //')
                             log_info "  → $template_name"
-                            echo "PROGRESS:Deploying $template_name" >> /etc/privatebox-install-complete
+                            echo "PROGRESS:$template_name" >> /etc/privatebox-install-complete
                         elif echo "$output_line" | grep -qE "^\s+✓.*completed successfully"; then
                             # Completion marker: "  ✓ AdGuard 1: Deploy... completed successfully"
                             local completed=$(echo "$output_line" | sed -E 's/^\s+✓ ([^c]+) completed.*/\1/')
