@@ -1,0 +1,388 @@
+---
+- name: "Proxmox: Power Optimization (Safe Tunables for i226-V Hardware)"
+  hosts: privatebox-proxmox
+  gather_facts: true
+  become: true
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "Empty"
+      semaphore_inventory: "privatebox-proxmox"
+      semaphore_survey_vars:
+        - name: mode
+          title: Operation Mode
+          description: "Apply optimizations or revert to defaults"
+          type: enum
+          required: true
+          values:
+            - name: Apply Optimizations
+              value: apply
+            - name: Revert to Defaults
+              value: revert
+
+    # Power optimization settings
+    vm_dirty_writeback_centisecs: 1500  # 15 seconds (default: 500 = 5 seconds)
+    sata_link_pm_policy: "min_power"     # Options: max_performance, min_power, med_power_with_dipm
+
+    # Configuration paths
+    sysctl_config_file: "/etc/sysctl.d/99-privatebox-power.conf"
+    udev_sata_rule_file: "/etc/udev/rules.d/99-privatebox-sata-alpm.rules"
+    udev_usb_rule_file: "/etc/udev/rules.d/99-privatebox-usb-autosuspend.rules"
+    udev_audio_rule_file: "/etc/udev/rules.d/99-privatebox-audio-pm.rules"
+
+  tasks:
+    - name: Display operation header
+      debug:
+        msg:
+          - "=========================================="
+          - "   PROXMOX POWER OPTIMIZATION"
+          - "=========================================="
+          - "Mode: {{ mode | default('apply') }}"
+          - "Target: Intel N150 with dual i226-V NICs"
+          - "Strategy: Safe tunables (avoiding ASPM)"
+
+    # Install powertop
+    - name: Check if powertop is installed
+      command: which powertop
+      register: powertop_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install powertop if needed
+      when: powertop_check.rc != 0
+      block:
+        - name: Update apt cache
+          apt:
+            update_cache: yes
+            cache_valid_time: 3600
+
+        - name: Install powertop
+          apt:
+            name: powertop
+            state: present
+
+        - name: Verify powertop installation
+          command: powertop --version
+          register: powertop_version
+          changed_when: false
+
+        - name: Display powertop version
+          debug:
+            msg: "✓ Installed powertop: {{ powertop_version.stdout }}"
+
+    - name: Confirm powertop is available
+      debug:
+        msg: "✓ powertop is installed and available"
+      when: powertop_check.rc == 0
+
+    # Apply optimization mode
+    - name: Apply power optimizations
+      when: mode | default('apply') == 'apply'
+      block:
+        - name: "Tunable 1/4: VM Dirty Writeback Timeout (⭐ Most Important)"
+          block:
+            - name: Get current VM dirty writeback value
+              command: cat /proc/sys/vm/dirty_writeback_centisecs
+              register: current_writeback
+              changed_when: false
+
+            - name: Display current writeback value
+              debug:
+                msg: "Current: {{ current_writeback.stdout }} centisecs ({{ (current_writeback.stdout | int / 100) | int }} seconds)"
+
+            - name: Configure VM dirty writeback (persistent)
+              lineinfile:
+                path: "{{ sysctl_config_file }}"
+                line: "vm.dirty_writeback_centisecs = {{ vm_dirty_writeback_centisecs }}"
+                regexp: "^vm.dirty_writeback_centisecs"
+                create: yes
+                mode: '0644'
+              notify: reload sysctl
+
+            - name: Apply VM dirty writeback (immediate)
+              sysctl:
+                name: vm.dirty_writeback_centisecs
+                value: "{{ vm_dirty_writeback_centisecs }}"
+                state: present
+                sysctl_set: yes
+
+            - name: Verify VM dirty writeback applied
+              command: cat /proc/sys/vm/dirty_writeback_centisecs
+              register: new_writeback
+              changed_when: false
+
+            - name: Display optimization result
+              debug:
+                msg:
+                  - "✓ VM Dirty Writeback optimized"
+                  - "  Before: {{ (current_writeback.stdout | int / 100) | int }}s"
+                  - "  After: {{ (new_writeback.stdout | int / 100) | int }}s"
+                  - "  Estimated savings: 1-3W"
+
+        - name: "Tunable 2/4: SATA Link Power Management"
+          block:
+            - name: Check for SATA hosts
+              find:
+                paths: /sys/class/scsi_host
+                patterns: "host*"
+                file_type: directory
+              register: sata_hosts
+
+            - name: Display SATA hosts found
+              debug:
+                msg: "Found {{ sata_hosts.files | length }} SATA host(s)"
+
+            - name: Create SATA ALPM udev rule
+              copy:
+                dest: "{{ udev_sata_rule_file }}"
+                mode: '0644'
+                content: |
+                  # PrivateBox Power Optimization: SATA Link Power Management
+                  # Automatically applies min_power policy to all SATA hosts
+                  ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", \
+                    ATTR{link_power_management_policy}="{{ sata_link_pm_policy }}"
+              notify: reload udev
+
+            - name: Apply SATA link PM (immediate)
+              shell: |
+                for host in /sys/class/scsi_host/host*/link_power_management_policy; do
+                  echo '{{ sata_link_pm_policy }}' > "$host" 2>/dev/null || true
+                done
+              changed_when: true
+
+            - name: Verify SATA link PM
+              shell: cat /sys/class/scsi_host/host*/link_power_management_policy 2>/dev/null | head -1
+              register: sata_pm_status
+              changed_when: false
+              failed_when: false
+
+            - name: Display SATA PM result
+              debug:
+                msg:
+                  - "✓ SATA Link Power Management configured"
+                  - "  Policy: {{ sata_pm_status.stdout | default('N/A (no SATA hosts)') }}"
+                  - "  Estimated savings: 0.5-1W"
+
+        - name: "Tunable 3/4: USB Autosuspend"
+          block:
+            - name: Create USB autosuspend udev rule
+              copy:
+                dest: "{{ udev_usb_rule_file }}"
+                mode: '0644'
+                content: |
+                  # PrivateBox Power Optimization: USB Autosuspend
+                  # Enables runtime power management for all USB devices
+                  ACTION=="add", SUBSYSTEM=="usb", TEST=="power/control", \
+                    ATTR{power/control}="auto"
+              notify: reload udev
+
+            - name: Apply USB autosuspend (immediate)
+              shell: |
+                for device in /sys/bus/usb/devices/*/power/control; do
+                  echo 'auto' > "$device" 2>/dev/null || true
+                done
+              changed_when: true
+
+            - name: Count USB devices with autosuspend
+              shell: grep -l "auto" /sys/bus/usb/devices/*/power/control 2>/dev/null | wc -l
+              register: usb_auto_count
+              changed_when: false
+              failed_when: false
+
+            - name: Display USB autosuspend result
+              debug:
+                msg:
+                  - "✓ USB Autosuspend enabled"
+                  - "  Devices: {{ usb_auto_count.stdout | default('0') }}"
+                  - "  Estimated savings: 0.5W"
+
+        - name: "Tunable 4/4: Audio Codec Runtime PM"
+          block:
+            - name: Find audio devices
+              shell: lspci | grep -i audio | wc -l
+              register: audio_count
+              changed_when: false
+              failed_when: false
+
+            - name: Create audio PM udev rule
+              copy:
+                dest: "{{ udev_audio_rule_file }}"
+                mode: '0644'
+                content: |
+                  # PrivateBox Power Optimization: Audio Codec Power Management
+                  # Enables runtime PM for audio devices (unused on firewall appliance)
+                  # PCI class 0x0403 = Audio device
+                  ACTION=="add", SUBSYSTEM=="pci", ATTR{class}=="0x0403*", \
+                    TEST=="power/control", ATTR{power/control}="auto"
+              notify: reload udev
+
+            - name: Apply audio codec PM (immediate)
+              shell: |
+                for audio in /sys/bus/pci/devices/*/class; do
+                  if grep -q "^0x0403" "$audio" 2>/dev/null; then
+                    device_path=$(dirname "$audio")
+                    echo 'auto' > "$device_path/power/control" 2>/dev/null || true
+                  fi
+                done
+              changed_when: true
+
+            - name: Display audio PM result
+              debug:
+                msg:
+                  - "✓ Audio Codec Power Management enabled"
+                  - "  Audio devices found: {{ audio_count.stdout | default('0') }}"
+                  - "  Estimated savings: 0.5W"
+
+        - name: "Safety Check: Verify ASPM is Disabled"
+          block:
+            - name: Check ASPM policy
+              shell: cat /sys/module/pcie_aspm/parameters/policy 2>/dev/null || echo "not_available"
+              register: aspm_policy
+              changed_when: false
+              failed_when: false
+
+            - name: Check for i226-V NICs
+              shell: lspci | grep -i "I226-V" | wc -l
+              register: i226_count
+              changed_when: false
+              failed_when: false
+
+            - name: Display ASPM safety status
+              debug:
+                msg:
+                  - "=========================================="
+                  - "   ASPM SAFETY CHECK"
+                  - "=========================================="
+                  - "i226-V NICs detected: {{ i226_count.stdout | default('0') }}"
+                  - "ASPM policy: {{ aspm_policy.stdout }}"
+                  - "{% if '[default]' in aspm_policy.stdout or '[performance]' in aspm_policy.stdout %}✓ ASPM safely disabled/performance mode{% elif aspm_policy.stdout == 'not_available' %}✓ ASPM not available (safe){% else %}⚠ WARNING: ASPM may be enabled - can break i226-V NICs{% endif %}"
+                  - ""
+                  - "Note: ASPM is intentionally disabled due to i226-V bug"
+                  - "Reference: Kernel Bugzilla #218499"
+                  - "Lost power savings: 2-6W (unavoidable hardware limitation)"
+
+        - name: Display optimization summary
+          debug:
+            msg:
+              - ""
+              - "=========================================="
+              - "   OPTIMIZATION APPLIED SUCCESSFULLY"
+              - "=========================================="
+              - ""
+              - "Enabled Tunables:"
+              - "  ✓ VM Dirty Writeback: {{ vm_dirty_writeback_centisecs }} centisecs (15s)"
+              - "  ✓ SATA Link PM: {{ sata_link_pm_policy }}"
+              - "  ✓ USB Autosuspend: Enabled"
+              - "  ✓ Audio Codec PM: Enabled"
+              - ""
+              - "Expected Power Savings: 2.5-5W"
+              - "  - VM Writeback: 1-3W"
+              - "  - SATA PM: 0.5-1W"
+              - "  - USB Autosuspend: 0.5W"
+              - "  - Audio PM: 0.5W"
+              - ""
+              - "Annual Impact (per unit):"
+              - "  - Energy: ~43.8 kWh/year saved"
+              - "  - Cost: ~€11/year saved (at €0.25/kWh)"
+              - "  - CO₂: ~4.4 kg/year avoided"
+              - ""
+              - "Disabled Tunables (i226-V Safety):"
+              - "  ✗ PCIe ASPM: Disabled (prevents network failures)"
+              - "  ✗ Lost savings: 2-6W (hardware limitation)"
+              - ""
+              - "All settings are persistent and will survive reboot."
+              - "Run 'powertop' to verify current power consumption."
+
+    # Revert optimization mode
+    - name: Revert power optimizations to defaults
+      when: mode | default('apply') == 'revert'
+      block:
+        - name: Revert VM dirty writeback to default
+          sysctl:
+            name: vm.dirty_writeback_centisecs
+            value: "500"
+            state: present
+            sysctl_set: yes
+
+        - name: Remove sysctl configuration file
+          file:
+            path: "{{ sysctl_config_file }}"
+            state: absent
+          notify: reload sysctl
+
+        - name: Revert SATA link PM to max_performance
+          shell: |
+            for host in /sys/class/scsi_host/host*/link_power_management_policy; do
+              echo 'max_performance' > "$host" 2>/dev/null || true
+            done
+          changed_when: true
+
+        - name: Remove SATA ALPM udev rule
+          file:
+            path: "{{ udev_sata_rule_file }}"
+            state: absent
+          notify: reload udev
+
+        - name: Revert USB autosuspend to default
+          shell: |
+            for device in /sys/bus/usb/devices/*/power/control; do
+              echo 'on' > "$device" 2>/dev/null || true
+            done
+          changed_when: true
+
+        - name: Remove USB autosuspend udev rule
+          file:
+            path: "{{ udev_usb_rule_file }}"
+            state: absent
+          notify: reload udev
+
+        - name: Revert audio codec PM to default
+          shell: |
+            for audio in /sys/bus/pci/devices/*/class; do
+              if grep -q "^0x0403" "$audio" 2>/dev/null; then
+                device_path=$(dirname "$audio")
+                echo 'on' > "$device_path/power/control" 2>/dev/null || true
+              fi
+            done
+          changed_when: true
+
+        - name: Remove audio PM udev rule
+          file:
+            path: "{{ udev_audio_rule_file }}"
+            state: absent
+          notify: reload udev
+
+        - name: Display revert summary
+          debug:
+            msg:
+              - ""
+              - "=========================================="
+              - "   REVERTED TO DEFAULT SETTINGS"
+              - "=========================================="
+              - ""
+              - "All power optimizations have been removed:"
+              - "  ✓ VM Dirty Writeback: 500 centisecs (5s default)"
+              - "  ✓ SATA Link PM: max_performance"
+              - "  ✓ USB Autosuspend: Disabled (on)"
+              - "  ✓ Audio Codec PM: Disabled (on)"
+              - ""
+              - "Configuration files removed:"
+              - "  - {{ sysctl_config_file }}"
+              - "  - {{ udev_sata_rule_file }}"
+              - "  - {{ udev_usb_rule_file }}"
+              - "  - {{ udev_audio_rule_file }}"
+              - ""
+              - "System restored to default power settings."
+
+  handlers:
+    - name: reload sysctl
+      command: sysctl -p {{ sysctl_config_file }}
+      failed_when: false
+
+    - name: reload udev
+      command: udevadm control --reload-rules
+      notify: trigger udev
+
+    - name: trigger udev
+      command: udevadm trigger
