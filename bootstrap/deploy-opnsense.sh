@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+# Set fallback TERM for tput commands when running via pipe (e.g., curl | bash)
+export TERM="${TERM:-dumb}"
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/tmp/privatebox-opnsense-deploy.log"
