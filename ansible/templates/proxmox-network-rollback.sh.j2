@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# PrivateBox Network Rollback Script
+# Generated: {{ ansible_date_time.iso8601 }}
+#
+# This script restores Proxmox network configuration to the state
+# before running proxmox-go-live.yml
+#
+
+set -e
+
+echo "================================================================"
+echo "  PrivateBox Network Rollback"
+echo "================================================================"
+echo ""
+echo "This will restore Proxmox network configuration to:"
+echo "  Backup: {{ interfaces_backup }}"
+echo ""
+echo "WARNING: This will restart networking and disconnect SSH!"
+echo ""
+read -p "Continue? (yes/no): " confirm
+
+if [[ "$confirm" != "yes" ]]; then
+    echo "Rollback cancelled."
+    exit 0
+fi
+
+echo ""
+echo "Starting rollback..."
+
+# Backup current state (in case rollback fails)
+cp /etc/network/interfaces /etc/network/interfaces.rollback-backup
+cp /etc/resolv.conf /etc/resolv.conf.rollback-backup
+
+# Restore network configuration
+if [[ -f "{{ interfaces_backup }}" ]]; then
+    echo "✓ Restoring /etc/network/interfaces..."
+    cp "{{ interfaces_backup }}" /etc/network/interfaces
+else
+    echo "ERROR: Backup file not found: {{ interfaces_backup }}"
+    exit 1
+fi
+
+# Restore DNS configuration
+if [[ -f "{{ resolv_backup }}" ]]; then
+    echo "✓ Restoring /etc/resolv.conf..."
+    cp "{{ resolv_backup }}" /etc/resolv.conf
+else
+    echo "WARNING: resolv.conf backup not found: {{ resolv_backup }}"
+fi
+
+echo ""
+echo "Applying network configuration..."
+echo "WARNING: Network will restart in 3 seconds..."
+sleep 3
+
+# Restart networking
+ifreload -a
+
+echo ""
+echo "✓ Network configuration rolled back"
+echo ""
+echo "If you lost connectivity, access via console and verify:"
+echo "  ip addr show"
+echo "  ip route show"
+echo "  cat /etc/resolv.conf"
+echo ""
+echo "Original state saved to:"
+echo "  /etc/network/interfaces.rollback-backup"
+echo "  /etc/resolv.conf.rollback-backup"
+echo ""
