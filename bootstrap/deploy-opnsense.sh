@@ -616,7 +616,6 @@ apply_custom_config() {
             # OPNsense is responding
             if [[ "$state" == "waiting_for_down" ]]; then
                 display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for shutdown..."
-                display "  OPNsense still up, waiting for shutdown (${waited}s)..."
             elif [[ "$state" == "waiting_for_up" ]]; then
                 # Now check if SSH is also available
                 if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
@@ -626,7 +625,6 @@ apply_custom_config() {
                     break
                 else
                     display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for SSH..."
-                    display "  Ping OK but SSH not ready yet..."
                 fi
             fi
         else
@@ -637,7 +635,6 @@ apply_custom_config() {
                 state="waiting_for_up"
             elif [[ "$state" == "waiting_for_up" ]]; then
                 display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for OPNsense to come back up..."
-                display "  Waiting for OPNsense to come back up (${waited}s)..."
             fi
         fi
 
