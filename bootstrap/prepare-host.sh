@@ -31,33 +31,8 @@ error_exit() {
     exit 1
 }
 
-# Fix Proxmox enterprise repositories
-fix_proxmox_repos() {
-    log "Fixing Proxmox repository configuration..."
-
-    # Disable enterprise repositories (.list format - Proxmox 7.x/8.x)
-    if [[ -f /etc/apt/sources.list.d/pve-enterprise.list ]]; then
-        sed -i 's/^/#/' /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null || true
-        log "Disabled enterprise repository (.list)"
-    fi
-
-    if [[ -f /etc/apt/sources.list.d/ceph.list ]]; then
-        sed -i 's/^/#/' /etc/apt/sources.list.d/ceph.list 2>/dev/null || true
-        log "Disabled Ceph enterprise repository (.list)"
-    fi
-
-    # Disable enterprise repositories (.sources format - Debian Trixie/DEB822)
-    # We rename instead of commenting to avoid malformed stanza errors
-    if [[ -f /etc/apt/sources.list.d/pve-enterprise.sources ]]; then
-        mv /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/pve-enterprise.sources.disabled 2>/dev/null || true
-        log "Disabled enterprise repository (.sources)"
-    fi
-
-    if [[ -f /etc/apt/sources.list.d/ceph.sources ]]; then
-        mv /etc/apt/sources.list.d/ceph.sources /etc/apt/sources.list.d/ceph.sources.disabled 2>/dev/null || true
-        log "Disabled Ceph enterprise repository (.sources)"
-    fi
-}
+# Note: Repository fixes are now handled by proxmox-optimize.sh
+# which runs early in the bootstrap process
 
 # Check and install required dependencies
 check_dependencies() {
@@ -84,12 +59,10 @@ check_dependencies() {
         display "  Installing missing dependencies: ${deps_to_install[*]}"
         log "Installing packages: ${deps_to_install[*]}"
 
-        # Fix enterprise repos before apt-get update
-        fix_proxmox_repos
-
+        # Note: Repository fixes are handled by proxmox-optimize.sh
         # Update package list
         apt-get update >/dev/null 2>&1 || error_exit "Failed to update package list"
-        
+
         # Install missing packages
         if DEBIAN_FRONTEND=noninteractive apt-get install -y "${deps_to_install[@]}" >/dev/null 2>&1; then
             display "  ✓ Dependencies installed successfully"
@@ -625,10 +598,13 @@ EOF
 main() {
     display "Starting host preparation..."
     log "Phase 1: Host preparation started"
-    
+
     # Run pre-flight checks
     run_preflight_checks
-    
+
+    # Optimize Proxmox (repos, nag removal, HA services)
+    "${SCRIPT_DIR}/proxmox-optimize.sh"
+
     # Generate SSH keys if needed
     generate_ssh_keys
     
