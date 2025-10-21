@@ -603,7 +603,7 @@ main() {
     run_preflight_checks
 
     # Optimize Proxmox (repos, nag removal, HA services)
-    "${SCRIPT_DIR}/proxmox-optimize.sh"
+    bash "${SCRIPT_DIR}/proxmox-optimize.sh"
 
     # Generate SSH keys if needed
     generate_ssh_keys
