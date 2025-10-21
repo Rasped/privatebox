@@ -1,5 +1,5 @@
 ---
-- name: "Subnet Router 1: Create Alpine VM"
+- name: "Subnet Router 1: Create Debian VM"
   hosts: privatebox-proxmox
   gather_facts: true
 
