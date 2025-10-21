@@ -6,6 +6,9 @@
 
 set -euo pipefail
 
+# Fix locale warnings from Perl (qm, pvesm commands)
+export LC_ALL=C
+
 # Script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/lib"
@@ -232,7 +235,7 @@ main() {
 
     # Define SSH key path (same as verify-install.sh uses)
     local ssh_key_path="${SSH_KEY_PATH:-/root/.ssh/id_ed25519}"
-    local ssh_opts="-o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    local ssh_opts="-o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
     if [[ -f "$ssh_key_path" ]]; then
         ssh_opts="$ssh_opts -i $ssh_key_path"
     fi
