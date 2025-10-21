@@ -9,6 +9,9 @@ set -euo pipefail
 # Fix locale warnings from Perl (qm, pvesm commands)
 export LC_ALL=C
 
+# Set fallback TERM for tput commands when running via pipe (e.g., curl | bash)
+export TERM="${TERM:-dumb}"
+
 # Script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/lib"
