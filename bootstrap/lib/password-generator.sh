@@ -36,9 +36,9 @@ apply_substitutions() {
     for ((i=0; i<${#word}; i++)); do
         local char="${word:$i:1}"
         local lower_char=$(echo "$char" | tr '[:upper:]' '[:lower:]')
-        
-        # Guaranteed substitution or 25% chance for others
-        if [[ $i -eq $guaranteed_pos ]] || { [[ ! $has_number ]] && (( RANDOM % 4 == 0 )); }; then
+
+        # Only do the one guaranteed substitution per word
+        if [[ $i -eq $guaranteed_pos ]]; then
             case "$lower_char" in
                 e) char="3"; has_number=true ;;
                 o) char="0"; has_number=true ;;
@@ -48,7 +48,7 @@ apply_substitutions() {
                 s) char="5"; has_number=true ;;
             esac
         fi
-        
+
         result+="$char"
     done
     
