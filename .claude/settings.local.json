@@ -40,7 +40,14 @@
       "Bash(ansible/playbooks/services/ddns-1-setup-environment.yml:*)",
       "Bash(CLAUDE.md)",
       "Bash(ls:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(sshpass:*)",
+      "WebFetch(domain:unix.stackexchange.com)",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:www.amazon.com)",
+      "Bash(xmllint:*)",
+      "WebFetch(domain:community-scripts.github.io)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": [],

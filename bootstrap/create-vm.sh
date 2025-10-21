@@ -158,14 +158,11 @@ EOF
 # Generate cloud-init configuration
 generate_cloud_init() {
     display "Generating cloud-init configuration..."
-    
-    # Enable snippets on local storage if not already enabled
-    local storage_config=$(pvesm status -content | grep "^local " || true)
-    if [[ -n "$storage_config" ]] && ! echo "$storage_config" | grep -q "snippets"; then
-        log "Enabling snippets on local storage"
-        pvesm set local --content vztmpl,iso,backup,snippets || true
-    fi
-    
+
+    # Enable snippets on local storage (idempotent - safe to run multiple times)
+    log "Ensuring snippets enabled on local storage"
+    pvesm set local --content vztmpl,iso,backup,snippets || true
+
     # Create snippets directory if it doesn't exist
     mkdir -p /var/lib/vz/snippets
     
