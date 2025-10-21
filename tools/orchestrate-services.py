@@ -58,7 +58,7 @@ class SemaphoreOrchestrator:
             "OPNsense 2: Configure Semaphore Integration",
             "OPNsense 3: Apply Post-Configuration",
             "Headscale 1: Deploy VPN Control Server",
-            "Subnet Router 1: Create Alpine VM",
+            "Subnet Router 1: Create Debian VM",
             "Generate Templates",
             "Subnet Router 2: Configure VPN Connection",
             "Subnet Router 3: Approve Routes",
