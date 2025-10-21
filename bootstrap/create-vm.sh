@@ -47,20 +47,26 @@ display_always() {
     log "$1"
 }
 
-# Display spinner (in-place update, no newline)
-# Usage: display_spinner "spinner_char"
-display_spinner() {
+# Update status line at bottom of terminal
+# Usage: update_status_line "spinner_char"
+update_status_line() {
     if [[ "$VERBOSE" == "--quiet" ]]; then
         local spinner_char="$1"
-        # Clear line and print spinner without newline
-        printf "\r\033[K%s Configuring PrivateBox..." "$spinner_char"
+        tput sc 2>/dev/null || true                    # Save cursor position
+        tput cup $(tput lines) 0 2>/dev/null || true   # Move to last line
+        tput el 2>/dev/null || true                    # Clear line
+        printf "%s Configuring PrivateBox..." "$spinner_char"
+        tput rc 2>/dev/null || true                    # Restore cursor
     fi
 }
 
-# Clear spinner line (before printing permanent message)
-clear_spinner() {
+# Clear status line at bottom of terminal
+cleanup_status_line() {
     if [[ "$VERBOSE" == "--quiet" ]]; then
-        printf "\r\033[K"
+        tput sc 2>/dev/null || true
+        tput cup $(tput lines) 0 2>/dev/null || true
+        tput el 2>/dev/null || true
+        tput rc 2>/dev/null || true
     fi
 }
 
@@ -326,19 +332,17 @@ start_vm() {
     while [[ $waited -lt $max_wait ]]; do
         if qm status $VMID 2>/dev/null | grep -q "running"; then
             log "VM $VMID is running"
-            clear_spinner
             display_always "  ✓ VM started successfully"
             return 0
         fi
 
-        display_spinner "${spinner_chars[$spinner_index]}"
+        update_status_line "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
 
         sleep 1
         ((waited++))
     done
 
-    clear_spinner
     error_exit "VM failed to start within ${max_wait} seconds"
 }
 

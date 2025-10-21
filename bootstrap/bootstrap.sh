@@ -100,17 +100,27 @@ display() {
     log "$message"
 }
 
-# Display spinner (in-place update, no newline)
-# Usage: display_spinner "spinner_char"
-display_spinner() {
-    local spinner_char="$1"
-    # Clear line and print spinner without newline
-    printf "\r\033[K%s Configuring PrivateBox..." "$spinner_char"
+# Update status line at bottom of terminal
+# Usage: update_status_line "spinner_char"
+update_status_line() {
+    if [[ "$QUIET_MODE" == true ]]; then
+        local spinner_char="$1"
+        tput sc 2>/dev/null || true                    # Save cursor position
+        tput cup $(tput lines) 0 2>/dev/null || true   # Move to last line
+        tput el 2>/dev/null || true                    # Clear line
+        printf "%s Configuring PrivateBox..." "$spinner_char"
+        tput rc 2>/dev/null || true                    # Restore cursor
+    fi
 }
 
-# Clear spinner line (before printing permanent message)
-clear_spinner() {
-    printf "\r\033[K"
+# Clear status line at bottom of terminal
+cleanup_status_line() {
+    if [[ "$QUIET_MODE" == true ]]; then
+        tput sc 2>/dev/null || true
+        tput cup $(tput lines) 0 2>/dev/null || true
+        tput el 2>/dev/null || true
+        tput rc 2>/dev/null || true
+    fi
 }
 
 # Error handler
@@ -162,7 +172,8 @@ main() {
     
     source "$CONFIG_FILE"
     log "Configuration loaded successfully"
-    
+
+    cleanup_status_line
     display "✅ Host preparation complete"
     display ""
     
@@ -205,6 +216,7 @@ main() {
         if ! bash "${SCRIPT_DIR}/deploy-opnsense.sh" $opnsense_args; then
             error_exit "OPNsense deployment failed - cannot continue without firewall"
         else
+            cleanup_status_line
             display "✅ OPNsense firewall deployed"
             log "OPNsense deployed successfully"
         fi
@@ -227,7 +239,8 @@ main() {
     if ! bash "${SCRIPT_DIR}/create-vm.sh" $createvm_args; then
         error_exit "VM creation failed"
     fi
-    
+
+    cleanup_status_line
     display "✅ VM provisioning complete"
     display ""
     
@@ -290,10 +303,6 @@ main() {
                         while IFS= read -r line; do
                             if [[ "$line" == PROGRESS:* ]]; then
                                 local progress_msg="${line#PROGRESS:}"
-                                # Clear spinner before showing progress
-                                if [[ "$QUIET_MODE" == true ]]; then
-                                    clear_spinner
-                                fi
                                 display "   ✓ ${progress_msg}"
                                 log "Phase 4 progress: $progress_msg"
                                 phase4_progress_shown=true
@@ -306,18 +315,14 @@ main() {
                 # Check if Phase 4 is complete
                 case "$status" in
                     SUCCESS)
-                        if [[ "$QUIET_MODE" == true ]]; then
-                            clear_spinner
-                        fi
+                        cleanup_status_line
                         log "Phase 4 completed successfully"
                         display "✅ Service configuration complete"
                         phase4_progress_shown=true
                         break
                         ;;
                     ERROR)
-                        if [[ "$QUIET_MODE" == true ]]; then
-                            clear_spinner
-                        fi
+                        cleanup_status_line
                         error_exit "Service configuration failed"
                         ;;
                 esac
@@ -328,7 +333,7 @@ main() {
             # Update spinner every second (only in quiet mode)
             if [[ "$QUIET_MODE" == true ]]; then
                 local spinner_char="${spinner_chars[$spinner_index]}"
-                display_spinner "$spinner_char"
+                update_status_line "$spinner_char"
                 spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
             fi
 
@@ -343,11 +348,8 @@ main() {
             fi
         done
 
-        # Clear spinner if we exited the loop
-        if [[ "$QUIET_MODE" == true ]]; then
-            clear_spinner
-            echo ""  # Add newline after clearing spinner
-        fi
+        # Clear status line if we exited the loop
+        cleanup_status_line
 
         if [[ $elapsed -ge $phase4_timeout ]]; then
             error_exit "Service configuration timeout after ${phase4_timeout} seconds"
@@ -374,7 +376,8 @@ main() {
     if ! bash "${SCRIPT_DIR}/verify-install.sh"; then
         error_exit "Installation verification failed"
     fi
-    
+
+    cleanup_status_line
     display "✅ Installation verified successfully"
     display ""
     
