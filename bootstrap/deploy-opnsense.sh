@@ -98,14 +98,12 @@ display_always() {
 }
 
 # Display spinner (in-place update, no newline)
-# Usage: display_spinner "spinner_char" "elapsed_seconds" "message"
+# Usage: display_spinner "spinner_char"
 display_spinner() {
     if [[ "$VERBOSE" == "--quiet" ]]; then
         local spinner_char="$1"
-        local elapsed="$2"
-        local message="${3:-Waiting...}"
         # Clear line and print spinner without newline
-        printf "\r\033[K   %s %s %ss elapsed" "$spinner_char" "$message" "$elapsed"
+        printf "\r\033[K%s Configuring PrivateBox..." "$spinner_char"
     fi
 }
 
@@ -389,61 +387,114 @@ EOF
     # Restore as template first (using temporary ID)
     display "  Restoring template with temporary ID $temp_template_id..."
     echo "[$(date +%T)] Starting template restoration..." >> "$DEPLOYMENT_INFO_FILE"
-    
-    if qmrestore "$restore_file" $temp_template_id \
-                 --storage $VM_STORAGE \
-                 --unique 1 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
-        echo "[$(date +%T)] Template restoration completed" >> "$DEPLOYMENT_INFO_FILE"
-        display_always "  ✓ Template restored successfully"
+
+    if [[ "$VERBOSE" == "--quiet" ]]; then
+        if qmrestore "$restore_file" $temp_template_id \
+                     --storage $VM_STORAGE \
+                     --unique 1 >> "$DEPLOYMENT_INFO_FILE" 2>&1; then
+            echo "[$(date +%T)] Template restoration completed" >> "$DEPLOYMENT_INFO_FILE"
+            display_always "  ✓ Template restored successfully"
+        else
+            error_exit "Failed to restore template"
+        fi
     else
-        error_exit "Failed to restore template"
+        if qmrestore "$restore_file" $temp_template_id \
+                     --storage $VM_STORAGE \
+                     --unique 1 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
+            echo "[$(date +%T)] Template restoration completed" >> "$DEPLOYMENT_INFO_FILE"
+            display_always "  ✓ Template restored successfully"
+        else
+            error_exit "Failed to restore template"
+        fi
     fi
     
     # Clone template to final VM
     display "  Cloning template to VM $VMID..."
     echo "[$(date +%T)] Cloning template to VM $VMID..." >> "$DEPLOYMENT_INFO_FILE"
-    
-    if qm clone $temp_template_id $VMID \
-                --name "$VM_NAME" \
-                --full 1 \
-                --storage $VM_STORAGE 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
-        echo "[$(date +%T)] VM cloning completed" >> "$DEPLOYMENT_INFO_FILE"
-        display_always "  ✓ VM cloned successfully"
+
+    if [[ "$VERBOSE" == "--quiet" ]]; then
+        if qm clone $temp_template_id $VMID \
+                    --name "$VM_NAME" \
+                    --full 1 \
+                    --storage $VM_STORAGE >> "$DEPLOYMENT_INFO_FILE" 2>&1; then
+            echo "[$(date +%T)] VM cloning completed" >> "$DEPLOYMENT_INFO_FILE"
+            display_always "  ✓ VM cloned successfully"
+        else
+            # Clean up template on failure
+            qm destroy $temp_template_id --purge 2>/dev/null || true
+            error_exit "Failed to clone template to VM"
+        fi
     else
-        # Clean up template on failure
-        qm destroy $temp_template_id --purge 2>/dev/null || true
-        error_exit "Failed to clone template to VM"
+        if qm clone $temp_template_id $VMID \
+                    --name "$VM_NAME" \
+                    --full 1 \
+                    --storage $VM_STORAGE 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
+            echo "[$(date +%T)] VM cloning completed" >> "$DEPLOYMENT_INFO_FILE"
+            display_always "  ✓ VM cloned successfully"
+        else
+            # Clean up template on failure
+            qm destroy $temp_template_id --purge 2>/dev/null || true
+            error_exit "Failed to clone template to VM"
+        fi
     fi
-    
+
     # Delete the temporary template
     display "  Cleaning up temporary template..."
-    if qm destroy $temp_template_id --purge 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
-        display_always "  ✓ Temporary template removed"
+    if [[ "$VERBOSE" == "--quiet" ]]; then
+        if qm destroy $temp_template_id --purge >> "$DEPLOYMENT_INFO_FILE" 2>&1; then
+            display_always "  ✓ Temporary template removed"
+        else
+            display "  ⚠ Warning: Could not remove temporary template $temp_template_id"
+        fi
     else
-        display "  ⚠ Warning: Could not remove temporary template $temp_template_id"
+        if qm destroy $temp_template_id --purge 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"; then
+            display_always "  ✓ Temporary template removed"
+        else
+            display "  ⚠ Warning: Could not remove temporary template $temp_template_id"
+        fi
     fi
     
     # Configure VM settings
     display "  Configuring VM settings..."
-    
-    # Set correct network bridges (in case template had different ones)
-    qm set $VMID --net0 "virtio,bridge=${WAN_BRIDGE}" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
-    qm set $VMID --net1 "virtio,bridge=vmbr1" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
-    
-    # Enable auto-start
-    qm set $VMID --onboot 1 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
-    
-    # Set startup order (firewall starts first)
-    qm set $VMID --startup order=1,up=60 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
-    
-    # Add description
-    qm set $VMID --description "OPNsense Firewall
+
+    if [[ "$VERBOSE" == "--quiet" ]]; then
+        # Set correct network bridges (in case template had different ones)
+        qm set $VMID --net0 "virtio,bridge=${WAN_BRIDGE}" >> "$DEPLOYMENT_INFO_FILE" 2>&1
+        qm set $VMID --net1 "virtio,bridge=vmbr1" >> "$DEPLOYMENT_INFO_FILE" 2>&1
+
+        # Enable auto-start
+        qm set $VMID --onboot 1 >> "$DEPLOYMENT_INFO_FILE" 2>&1
+
+        # Set startup order (firewall starts first)
+        qm set $VMID --startup order=1,up=60 >> "$DEPLOYMENT_INFO_FILE" 2>&1
+
+        # Add description
+        qm set $VMID --description "OPNsense Firewall
 Deployed: $(date -Iseconds)
 Template: $TEMPLATE_FILENAME
 LAN: ${OPNSENSE_LAN_IP}/24
 Default credentials: ${OPNSENSE_DEFAULT_USER}/${OPNSENSE_DEFAULT_PASSWORD}" \
-        2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
-    
+            >> "$DEPLOYMENT_INFO_FILE" 2>&1
+    else
+        # Set correct network bridges (in case template had different ones)
+        qm set $VMID --net0 "virtio,bridge=${WAN_BRIDGE}" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
+        qm set $VMID --net1 "virtio,bridge=vmbr1" 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
+
+        # Enable auto-start
+        qm set $VMID --onboot 1 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
+
+        # Set startup order (firewall starts first)
+        qm set $VMID --startup order=1,up=60 2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
+
+        # Add description
+        qm set $VMID --description "OPNsense Firewall
+Deployed: $(date -Iseconds)
+Template: $TEMPLATE_FILENAME
+LAN: ${OPNSENSE_LAN_IP}/24
+Default credentials: ${OPNSENSE_DEFAULT_USER}/${OPNSENSE_DEFAULT_PASSWORD}" \
+            2>&1 | tee -a "$DEPLOYMENT_INFO_FILE"
+    fi
+
     display_always "  ✓ VM configuration complete"
 }
 
@@ -475,7 +526,7 @@ start_vm() {
             break
         fi
 
-        display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for VM to start..."
+        display_spinner "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
 
         sleep 1
@@ -494,7 +545,7 @@ start_vm() {
     spinner_index=0
 
     while [[ $waited -lt $init_wait ]]; do
-        display_spinner "${spinner_chars[$spinner_index]}" "$waited" "OPNsense initializing..."
+        display_spinner "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
         sleep 1
         ((waited+=1))
@@ -530,7 +581,7 @@ test_ssh_connectivity() {
         fi
 
         # Update spinner every second
-        display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for SSH..."
+        display_spinner "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
 
         sleep 1
@@ -615,7 +666,7 @@ apply_custom_config() {
         if ping -c 1 -W 1 $OPNSENSE_SERVICES_IP &>/dev/null; then
             # OPNsense is responding
             if [[ "$state" == "waiting_for_down" ]]; then
-                display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for shutdown..."
+                display_spinner "${spinner_chars[$spinner_index]}"
             elif [[ "$state" == "waiting_for_up" ]]; then
                 # Now check if SSH is also available
                 if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
@@ -624,7 +675,7 @@ apply_custom_config() {
                     echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
                     break
                 else
-                    display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for SSH..."
+                    display_spinner "${spinner_chars[$spinner_index]}"
                 fi
             fi
         else
@@ -634,7 +685,7 @@ apply_custom_config() {
                 display_always "  ✓ OPNsense has gone down for reboot"
                 state="waiting_for_up"
             elif [[ "$state" == "waiting_for_up" ]]; then
-                display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Waiting for OPNsense to come back up..."
+                display_spinner "${spinner_chars[$spinner_index]}"
             fi
         fi
 
@@ -660,7 +711,7 @@ apply_custom_config() {
     spinner_index=0
 
     while [[ $waited -lt $stabilize_wait ]]; do
-        display_spinner "${spinner_chars[$spinner_index]}" "$waited" "Services stabilizing..."
+        display_spinner "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
         sleep 1
         ((waited+=1))
@@ -702,7 +753,7 @@ apply_custom_config() {
         fi
 
         # Update spinner every second
-        display_spinner "${spinner_chars[$spinner_index]}" "$vlan_wait" "Waiting for VLAN interfaces..."
+        display_spinner "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
 
         sleep 1

@@ -14,6 +14,15 @@ WORK_DIR="/tmp/privatebox-vm-creation"
 DEBIAN_IMAGE_URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
 IMAGE_CACHE_DIR="/var/lib/vz/template/cache"
 
+# Parse command line arguments
+VERBOSE="--verbose"  # Default to verbose
+for arg in "$@"; do
+    case $arg in
+        --quiet) VERBOSE="--quiet" ;;
+        --verbose) VERBOSE="--verbose" ;;
+    esac
+done
+
 # Source configuration
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "ERROR: Configuration file not found: $CONFIG_FILE" >&2
@@ -27,8 +36,32 @@ log() {
 }
 
 display() {
+    if [[ "$VERBOSE" == "--verbose" ]]; then
+        echo "$1"
+    fi
+    log "$1"
+}
+
+display_always() {
     echo "$1"
     log "$1"
+}
+
+# Display spinner (in-place update, no newline)
+# Usage: display_spinner "spinner_char"
+display_spinner() {
+    if [[ "$VERBOSE" == "--quiet" ]]; then
+        local spinner_char="$1"
+        # Clear line and print spinner without newline
+        printf "\r\033[K%s Configuring PrivateBox..." "$spinner_char"
+    fi
+}
+
+# Clear spinner line (before printing permanent message)
+clear_spinner() {
+    if [[ "$VERBOSE" == "--quiet" ]]; then
+        printf "\r\033[K"
+    fi
 }
 
 error_exit() {
@@ -286,16 +319,26 @@ start_vm() {
     # Wait for VM to be fully started
     local max_wait=30
     local waited=0
+
+    local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local spinner_index=0
+
     while [[ $waited -lt $max_wait ]]; do
         if qm status $VMID 2>/dev/null | grep -q "running"; then
             log "VM $VMID is running"
-            display "  ✓ VM started successfully"
+            clear_spinner
+            display_always "  ✓ VM started successfully"
             return 0
         fi
+
+        display_spinner "${spinner_chars[$spinner_index]}"
+        spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
+
         sleep 1
         ((waited++))
     done
-    
+
+    clear_spinner
     error_exit "VM failed to start within ${max_wait} seconds"
 }
 

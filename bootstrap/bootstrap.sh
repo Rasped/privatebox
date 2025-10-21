@@ -101,12 +101,11 @@ display() {
 }
 
 # Display spinner (in-place update, no newline)
-# Usage: display_spinner "spinner_char" "elapsed_seconds"
+# Usage: display_spinner "spinner_char"
 display_spinner() {
     local spinner_char="$1"
-    local elapsed="$2"
     # Clear line and print spinner without newline
-    printf "\r\033[K   %s Configuring services... %ss elapsed" "$spinner_char" "$elapsed"
+    printf "\r\033[K%s Configuring PrivateBox..." "$spinner_char"
 }
 
 # Clear spinner line (before printing permanent message)
@@ -199,7 +198,11 @@ main() {
         display "   Note: Management VM will need a gateway configured"
         log "WARNING: deploy-opnsense.sh not found, skipping"
     else
-        if ! bash "${SCRIPT_DIR}/deploy-opnsense.sh"; then
+        local opnsense_args=""
+        if [[ "$QUIET_MODE" == true ]]; then
+            opnsense_args="--quiet"
+        fi
+        if ! bash "${SCRIPT_DIR}/deploy-opnsense.sh" $opnsense_args; then
             error_exit "OPNsense deployment failed - cannot continue without firewall"
         else
             display "✅ OPNsense firewall deployed"
@@ -216,8 +219,12 @@ main() {
     if [[ ! -f "${SCRIPT_DIR}/create-vm.sh" ]]; then
         error_exit "create-vm.sh not found"
     fi
-    
-    if ! bash "${SCRIPT_DIR}/create-vm.sh"; then
+
+    local createvm_args=""
+    if [[ "$QUIET_MODE" == true ]]; then
+        createvm_args="--quiet"
+    fi
+    if ! bash "${SCRIPT_DIR}/create-vm.sh" $createvm_args; then
         error_exit "VM creation failed"
     fi
     
@@ -321,7 +328,7 @@ main() {
             # Update spinner every second (only in quiet mode)
             if [[ "$QUIET_MODE" == true ]]; then
                 local spinner_char="${spinner_chars[$spinner_index]}"
-                display_spinner "$spinner_char" "$elapsed"
+                display_spinner "$spinner_char"
                 spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
             fi
 
