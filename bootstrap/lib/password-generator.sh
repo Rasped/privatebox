@@ -3,8 +3,9 @@
 # Generates memorable passwords using 5-letter words with number substitutions
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORD_FILE="${SCRIPT_DIR}/phonetic-words.txt"
+# Use LIB_DIR instead of SCRIPT_DIR to avoid overwriting parent script's variable
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORD_FILE="${LIB_DIR}/phonetic-words.txt"
 
 # Letter to number substitution map
 apply_substitutions() {
