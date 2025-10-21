@@ -18,7 +18,7 @@ PrivateBox is a project that uses shell scripts, Python, and Ansible to turn a b
 
 Manually setting up a secure network stack with a firewall, DNS filtering, and a VPN is a repetitive and time-consuming task. PrivateBox automates the entire process, providing a consistent, secure, and repeatable deployment with a single command. It is designed for developers and tech enthusiasts who value their time but refuse to compromise on control or transparency.
 
-### Architecture Overview
+### Architecture overview
 
 PrivateBox runs three core virtual machines on a single Proxmox host. The Management VM, in turn, runs all the containerized services.
 
@@ -38,7 +38,7 @@ graph TD
     end
 ```
 
-### Network Layout
+### Network layout
 
 Each component is deliberately placed in a specific network zone for security and performance:
 
@@ -49,7 +49,7 @@ Each component is deliberately placed in a specific network zone for security an
 | Management VM | Services VLAN |
 | **Subnet Router VM** | **Trusted LAN** |
 
-## Key Features
+## Key features
 
 -   **OPNsense® Firewall**: Deploys and configures a full OPNsense® VM for routing and security.
 -   **Network-Wide DNS Filtering**: Deploys AdGuard Home for blocking ads and trackers on all devices.
@@ -58,13 +58,13 @@ Each component is deliberately placed in a specific network zone for security an
 -   **Web-Based Management**: Includes Portainer, Semaphore, and Headplane for easy management of your stack.
 -   **Optional TLS Certificates**: Includes a playbook to automatically acquire Let's Encrypt certificates for a custom domain.
 
-## System Requirements
+## System requirements
 
 -   **Hardware**: A dual-NIC system with 8GB+ RAM and 20GB+ available storage.
 -   **Software**: Proxmox VE 9.0 or higher.
 -   **Network**: A stable internet connection for the initial installation.
 
-## Quick Start
+## Quick start
 
 Execute the following command on your Proxmox VE host. We recommend reviewing the script before running it.
 
@@ -73,7 +73,7 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 bash quickstart.sh
 ```
 
-## See it in Action
+## See it in action
 
 Watch the 2-minute video to see the entire deployment process, from the `curl` command to the final dashboard.
 
@@ -82,7 +82,7 @@ Watch the 2-minute video to see the entire deployment process, from the `curl` c
 
 ---
 
-## What Now? Your First Login
+## What now? Your first login
 
 After the script completes, your PrivateBox is running. 
 
@@ -91,10 +91,10 @@ After the script completes, your PrivateBox is running.
 
 **IMPORTANT:** You must set up your Portainer admin account within 5 minutes of the first boot or after a restart. Navigate to **`https://portainer.lan`** to create your account.
 
-### Homer Dashboard Screenshot
+### Homer dashboard screenshot
 *(Placeholder for a screenshot of the final Homer dashboard. This is valuable for transparency, even if the UI is simple.)*
 
-## Deployed Services
+## Deployed services
 
 The script deploys the following services, accessible from your trusted network:
 
@@ -108,9 +108,9 @@ The script deploys the following services, accessible from your trusted network:
 | **Homer Dashboard** | Service Dashboard | `https://privatebox.lan` |
 
 <details>
-<summary><b>View Deployment Process & Advanced Options</b></summary>
+<summary><b>View deployment process & advanced options</b></summary>
 
-### Deployment Architecture
+### Deployment architecture
 
 The `quickstart.sh` script initiates a four-phase deployment:
 
@@ -119,7 +119,7 @@ The `quickstart.sh` script initiates a four-phase deployment:
 3.  **Phase 3: Guest Configuration**: Inside the VM, a script installs and configures the software stack, including Podman, Portainer, and a custom-built Semaphore image that includes Proxmox integration tools.
 4.  **Phase 4: Service Orchestration**: The system uses its own Semaphore instance to bootstrap itself, creating the management project, inventories, and environments via its API. It then runs an orchestration script to deploy and configure OPNsense, AdGuard, and all other services in the correct dependency order.
 
-### Installation Arguments
+### Installation arguments
 
 The `quickstart.sh` script accepts several arguments for testing and development.
 
@@ -138,7 +138,7 @@ bash quickstart.sh --help         # Display all available arguments.
 
 ---
 
-## Supporting the Project
+## Supporting the project
 
 This project is and always will be free and open source. If you find it useful and would like to support its continued development, we also offer a pre-configured hardware appliance running the exact same software.
 
@@ -151,3 +151,20 @@ Contributions are welcome. Please review [CONTRIBUTING.md](CONTRIBUTING.md) for 
 ## License
 
 This project is licensed under the EUPL-1.2. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## Known issues
+
+### Intel i226-V power management bug
+
+If your hardware uses Intel i226-V network controllers (common in Intel N100/N150/N200/N305 systems), **do not run `powertop --auto-tune`** or enable ASPM power management features. There is a confirmed bug in the Linux kernel `igc` driver that causes system freezes and network failures when power management is enabled on these controllers.
+
+**Reference:** [Linux Kernel Bugzilla #218499](https://bugzilla.kernel.org/show_bug.cgi?id=218499)
+
+**Workarounds:**
+- Never use `powertop --auto-tune` on i226-V systems
+- Disable ASPM in BIOS if experiencing network issues
+- Add `pcie_aspm=off` to kernel boot parameters if needed
+
+This issue does not affect normal PrivateBox operation.
