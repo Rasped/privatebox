@@ -15,6 +15,7 @@ CONFIG_FILE="/tmp/privatebox-config.conf"
 # Default values
 DRY_RUN=false
 VERBOSE=false
+QUIET_MODE=false
 VMID=9000
 
 # Parse arguments
@@ -26,6 +27,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --verbose|-v)
             VERBOSE=true
+            shift
+            ;;
+        --quiet)
+            QUIET_MODE=true
             shift
             ;;
         --setup-proxmox-api)
@@ -45,6 +50,7 @@ Usage: $0 [OPTIONS]
 Options:
     --dry-run       Run pre-flight checks and generate config only (no VM creation)
     --verbose, -v   Show detailed output
+    --quiet         Show minimal output with in-place spinner (default for quickstart.sh)
     --help, -h      Show this help message
     --setup-proxmox-api  Setup Proxmox API token (run on Proxmox host)
 
@@ -72,7 +78,7 @@ done
 # Initialize logging
 init_log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] PrivateBox Bootstrap starting" > "$LOG_FILE"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Arguments: dry-run=$DRY_RUN, verbose=$VERBOSE" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Arguments: dry-run=$DRY_RUN, verbose=$VERBOSE, quiet=$QUIET_MODE" >> "$LOG_FILE"
 }
 
 # Log function
@@ -89,6 +95,20 @@ display() {
     local message="$1"
     echo "$message"
     log "$message"
+}
+
+# Display spinner (in-place update, no newline)
+# Usage: display_spinner "spinner_char" "elapsed_seconds"
+display_spinner() {
+    local spinner_char="$1"
+    local elapsed="$2"
+    # Clear line and print spinner without newline
+    printf "\r\033[K   %s Configuring services... %ss elapsed" "$spinner_char" "$elapsed"
+}
+
+# Clear spinner line (before printing permanent message)
+clear_spinner() {
+    printf "\r\033[K"
 }
 
 # Error handler
@@ -237,60 +257,87 @@ main() {
         elapsed=0
         local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
         local spinner_index=0
+        local check_interval=10  # Check for progress every 10 seconds
+        local seconds_since_check=0
 
         while [[ $elapsed -lt $phase4_timeout ]]; do
-            # Get the marker file content
-            local file_content=$(ssh $ssh_opts \
-                          "${VM_USERNAME}@${STATIC_IP}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
+            # Check for progress every 10 seconds
+            if [[ $seconds_since_check -ge $check_interval ]]; then
+                # Get the marker file content
+                local file_content=$(ssh $ssh_opts \
+                              "${VM_USERNAME}@${STATIC_IP}" "cat /etc/privatebox-install-complete 2>/dev/null" || echo "PENDING")
 
-            # Get the last line for status check
-            local status=$(echo "$file_content" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                # Get the last line for status check
+                local status=$(echo "$file_content" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-            # Process any new progress messages
-            if [[ -n "$file_content" ]] && [[ "$file_content" != "PENDING" ]]; then
-                local current_line_count=$(echo "$file_content" | wc -l)
+                # Process any new progress messages
+                if [[ -n "$file_content" ]] && [[ "$file_content" != "PENDING" ]]; then
+                    local current_line_count=$(echo "$file_content" | wc -l)
 
-                # Display new progress messages since last check
-                if [[ $current_line_count -gt $last_line_count ]]; then
-                    local new_lines=$(echo "$file_content" | tail -n $((current_line_count - last_line_count)))
-                    while IFS= read -r line; do
-                        if [[ "$line" == PROGRESS:* ]]; then
-                            local progress_msg="${line#PROGRESS:}"
-                            display "   ✓ ${progress_msg}"
-                            log "Phase 4 progress: $progress_msg"
-                            phase4_progress_shown=true
-                        fi
-                    done <<< "$new_lines"
-                    last_line_count=$current_line_count
+                    # Display new progress messages since last check
+                    if [[ $current_line_count -gt $last_line_count ]]; then
+                        local new_lines=$(echo "$file_content" | tail -n $((current_line_count - last_line_count)))
+                        while IFS= read -r line; do
+                            if [[ "$line" == PROGRESS:* ]]; then
+                                local progress_msg="${line#PROGRESS:}"
+                                # Clear spinner before showing progress
+                                if [[ "$QUIET_MODE" == true ]]; then
+                                    clear_spinner
+                                fi
+                                display "   ✓ ${progress_msg}"
+                                log "Phase 4 progress: $progress_msg"
+                                phase4_progress_shown=true
+                            fi
+                        done <<< "$new_lines"
+                        last_line_count=$current_line_count
+                    fi
                 fi
+
+                # Check if Phase 4 is complete
+                case "$status" in
+                    SUCCESS)
+                        if [[ "$QUIET_MODE" == true ]]; then
+                            clear_spinner
+                        fi
+                        log "Phase 4 completed successfully"
+                        display "✅ Service configuration complete"
+                        phase4_progress_shown=true
+                        break
+                        ;;
+                    ERROR)
+                        if [[ "$QUIET_MODE" == true ]]; then
+                            clear_spinner
+                        fi
+                        error_exit "Service configuration failed"
+                        ;;
+                esac
+
+                seconds_since_check=0
             fi
 
-            # Check if Phase 4 is complete
-            case "$status" in
-                SUCCESS)
-                    log "Phase 4 completed successfully"
-                    display "✅ Service configuration complete"
-                    phase4_progress_shown=true
-                    break
-                    ;;
-                ERROR)
-                    error_exit "Service configuration failed"
-                    ;;
-                *)
-                    sleep 10
-                    elapsed=$((elapsed + 10))
+            # Update spinner every second (only in quiet mode)
+            if [[ "$QUIET_MODE" == true ]]; then
+                local spinner_char="${spinner_chars[$spinner_index]}"
+                display_spinner "$spinner_char" "$elapsed"
+                spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
+            fi
 
-                    # Show spinner every 10 seconds to indicate activity
-                    local spinner_char="${spinner_chars[$spinner_index]}"
-                    spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
-                    display "   ${spinner_char} Configuring services... (${elapsed}s elapsed)"
+            # Sleep and increment counters
+            sleep 1
+            elapsed=$((elapsed + 1))
+            seconds_since_check=$((seconds_since_check + 1))
 
-                    if [[ $((elapsed % 30)) -eq 0 ]] && [[ "$status" == "PENDING" ]]; then
-                        log "Still waiting for initial progress (${elapsed}s elapsed)"
-                    fi
-                    ;;
-            esac
+            # Log progress periodically
+            if [[ $((elapsed % 30)) -eq 0 ]]; then
+                log "Still waiting for progress (${elapsed}s elapsed)"
+            fi
         done
+
+        # Clear spinner if we exited the loop
+        if [[ "$QUIET_MODE" == true ]]; then
+            clear_spinner
+            echo ""  # Add newline after clearing spinner
+        fi
 
         if [[ $elapsed -ge $phase4_timeout ]]; then
             error_exit "Service configuration timeout after ${phase4_timeout} seconds"

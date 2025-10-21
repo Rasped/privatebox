@@ -289,40 +289,21 @@ run_bootstrap() {
     
     # Build bootstrap command with arguments
     local bootstrap_cmd="$bootstrap_script"
-    
+
     if [[ "$DRY_RUN" == true ]]; then
         bootstrap_cmd="$bootstrap_cmd --dry-run"
     fi
-    
+
     if [[ "$VERBOSE" == true ]]; then
         bootstrap_cmd="$bootstrap_cmd --verbose"
-    fi
-    
-    # Run bootstrap
-    if [[ "$VERBOSE" == true ]]; then
-        if ! bash $bootstrap_cmd; then
-            error_exit "Bootstrap failed. Check /tmp/privatebox-bootstrap.log for details"
-        fi
     else
-        bash $bootstrap_cmd 2>&1 | while IFS= read -r line; do
-            # Filter output for non-verbose mode - show important progress and results
-            if [[ "$line" =~ ^Phase ]] || [[ "$line" =~ ✓ ]] || [[ "$line" =~ ✅ ]] || \
-               [[ "$line" =~ ⏳ ]] || [[ "$line" =~ ⠋ ]] || [[ "$line" =~ ⠙ ]] || \
-               [[ "$line" =~ ⠹ ]] || [[ "$line" =~ ⠸ ]] || [[ "$line" =~ ⠼ ]] || \
-               [[ "$line" =~ ⠴ ]] || [[ "$line" =~ ⠦ ]] || [[ "$line" =~ ⠧ ]] || \
-               [[ "$line" =~ ⠇ ]] || [[ "$line" =~ ⠏ ]] || \
-               [[ "$line" =~ "Configuring services" ]] || [[ "$line" =~ "Still configuring" ]] || \
-               [[ "$line" =~ ERROR ]] || [[ "$line" =~ "Installation Complete" ]] || \
-               [[ "$line" =~ "VM Details:" ]] || [[ "$line" =~ "Access Credentials:" ]] || \
-               [[ "$line" =~ "Service Access:" ]] || [[ "$line" =~ "IP Address:" ]] || \
-               [[ "$line" =~ "Password:" ]] || [[ "$line" =~ "Admin Password:" ]] || \
-               [[ "$line" =~ "http://" ]] || [[ "$line" =~ "https://" ]]; then
-                echo "$line"
-            fi
-        done
-        if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-            error_exit "Bootstrap failed. Check /tmp/privatebox-bootstrap.log for details"
-        fi
+        # Use quiet mode for non-verbose (shows spinner + progress)
+        bootstrap_cmd="$bootstrap_cmd --quiet"
+    fi
+
+    # Run bootstrap directly (no filtering needed - bootstrap handles output)
+    if ! bash $bootstrap_cmd; then
+        error_exit "Bootstrap failed. Check /tmp/privatebox-bootstrap.log for details"
     fi
 }
 
