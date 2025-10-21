@@ -97,20 +97,26 @@ display_always() {
     log "$1"
 }
 
-# Display spinner (in-place update, no newline)
-# Usage: display_spinner "spinner_char"
-display_spinner() {
+# Update status line at bottom of terminal
+# Usage: update_status_line "spinner_char"
+update_status_line() {
     if [[ "$VERBOSE" == "--quiet" ]]; then
         local spinner_char="$1"
-        # Clear line and print spinner without newline
-        printf "\r\033[K%s Configuring PrivateBox..." "$spinner_char"
+        tput sc 2>/dev/null || true                    # Save cursor position
+        tput cup $(tput lines) 0 2>/dev/null || true   # Move to last line
+        tput el 2>/dev/null || true                    # Clear line
+        printf "%s Configuring PrivateBox..." "$spinner_char"
+        tput rc 2>/dev/null || true                    # Restore cursor
     fi
 }
 
-# Clear spinner line (before printing permanent message)
-clear_spinner() {
+# Clear status line at bottom of terminal
+cleanup_status_line() {
     if [[ "$VERBOSE" == "--quiet" ]]; then
-        printf "\r\033[K"
+        tput sc 2>/dev/null || true
+        tput cup $(tput lines) 0 2>/dev/null || true
+        tput el 2>/dev/null || true
+        tput rc 2>/dev/null || true
     fi
 }
 
@@ -521,12 +527,11 @@ start_vm() {
     while [[ $waited -lt $max_wait ]]; do
         if qm status $VMID 2>/dev/null | grep -q "status: running"; then
             echo "[$(date +%T)] VM status: running" >> "$DEPLOYMENT_INFO_FILE"
-            clear_spinner
             display_always "  ✓ VM is running"
             break
         fi
 
-        display_spinner "${spinner_chars[$spinner_index]}"
+        update_status_line "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
 
         sleep 1
@@ -534,7 +539,6 @@ start_vm() {
     done
 
     if [[ $waited -ge $max_wait ]]; then
-        clear_spinner
         error_exit "VM failed to start within ${max_wait} seconds"
     fi
 
@@ -545,13 +549,12 @@ start_vm() {
     spinner_index=0
 
     while [[ $waited -lt $init_wait ]]; do
-        display_spinner "${spinner_chars[$spinner_index]}"
+        update_status_line "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
         sleep 1
         ((waited+=1))
     done
 
-    clear_spinner
     display_always "  ✓ OPNsense initialized"
 }
 
@@ -573,15 +576,14 @@ test_ssh_connectivity() {
         # Check SSH port every 5 seconds
         if [[ $seconds_since_check -ge $check_interval ]]; then
             if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
-                clear_spinner
-                display_always "  ✓ SSH port is open on Services VLAN"
+                    display_always "  ✓ SSH port is open on Services VLAN"
                 break
             fi
             seconds_since_check=0
         fi
 
         # Update spinner every second
-        display_spinner "${spinner_chars[$spinner_index]}"
+        update_status_line "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
 
         sleep 1
@@ -590,7 +592,6 @@ test_ssh_connectivity() {
     done
 
     if [[ $waited -ge $max_wait ]]; then
-        clear_spinner
         error_exit "SSH not available after ${max_wait} seconds"
     fi
     
@@ -666,26 +667,24 @@ apply_custom_config() {
         if ping -c 1 -W 1 $OPNSENSE_SERVICES_IP &>/dev/null; then
             # OPNsense is responding
             if [[ "$state" == "waiting_for_down" ]]; then
-                display_spinner "${spinner_chars[$spinner_index]}"
+                update_status_line "${spinner_chars[$spinner_index]}"
             elif [[ "$state" == "waiting_for_up" ]]; then
                 # Now check if SSH is also available
                 if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
-                    clear_spinner
-                    display_always "  ✓ OPNsense is back online with SSH available"
+                            display_always "  ✓ OPNsense is back online with SSH available"
                     echo "[$(date +%T)] Custom configuration applied and OPNsense rebooted" >> "$DEPLOYMENT_INFO_FILE"
                     break
                 else
-                    display_spinner "${spinner_chars[$spinner_index]}"
+                    update_status_line "${spinner_chars[$spinner_index]}"
                 fi
             fi
         else
             # OPNsense is NOT responding
             if [[ "$state" == "waiting_for_down" ]]; then
-                clear_spinner
-                display_always "  ✓ OPNsense has gone down for reboot"
+                    display_always "  ✓ OPNsense has gone down for reboot"
                 state="waiting_for_up"
             elif [[ "$state" == "waiting_for_up" ]]; then
-                display_spinner "${spinner_chars[$spinner_index]}"
+                update_status_line "${spinner_chars[$spinner_index]}"
             fi
         fi
 
@@ -694,7 +693,6 @@ apply_custom_config() {
         ((waited+=1))
     done
 
-    clear_spinner
     if [[ $waited -ge $max_wait ]]; then
         if [[ "$state" == "waiting_for_down" ]]; then
             display_always "  ⚠ OPNsense never went down - reboot may have failed"
@@ -711,13 +709,12 @@ apply_custom_config() {
     spinner_index=0
 
     while [[ $waited -lt $stabilize_wait ]]; do
-        display_spinner "${spinner_chars[$spinner_index]}"
+        update_status_line "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
         sleep 1
         ((waited+=1))
     done
 
-    clear_spinner
     display_always "  ✓ Services stabilized"
     
     # Wait for VLAN interfaces to come up
@@ -743,8 +740,7 @@ apply_custom_config() {
                     "ifconfig | grep -E 'vlan: (20|30|40|50|60|70)'" 2>/dev/null || true)
 
             if [[ -n "$vlan_output" ]]; then
-                clear_spinner
-                display_always "  ✓ VLAN interfaces are configured"
+                    display_always "  ✓ VLAN interfaces are configured"
                 vlans_found=true
                 echo "[$(date +%T)] VLAN interfaces confirmed active" >> "$DEPLOYMENT_INFO_FILE"
                 break
@@ -753,7 +749,7 @@ apply_custom_config() {
         fi
 
         # Update spinner every second
-        display_spinner "${spinner_chars[$spinner_index]}"
+        update_status_line "${spinner_chars[$spinner_index]}"
         spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
 
         sleep 1
@@ -761,7 +757,6 @@ apply_custom_config() {
         ((seconds_since_check+=1))
     done
 
-    clear_spinner
     if [[ "$vlans_found" == "false" ]]; then
         display_always "  ⚠ VLAN interfaces did not come up after ${vlan_max_wait}s"
         display_always "    Configuration may need manual verification"
