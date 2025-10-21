@@ -235,6 +235,8 @@ main() {
         local last_line_count=0
         local phase4_timeout=1500  # 25 minutes (allows for 20min orchestration + buffer)
         elapsed=0
+        local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+        local spinner_index=0
 
         while [[ $elapsed -lt $phase4_timeout ]]; do
             # Get the marker file content
@@ -278,8 +280,13 @@ main() {
                     sleep 10
                     elapsed=$((elapsed + 10))
 
+                    # Show spinner every 10 seconds to indicate activity
+                    local spinner_char="${spinner_chars[$spinner_index]}"
+                    spinner_index=$(( (spinner_index + 1) % ${#spinner_chars[@]} ))
+                    display "   ${spinner_char} Configuring services... (${elapsed}s elapsed)"
+
                     if [[ $((elapsed % 30)) -eq 0 ]] && [[ "$status" == "PENDING" ]]; then
-                        display "   Still configuring... (${elapsed}s elapsed)"
+                        log "Still waiting for initial progress (${elapsed}s elapsed)"
                     fi
                     ;;
             esac
