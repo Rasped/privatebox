@@ -17,24 +17,6 @@
     management_vm_ip: "{{ ansible_default_ipv4.address }}"
     quadlet_system_path: "/etc/containers/systemd"
 
-    # Services to configure
-    default_services:
-      - name: portainer
-        port: 1443
-        protocol: https
-      - name: semaphore
-        port: 2443
-        protocol: https
-      - name: adguard
-        port: 3443
-        protocol: https
-      - name: headplane
-        port: 8080
-        protocol: http
-      - name: privatebox
-        port: 8081
-        protocol: http
-
     # DNS provider Caddy module mapping
     dns_provider_modules:
       desec: "desec"
@@ -138,7 +120,60 @@
         msg: "✓ DNS credentials written to /etc/privatebox/ddns-config.env"
 
     # ============================================
-    # Phase 4: Create Custom Domains Configuration
+    # Phase 4: Discover Services from Caddyfile
+    # ============================================
+
+    - name: Extract services from Caddyfile
+      shell: |
+        awk '
+        /^[a-z]+\.lan \{/ {
+          # Extract service name
+          service = $1
+          gsub(/\.lan/, "", service)
+          in_block = 1
+          next
+        }
+        in_block && /reverse_proxy/ {
+          # Extract protocol and target
+          if ($2 ~ /^https:/) {
+            protocol = "https"
+          } else {
+            protocol = "http"
+          }
+          target = $2
+          gsub(/https?:\/\//, "", target)
+          print service "," protocol "," target
+          in_block = 0
+        }
+        /^\}/ {
+          in_block = 0
+        }
+        ' {{ caddy_config_dir }}/Caddyfile | grep -v '^\*'
+      register: caddyfile_parse
+      changed_when: false
+
+    - name: Initialize services list
+      set_fact:
+        discovered_services: []
+
+    - name: Build services list from parsed Caddyfile
+      set_fact:
+        discovered_services: "{{ discovered_services + [item_dict] }}"
+      vars:
+        item_parts: "{{ item.split(',') }}"
+        item_dict:
+          name: "{{ item_parts[0] }}"
+          protocol: "{{ item_parts[1] }}"
+          target: "{{ item_parts[2] }}"
+      loop: "{{ caddyfile_parse.stdout_lines }}"
+      when: item | length > 0
+
+    - name: Display discovered services
+      debug:
+        msg: "Found {{ discovered_services | length }} services: {{ discovered_services | map(attribute='name') | join(', ') }}"
+
+    # ============================================
+    # Phase 5: Create Custom Domains Configuration
     # ============================================
 
     - name: Generate custom domains Caddyfile snippet
@@ -167,12 +202,12 @@
           {% endif %}
               }
 
-          {% for service in default_services %}
+          {% for service in discovered_services %}
               # {{ service.name | capitalize }}
               @{{ service.name }} host {{ service.name }}.{{ ddns_domain }}
               handle @{{ service.name }} {
           {% if service.protocol == 'https' %}
-                  reverse_proxy https://{{ management_vm_ip }}:{{ service.port }} {
+                  reverse_proxy https://{{ service.target }} {
                       header_up Host {upstream_hostport}
                       header_up X-Real-IP {remote_host}
                       header_up X-Forwarded-For {remote_host}
@@ -183,7 +218,7 @@
                       }
                   }
           {% else %}
-                  reverse_proxy http://{{ management_vm_ip }}:{{ service.port }} {
+                  reverse_proxy http://{{ service.target }} {
                       header_up Host {upstream_hostport}
                       header_up X-Real-IP {remote_host}
                       header_up X-Forwarded-For {remote_host}
@@ -358,8 +393,9 @@
     # ============================================
 
     - name: Test HTTPS access to first service
+      when: discovered_services | length > 0
       uri:
-        url: "https://portainer.{{ ddns_domain }}"
+        url: "https://{{ discovered_services[0].name }}.{{ ddns_domain }}"
         method: GET
         validate_certs: no
         follow_redirects: yes
@@ -369,9 +405,10 @@
       failed_when: false
 
     - name: Display HTTPS test result
+      when: discovered_services | length > 0
       debug:
         msg: >-
-          HTTPS test: portainer.{{ ddns_domain }} → HTTP {{ https_test.status | default('FAILED') }}
+          HTTPS test: {{ discovered_services[0].name }}.{{ ddns_domain }} → HTTP {{ https_test.status | default('FAILED') }}
           ({{ 'PASS' if https_test.status is defined and https_test.status in [200, 302, 401] else 'FAIL - check DNS and Caddy logs' }})
 
     # ============================================
@@ -390,7 +427,7 @@
           - "Certificate Email: {{ letsencrypt_email }}"
           - ""
           - "Services Now Accessible Via HTTPS:"
-          - "{% for service in default_services %}  - https://{{ service.name }}.{{ ddns_domain }}{% endfor %}"
+          - "{% for service in discovered_services %}  - https://{{ service.name }}.{{ ddns_domain }}{% endfor %}"
           - ""
           - "Certificate Details:"
           - "  • Issuer: Let's Encrypt (with ZeroSSL fallback)"
