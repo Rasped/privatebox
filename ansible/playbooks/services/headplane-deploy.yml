@@ -24,8 +24,8 @@
     confirm_deploy: true
     custom_web_port: "{{ headplane_web_port }}"
 
-    # Headscale connection (Services VLAN)
-    headscale_url: "https://{{ ansible_default_ipv4.address }}:4443"
+    # Headscale connection (via Caddy for proper TLS)
+    headscale_url: "https://headscale.lan"
 
     # Quadlet configuration
     use_system_quadlet: true
