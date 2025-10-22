@@ -345,6 +345,7 @@
           - ""
           - "Next Steps:"
           - "  1. Run 'DynDNS 3: Configure AdGuard' to add DNS rewrites"
-          - "  2. Run 'DynDNS 4: Configure Caddy' to get Let's Encrypt certificates"
+          - "  2. Run 'DynDNS 4: Cleanup DNS Records' to remove stale ACME challenges"
+          - "  3. Run 'DynDNS 5: Configure Caddy' to get Let's Encrypt certificates"
           - ""
           - "========================================"
