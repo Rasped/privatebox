@@ -1,17 +1,17 @@
 ---
 - name: "DynDNS 3: Configure AdGuard"
-  hosts: localhost
-  connection: local
+  hosts: privatebox-management
+  become: true
   gather_facts: no
 
   vars:
     # Template configuration for Semaphore
     template_config:
       semaphore_environment: "privatebox-env-passwords"
-      semaphore_inventory: "privatebox-local"
+      semaphore_inventory: "privatebox-management"
       semaphore_category: "services"
 
-    # Config file location (from ddns-2b)
+    # Config file location (from ddns-2b, inside Semaphore container)
     ddns_config_file: "/tmp/ddns-handoff.json"
 
     # AdGuard configuration
@@ -29,30 +29,19 @@
 
   tasks:
     # ============================================
-    # Phase 1: Read Config File
+    # Phase 1: Read Config File from Semaphore Container
     # ============================================
 
-    - name: Check if config file exists
-      stat:
-        path: "{{ ddns_config_file }}"
-      register: config_stat
-
-    - name: Fail if config file not found
-      fail:
-        msg: |
-          DynDNS config file not found at {{ ddns_config_file }}
-          Please run 'DynDNS 2b: Configure OPNsense' first.
-      when: not config_stat.stat.exists
-
-    - name: Read DynDNS config
-      slurp:
-        src: "{{ ddns_config_file }}"
+    - name: Read DynDNS config from Semaphore container
+      shell: podman exec semaphore cat {{ ddns_config_file }}
       register: ddns_config_raw
+      changed_when: false
       no_log: true
+      failed_when: ddns_config_raw.rc != 0
 
     - name: Parse DynDNS config
       set_fact:
-        ddns_config: "{{ ddns_config_raw.content | b64decode | from_json }}"
+        ddns_config: "{{ ddns_config_raw.stdout | from_json }}"
       no_log: true
 
     - name: Set domain from config
@@ -103,12 +92,12 @@
     # Phase 4: Discover Services from Caddyfile
     # ============================================
 
-    - name: Extract services from Caddyfile on management VM
+    - name: Extract services from Caddyfile
       shell: |
-        ssh -o StrictHostKeyChecking=no root@{{ management_vm_ip }} "awk '
+        awk '
         /^[a-z]+\.lan \{/ {
-          service = \$1
-          gsub(/\.lan/, \"\", service)
+          service = $1
+          gsub(/\.lan/, "", service)
           in_block = 1
           next
         }
@@ -119,7 +108,7 @@
         /^\}/ {
           in_block = 0
         }
-        ' {{ caddy_config_dir }}/Caddyfile | grep -v '^\*'"
+        ' {{ caddy_config_dir }}/Caddyfile | grep -v '^\*'
       register: caddyfile_parse
       changed_when: false
 
