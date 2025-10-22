@@ -19,6 +19,10 @@ rewrites:
     answer: "10.10.20.10"
     comment: "AdGuard Home DNS"
 
+  - domain: "headscale.lan"
+    answer: "10.10.20.10"
+    comment: "Headscale VPN Control Server"
+
   - domain: "headplane.lan"
     answer: "10.10.20.10"
     comment: "Headplane VPN Management"

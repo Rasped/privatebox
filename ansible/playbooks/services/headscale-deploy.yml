@@ -494,7 +494,8 @@
             service_info:
               name: "{{ service_name }}"
               status: "{{ 'Active' if service_status.status.ActiveState == 'active' else 'Inactive' }}"
-              web_url: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
+              web_url: "https://headscale.lan"
+              web_url_direct: "https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}"
               server_url: "{{ headscale_server_url }}"
               grpc_url: "{{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}"
 
@@ -508,12 +509,15 @@
               - "Service Status: {{ service_info.status }}"
               - "Server URL: {{ service_info.server_url }}"
               - ""
-              - "API Endpoint: {{ service_info.web_url }}"
-              - "gRPC API: {{ service_info.grpc_url }}"
+              - "API Access:"
+              - "  - Via Caddy: {{ service_info.web_url }} (recommended)"
+              - "  - Direct: {{ service_info.web_url_direct }}"
+              - "  - gRPC: {{ service_info.grpc_url }}"
               - ""
               - "Default User: {{ headscale_admin_user }}"
               - "Pre-Auth Key: Saved to /opt/privatebox/headscale-preauth-key.txt"
               - "API Key (Headplane): Registered in Semaphore environment 'privatebox-env-headscale'"
+              - "  AND saved to /opt/privatebox/credentials/headplane-api-key.txt"
               - ""
               - "Client Setup:"
               - "  1. Install Tailscale on client device"
@@ -543,7 +547,8 @@
           Host: {{ inventory_hostname }}
 
           Access URLs:
-          - API Endpoint: https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}
+          - API Endpoint (via Caddy): https://headscale.lan
+          - API Endpoint (direct): https://{{ ansible_default_ipv4.address }}:{{ custom_web_port }}
           - Server URL: {{ headscale_server_url }}
           - gRPC API: {{ ansible_default_ipv4.address }}:{{ headscale_grpc_port }}
 
@@ -555,7 +560,9 @@
 
           Default User: {{ headscale_admin_user }}
           Pre-Auth Key: /opt/privatebox/headscale-preauth-key.txt
-          API Key (Headplane): Registered in Semaphore environment 'privatebox-env-headscale'
+          API Key (Headplane):
+            - Registered in Semaphore environment 'privatebox-env-headscale'
+            - Saved to /opt/privatebox/credentials/headplane-api-key.txt
         dest: "/opt/privatebox/deployment-info-headscale.txt"
         mode: '0644'
 
