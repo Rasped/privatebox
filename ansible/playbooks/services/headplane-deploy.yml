@@ -25,7 +25,8 @@
     custom_web_port: "{{ headplane_web_port }}"
 
     # Headscale connection (via Caddy for proper TLS)
-    headscale_url: "https://headscale.lan"
+    # Auto-detect custom domain if DDNS is configured
+    ddns_config_file: "/etc/privatebox/ddns-config.env"
 
     # Quadlet configuration
     use_system_quadlet: true
@@ -114,6 +115,25 @@
           debug:
             msg: "WARNING: Port {{ custom_web_port }} appears to be in use. Service may fail to start."
           when: port_check.failed is defined and not port_check.failed
+
+        - name: Check if DDNS is configured
+          stat:
+            path: "{{ ddns_config_file }}"
+          register: ddns_config_stat
+
+        - name: Read DDNS configuration if present
+          when: ddns_config_stat.stat.exists
+          shell: grep '^DDNS_DOMAIN=' {{ ddns_config_file }} | cut -d'=' -f2 | tr -d '"'
+          register: ddns_domain_result
+          changed_when: false
+
+        - name: Set Headscale URL based on DDNS configuration
+          set_fact:
+            headscale_url: "{{ 'https://headscale.' + (ddns_domain_result.stdout | trim) if (ddns_config_stat.stat.exists and ddns_domain_result.stdout | length > 0) else 'https://headscale.lan' }}"
+
+        - name: Display Headscale URL being used
+          debug:
+            msg: "Using Headscale URL: {{ headscale_url }}"
 
         - name: Verify Headscale is running
           uri:
