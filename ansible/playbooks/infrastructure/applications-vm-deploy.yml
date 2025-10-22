@@ -34,6 +34,7 @@
     template_config:
       semaphore_environment: "privatebox-env-passwords"
       semaphore_inventory: "privatebox-proxmox"
+      semaphore_survey_vars: []  # No variables needed - fully automated
 
   tasks:
     - name: Display deployment header
