@@ -51,7 +51,7 @@ services:
       - name: "AdGuard Home"
         logo: "assets/tools/adguardhome.png"
         subtitle: "DNS Filtering"
-        tag: "security"
+        tag: "privacy"
         url: "https://adguard.lan"
         type: "Ping"
         target: "_blank"
