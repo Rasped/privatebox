@@ -1,5 +1,5 @@
 ---
-- name: "DynDNS 4: Configure Caddy"
+- name: "DynDNS 5: Configure Caddy"
   hosts: privatebox-management
   become: true
   gather_facts: true
@@ -263,28 +263,6 @@
         msg: >-
           {{ 'Added EnvironmentFile to Caddy Quadlet' if envfile_check.rc != 0
           else 'EnvironmentFile already present in Caddy Quadlet' }}
-
-    # ============================================
-    # Phase 6.5: Clean Stale ACME Challenge Records
-    # ============================================
-
-    - name: Clean stale ACME challenge TXT records (deSEC only)
-      when: dns_provider == 'desec'
-      uri:
-        url: "https://desec.io/api/v1/domains/{{ ddns_domain }}/rrsets/_acme-challenge/TXT/"
-        method: DELETE
-        headers:
-          Authorization: "Token {{ dns_api_token }}"
-        status_code: [204, 404]
-        timeout: 10
-      register: cleanup_result
-      no_log: true
-      failed_when: false
-
-    - name: Display cleanup status
-      when: dns_provider == 'desec'
-      debug:
-        msg: "{{ '✓ Cleaned stale ACME challenge records' if cleanup_result.status == 204 else '✓ No stale ACME records found' }}"
 
     # ============================================
     # Phase 7: Reload Systemd and Restart Caddy
