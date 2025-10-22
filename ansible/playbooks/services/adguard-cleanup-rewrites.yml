@@ -1,0 +1,216 @@
+---
+- name: "AdGuard: Cleanup DNS Rewrites"
+  hosts: privatebox-management
+  become: true
+  gather_facts: false
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "privatebox-env-passwords"
+      semaphore_inventory: "privatebox-management"
+      semaphore_survey_vars: []  # No variables needed - fully automated
+
+    # AdGuard configuration
+    adguard_ip: "10.10.20.10"
+    adguard_port: 3443
+    adguard_url: "https://{{ adguard_ip }}:{{ adguard_port }}"
+    adguard_username: "admin"
+    adguard_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
+
+    # Rewrites to fix
+    rewrites_to_remove:
+      - domain: "proxmox.lan"
+        answer: "10.10.20.20"
+        reason: "Should route through Caddy, not direct access"
+      - domain: "application.lan"
+        answer: "10.10.20.30"
+        reason: "Applications VM not deployed by default"
+
+    rewrites_to_add:
+      - domain: "proxmox.lan"
+        answer: "10.10.20.10"
+        comment: "Proxmox Hypervisor (via Caddy reverse proxy)"
+
+  tasks:
+    - name: Display cleanup header
+      debug:
+        msg:
+          - "=========================================="
+          - "   ADGUARD DNS REWRITE CLEANUP"
+          - "=========================================="
+          - "Fixing DNS rewrites to match current architecture"
+
+    # ============================================
+    # Phase 1: Validate Prerequisites
+    # ============================================
+
+    - name: Validate SERVICES_PASSWORD is set
+      fail:
+        msg: |
+          SERVICES_PASSWORD not found in privatebox-env-passwords environment.
+          This playbook requires the privatebox-env-passwords environment.
+      when: adguard_password == 'changeme'
+
+    - name: Test AdGuard API authentication
+      uri:
+        url: "{{ adguard_url }}/control/status"
+        validate_certs: no
+        method: GET
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: adguard_status
+
+    - name: Display AdGuard status
+      debug:
+        msg: "✓ Connected to AdGuard Home (version {{ adguard_status.json.version }})"
+
+    # ============================================
+    # Phase 2: Get Current Rewrites
+    # ============================================
+
+    - name: Get existing DNS rewrites
+      uri:
+        url: "{{ adguard_url }}/control/rewrite/list"
+        validate_certs: no
+        method: GET
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: existing_rewrites
+
+    - name: Display current rewrites count
+      debug:
+        msg: "Found {{ existing_rewrites.json | length }} existing DNS rewrites"
+
+    # ============================================
+    # Phase 3: Remove Incorrect Rewrites
+    # ============================================
+
+    - name: Check which rewrites need removal
+      set_fact:
+        rewrites_found: "{{ rewrites_to_remove | map('combine', {'exists': false}) | list }}"
+
+    - name: Check if rewrites exist
+      set_fact:
+        rewrites_found: "{{ rewrites_found | map('combine', {'exists': (existing_rewrites.json | selectattr('domain', 'equalto', item.domain) | selectattr('answer', 'equalto', item.answer) | list | length > 0)}) | list }}"
+      loop: "{{ rewrites_to_remove }}"
+
+    - name: Display rewrites to remove
+      debug:
+        msg: "{{ item.domain }} → {{ item.answer }} ({{ item.reason }})"
+      loop: "{{ rewrites_found | selectattr('exists', 'equalto', true) | list }}"
+      loop_control:
+        label: "{{ item.domain }}"
+      when: rewrites_found | selectattr('exists', 'equalto', true) | list | length > 0
+
+    - name: Remove incorrect DNS rewrites
+      uri:
+        url: "{{ adguard_url }}/control/rewrite/delete"
+        validate_certs: no
+        method: POST
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          domain: "{{ item.domain }}"
+          answer: "{{ item.answer }}"
+        status_code: 200
+      loop: "{{ rewrites_to_remove }}"
+      loop_control:
+        label: "{{ item.domain }} → {{ item.answer }}"
+      register: rewrite_delete_result
+      ignore_errors: true  # Ignore if rewrite doesn't exist
+
+    - name: Display removal results
+      debug:
+        msg: "{{ '✓ Removed ' + item.item.domain + ' → ' + item.item.answer if not item.failed else '  Skipped ' + item.item.domain + ' (not found)' }}"
+      loop: "{{ rewrite_delete_result.results }}"
+      loop_control:
+        label: "{{ item.item.domain }}"
+
+    # ============================================
+    # Phase 4: Add Correct Rewrites
+    # ============================================
+
+    - name: Check which rewrites need to be added
+      set_fact:
+        need_to_add: "{{ rewrites_to_add | map('combine', {'exists': false}) | list }}"
+
+    - name: Check if correct rewrites already exist
+      set_fact:
+        need_to_add: "{{ need_to_add | map('combine', {'exists': (existing_rewrites.json | selectattr('domain', 'equalto', item.domain) | selectattr('answer', 'equalto', item.answer) | list | length > 0)}) | list }}"
+      loop: "{{ rewrites_to_add }}"
+
+    - name: Display rewrites to add
+      debug:
+        msg: "{{ item.domain }} → {{ item.answer }}"
+      loop: "{{ need_to_add | selectattr('exists', 'equalto', false) | list }}"
+      loop_control:
+        label: "{{ item.domain }}"
+      when: need_to_add | selectattr('exists', 'equalto', false) | list | length > 0
+
+    - name: Add correct DNS rewrites
+      uri:
+        url: "{{ adguard_url }}/control/rewrite/add"
+        validate_certs: no
+        method: POST
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          domain: "{{ item.domain }}"
+          answer: "{{ item.answer }}"
+        status_code: 200
+      loop: "{{ need_to_add | selectattr('exists', 'equalto', false) | list }}"
+      loop_control:
+        label: "{{ item.domain }} → {{ item.answer }}"
+      register: rewrite_add_result
+      ignore_errors: true  # Ignore if rewrite already exists
+
+    - name: Display addition results
+      debug:
+        msg: "{{ '✓ Added ' + item.item.domain + ' → ' + item.item.answer if not item.failed else '  Skipped ' + item.item.domain + ' (already exists)' }}"
+      loop: "{{ rewrite_add_result.results }}"
+      loop_control:
+        label: "{{ item.item.domain }}"
+
+    # ============================================
+    # Phase 5: Verify and Summary
+    # ============================================
+
+    - name: Get updated DNS rewrites list
+      uri:
+        url: "{{ adguard_url }}/control/rewrite/list"
+        validate_certs: no
+        method: GET
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: updated_rewrites
+
+    - name: Display cleanup summary
+      debug:
+        msg:
+          - ""
+          - "=========================================="
+          - "   CLEANUP COMPLETE"
+          - "=========================================="
+          - ""
+          - "DNS Rewrites After Cleanup:"
+          - "{{ updated_rewrites.json | map(attribute='domain') | map('regex_replace', '^(.*)$', '  - \\1') | list }}"
+          - ""
+          - "Total rewrites: {{ updated_rewrites.json | length }}"
+          - ""
+          - "Changes made:"
+          - "  - Fixed proxmox.lan to route through Caddy (10.10.20.10)"
+          - "  - Removed application.lan (optional feature, deploy separately)"
+          - ""
+          - "✓ proxmox.lan should now work correctly"
+          - ""
