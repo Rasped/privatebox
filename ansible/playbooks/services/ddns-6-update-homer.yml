@@ -1,0 +1,176 @@
+---
+- name: "DynDNS 6: Update Homer Dashboard"
+  hosts: privatebox-management
+  become: true
+  gather_facts: no
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "Empty"
+      semaphore_inventory: "privatebox-management"
+      semaphore_category: "services"
+
+    # Config file location (from ddns-2b, inside Semaphore container)
+    ddns_config_file: "/tmp/ddns-handoff.json"
+
+    # Caddy and Homer configuration
+    caddy_config_dir: "/opt/caddy"
+    homer_config_dir: "/opt/homer"
+    homer_config_file: "{{ homer_config_dir }}/config.yml"
+
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Read DynDNS Config
+    # ============================================
+
+    - name: Read DynDNS config from Semaphore container
+      shell: podman exec semaphore cat {{ ddns_config_file }}
+      register: ddns_config_raw
+      changed_when: false
+      no_log: true
+      failed_when: ddns_config_raw.rc != 0
+
+    - name: Parse DynDNS config
+      set_fact:
+        ddns_config: "{{ ddns_config_raw.stdout | from_json }}"
+      no_log: true
+
+    - name: Set domain from config
+      set_fact:
+        ddns_domain: "{{ ddns_config.ddns_domain }}"
+
+    - name: Display configuration header
+      debug:
+        msg:
+          - "========================================"
+          - "   HOMER DASHBOARD URL UPDATE"
+          - "========================================"
+          - "Custom Domain: {{ ddns_domain }}"
+
+    # ============================================
+    # Phase 2: Discover Services from Caddyfile
+    # ============================================
+
+    - name: Extract services from Caddyfile
+      shell: |
+        awk '
+        /^[a-z]+\.lan \{/ {
+          service = $1
+          gsub(/\.lan/, "", service)
+          in_block = 1
+          next
+        }
+        in_block && /reverse_proxy/ {
+          print service
+          in_block = 0
+        }
+        /^\}/ {
+          in_block = 0
+        }
+        ' {{ caddy_config_dir }}/Caddyfile | grep -v '^\*'
+      register: caddyfile_parse
+      changed_when: false
+
+    - name: Build services list from parsed Caddyfile
+      set_fact:
+        discovered_services: "{{ caddyfile_parse.stdout_lines }}"
+
+    - name: Display discovered services
+      debug:
+        msg: "Found {{ discovered_services | length }} services: {{ discovered_services | join(', ') }}"
+
+    # ============================================
+    # Phase 3: Update Homer Configuration
+    # ============================================
+
+    - name: Read existing Homer configuration
+      slurp:
+        src: "{{ homer_config_file }}"
+      register: homer_config_content
+
+    - name: Backup Homer configuration
+      copy:
+        content: "{{ homer_config_content.content | b64decode }}"
+        dest: "{{ homer_config_file }}.bak"
+        mode: '0644'
+
+    - name: Replace .lan URLs with custom domain
+      shell: |
+        # Create pattern for services that exist in Caddyfile
+        services="{{ discovered_services | join('|') }}"
+
+        # Replace URLs for discovered services only
+        sed -E "s|(url: \"https://)(${services})(\.lan\")|\\1\\2.{{ ddns_domain }}|g" \
+          {{ homer_config_file }} > {{ homer_config_file }}.tmp
+
+        # Check if any changes were made
+        if ! diff -q {{ homer_config_file }} {{ homer_config_file }}.tmp > /dev/null 2>&1; then
+          mv {{ homer_config_file }}.tmp {{ homer_config_file }}
+          echo "changed"
+        else
+          rm {{ homer_config_file }}.tmp
+          echo "unchanged"
+        fi
+      register: homer_update
+      changed_when: homer_update.stdout == "changed"
+
+    - name: Display update status
+      debug:
+        msg: "{{ 'Homer URLs updated to use custom domain' if homer_update.changed else 'Homer URLs already using custom domain' }}"
+
+    # ============================================
+    # Phase 4: Restart Homer Service
+    # ============================================
+
+    - name: Restart Homer service
+      when: homer_update.changed
+      systemd:
+        name: homer.service
+        state: restarted
+
+    - name: Wait for Homer to start
+      when: homer_update.changed
+      wait_for:
+        timeout: 5
+
+    - name: Check Homer service status
+      systemd:
+        name: homer.service
+      register: homer_status
+
+    - name: Display Homer status
+      debug:
+        msg: "Homer service: {{ homer_status.status.ActiveState }}"
+
+    - name: Fail if Homer is not running
+      fail:
+        msg: "Homer service failed to start"
+      when: homer_status.status.ActiveState != "active"
+
+    # ============================================
+    # Phase 5: Display Summary
+    # ============================================
+
+    - name: Display final summary
+      debug:
+        msg:
+          - "========================================"
+          - "   HOMER DASHBOARD - COMPLETE"
+          - "========================================"
+          - ""
+          - "Custom Domain: {{ ddns_domain }}"
+          - "Configuration: {{ homer_config_file }}"
+          - "Backup: {{ homer_config_file }}.bak"
+          - ""
+          - "Updated Services:"
+          - "{% for service in discovered_services %}  - https://{{ service }}.{{ ddns_domain }}{% endfor %}"
+          - ""
+          - "Status:"
+          - "  • URLs updated to use custom domain"
+          - "  • Ping checks now use Let's Encrypt certificates"
+          - "  • Homer dashboard: https://privatebox.{{ ddns_domain }}"
+          - ""
+          - "========================================"

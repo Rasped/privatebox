@@ -249,6 +249,7 @@
           - "Next Steps:"
           - "  1. Run 'DynDNS 4: Cleanup DNS Records' to remove stale ACME challenges"
           - "  2. Run 'DynDNS 5: Configure Caddy Let's Encrypt' to get valid certificates"
-          - "  3. Services will be accessible with trusted TLS certificates"
+          - "  3. Run 'DynDNS 6: Update Homer Dashboard' to use custom domain URLs"
+          - "  4. Services will be accessible with trusted TLS certificates"
           - ""
           - "========================================"
