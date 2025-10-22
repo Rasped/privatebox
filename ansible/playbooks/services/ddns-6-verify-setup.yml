@@ -1,5 +1,5 @@
 ---
-- name: "DynDNS 5: Verify Complete Setup"
+- name: "DynDNS 6: Verify Complete Setup"
   hosts: privatebox-management
   become: false
   gather_facts: true

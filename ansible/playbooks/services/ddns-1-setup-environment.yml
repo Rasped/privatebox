@@ -528,8 +528,9 @@
               - "  1. DynDNS 2a: Prepare Config"
               - "  2. DynDNS 2b: Configure OPNsense"
               - "  3. DynDNS 3: Configure AdGuard"
-              - "  4. DynDNS 4: Configure Caddy Let's Encrypt"
-              - "  5. DynDNS 5: Verify Setup"
+              - "  4. DynDNS 4: Cleanup DNS Records"
+              - "  5. DynDNS 5: Configure Caddy Let's Encrypt"
+              - "  6. DynDNS 6: Verify Setup"
               - ""
               - "Monitor progress in Semaphore UI under Tasks"
               - ""
@@ -546,8 +547,9 @@
               - "  1. Run 'DynDNS 2a: Prepare Config'"
               - "  2. Run 'DynDNS 2b: Configure OPNsense'"
               - "  3. Run 'DynDNS 3: Configure AdGuard'"
-              - "  4. Run 'DynDNS 4: Configure Caddy Let's Encrypt'"
-              - "  5. Run 'DynDNS 5: Verify Setup'"
+              - "  4. Run 'DynDNS 4: Cleanup DNS Records'"
+              - "  5. Run 'DynDNS 5: Configure Caddy Let's Encrypt'"
+              - "  6. Run 'DynDNS 6: Verify Setup'"
 
     - name: Orchestrate template not found warning
       when: not orchestrate_template
@@ -558,5 +560,6 @@
           - "  1. DynDNS 2a: Prepare Config"
           - "  2. DynDNS 2b: Configure OPNsense"
           - "  3. DynDNS 3: Configure AdGuard"
-          - "  4. DynDNS 4: Configure Caddy Let's Encrypt"
-          - "  5. DynDNS 5: Verify Setup"
+          - "  4. DynDNS 4: Cleanup DNS Records"
+          - "  5. DynDNS 5: Configure Caddy Let's Encrypt"
+          - "  6. DynDNS 6: Verify Setup"

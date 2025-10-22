@@ -61,8 +61,9 @@ class DynDNSOrchestrator:
             "DynDNS 2a: Prepare Configuration",
             "DynDNS 2b: Configure OPNsense",
             "DynDNS 3: Configure AdGuard",
-            "DynDNS 4: Configure Caddy",
-            "DynDNS 5: Verify Complete Setup"
+            "DynDNS 4: Cleanup DNS Records",
+            "DynDNS 5: Configure Caddy",
+            "DynDNS 6: Verify Complete Setup"
         ]
 
         if not self.api_token:

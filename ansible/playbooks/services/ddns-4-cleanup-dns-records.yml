@@ -1,0 +1,246 @@
+---
+- name: "DynDNS 4: Cleanup DNS Records"
+  hosts: privatebox-management
+  become: true
+  gather_facts: false
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "Empty"
+      semaphore_inventory: "privatebox-management"
+      semaphore_category: "services"
+
+    enable_debug: true
+
+  tasks:
+    # ============================================
+    # Phase 1: Read Config File from Semaphore Container
+    # ============================================
+
+    - name: Read DynDNS config from Semaphore container
+      shell: podman exec semaphore cat /tmp/ddns-handoff.json
+      register: ddns_config_raw
+      changed_when: false
+      no_log: true
+
+    - name: Parse DynDNS config
+      set_fact:
+        ddns_config: "{{ ddns_config_raw.stdout | from_json }}"
+      no_log: true
+
+    - name: Set variables from config
+      set_fact:
+        dns_provider: "{{ ddns_config.dns_provider }}"
+        ddns_domain: "{{ ddns_config.ddns_domain }}"
+        dns_api_token: "{{ ddns_config.dns_api_token }}"
+        cloudflare_zone_id: "{{ ddns_config.cloudflare_zone_id | default('') }}"
+      no_log: true
+
+    # ============================================
+    # Phase 2: Display Configuration
+    # ============================================
+
+    - name: Display cleanup header
+      debug:
+        msg:
+          - "========================================"
+          - "   CLEANUP STALE DNS ACME RECORDS"
+          - "========================================"
+          - "Provider: {{ dns_provider }}"
+          - "Domain: {{ ddns_domain }}"
+          - ""
+          - "Removing stale _acme-challenge TXT records..."
+
+    # ============================================
+    # Phase 3: Clean deSEC Records
+    # ============================================
+
+    - name: Clean stale ACME challenge TXT records (deSEC)
+      when: dns_provider == 'desec'
+      block:
+        - name: Delete _acme-challenge TXT record from deSEC
+          uri:
+            url: "https://desec.io/api/v1/domains/{{ ddns_domain }}/rrsets/_acme-challenge/TXT/"
+            method: DELETE
+            headers:
+              Authorization: "Token {{ dns_api_token }}"
+            status_code: [204, 404]
+            timeout: 10
+          register: desec_cleanup
+          no_log: true
+
+        - name: Display deSEC cleanup result
+          debug:
+            msg: "{{ '✓ Cleaned stale ACME challenge records from deSEC' if desec_cleanup.status == 204 else '✓ No stale ACME records found on deSEC' }}"
+
+      rescue:
+        - name: Handle deSEC cleanup error
+          debug:
+            msg: "⚠ Warning: Could not clean deSEC records (non-critical, will retry during certificate issuance)"
+
+    # ============================================
+    # Phase 4: Clean Dynu Records
+    # ============================================
+
+    - name: Clean stale ACME challenge TXT records (Dynu)
+      when: dns_provider == 'dynu'
+      block:
+        - name: Get Dynu domain ID
+          uri:
+            url: "https://api.dynu.com/v2/dns"
+            method: GET
+            headers:
+              accept: "application/json"
+              API-Key: "{{ dns_api_token }}"
+            status_code: 200
+          register: dynu_domains
+          no_log: true
+
+        - name: Find matching Dynu domain
+          set_fact:
+            dynu_domain_id: "{{ dynu_domains.json.domains | selectattr('name', 'equalto', ddns_domain) | map(attribute='id') | first | default('') }}"
+
+        - name: Get Dynu DNS records
+          when: dynu_domain_id | length > 0
+          uri:
+            url: "https://api.dynu.com/v2/dns/{{ dynu_domain_id }}/record"
+            method: GET
+            headers:
+              accept: "application/json"
+              API-Key: "{{ dns_api_token }}"
+            status_code: 200
+          register: dynu_records
+          no_log: true
+
+        - name: Find _acme-challenge TXT records
+          when: dynu_records is defined and dynu_records.json is defined
+          set_fact:
+            acme_records: "{{ dynu_records.json.dnsRecords | default([]) | selectattr('nodeName', 'equalto', '_acme-challenge') | selectattr('recordType', 'equalto', 'TXT') | list }}"
+
+        - name: Delete _acme-challenge TXT records from Dynu
+          when: acme_records is defined and acme_records | length > 0
+          uri:
+            url: "https://api.dynu.com/v2/dns/{{ dynu_domain_id }}/record/{{ item.id }}"
+            method: DELETE
+            headers:
+              accept: "application/json"
+              API-Key: "{{ dns_api_token }}"
+            status_code: 200
+          loop: "{{ acme_records }}"
+          register: dynu_cleanup
+          no_log: true
+
+        - name: Display Dynu cleanup result
+          debug:
+            msg: "{{ '✓ Cleaned ' + (acme_records | length | string) + ' stale ACME challenge record(s) from Dynu' if acme_records is defined and acme_records | length > 0 else '✓ No stale ACME records found on Dynu' }}"
+
+      rescue:
+        - name: Handle Dynu cleanup error
+          debug:
+            msg: "⚠ Warning: Could not clean Dynu records (non-critical, will retry during certificate issuance)"
+
+    # ============================================
+    # Phase 5: Clean Cloudflare Records
+    # ============================================
+
+    - name: Clean stale ACME challenge TXT records (Cloudflare)
+      when: dns_provider == 'cloudflare'
+      block:
+        - name: Validate Cloudflare zone ID is present
+          fail:
+            msg: "Cloudflare Zone ID is required but not found in configuration"
+          when: cloudflare_zone_id | length == 0
+
+        - name: List Cloudflare DNS records for _acme-challenge
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id }}/dns_records?type=TXT&name=_acme-challenge.{{ ddns_domain }}"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ dns_api_token }}"
+              Content-Type: "application/json"
+            status_code: 200
+          register: cloudflare_records
+          no_log: true
+
+        - name: Extract _acme-challenge record IDs
+          set_fact:
+            acme_record_ids: "{{ cloudflare_records.json.result | map(attribute='id') | list }}"
+
+        - name: Delete _acme-challenge TXT records from Cloudflare
+          when: acme_record_ids | length > 0
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id }}/dns_records/{{ item }}"
+            method: DELETE
+            headers:
+              Authorization: "Bearer {{ dns_api_token }}"
+              Content-Type: "application/json"
+            status_code: 200
+          loop: "{{ acme_record_ids }}"
+          register: cloudflare_cleanup
+          no_log: true
+
+        - name: Display Cloudflare cleanup result
+          debug:
+            msg: "{{ '✓ Cleaned ' + (acme_record_ids | length | string) + ' stale ACME challenge record(s) from Cloudflare' if acme_record_ids | length > 0 else '✓ No stale ACME records found on Cloudflare' }}"
+
+      rescue:
+        - name: Handle Cloudflare cleanup error
+          debug:
+            msg: "⚠ Warning: Could not clean Cloudflare records (non-critical, will retry during certificate issuance)"
+
+    # ============================================
+    # Phase 6: Clean DuckDNS Records
+    # ============================================
+
+    - name: Clean stale ACME challenge TXT records (DuckDNS)
+      when: dns_provider == 'duckdns'
+      block:
+        - name: Extract subdomain from DuckDNS domain
+          set_fact:
+            duckdns_subdomain: "{{ ddns_domain | regex_replace('\\.duckdns\\.org$', '') }}"
+
+        - name: Clear DuckDNS TXT record
+          uri:
+            url: "https://www.duckdns.org/update?domains={{ duckdns_subdomain }}&token={{ dns_api_token }}&txt=&clear=true"
+            method: GET
+            status_code: 200
+          register: duckdns_cleanup
+          no_log: true
+
+        - name: Verify DuckDNS cleanup response
+          set_fact:
+            duckdns_success: "{{ 'OK' in duckdns_cleanup.content }}"
+
+        - name: Display DuckDNS cleanup result
+          debug:
+            msg: "{{ '✓ Cleaned stale ACME challenge record from DuckDNS' if duckdns_success else '⚠ DuckDNS cleanup may have failed' }}"
+
+      rescue:
+        - name: Handle DuckDNS cleanup error
+          debug:
+            msg: "⚠ Warning: Could not clean DuckDNS records (non-critical, will retry during certificate issuance)"
+
+    # ============================================
+    # Phase 7: Display Summary
+    # ============================================
+
+    - name: Display cleanup summary
+      debug:
+        msg:
+          - ""
+          - "========================================"
+          - "   DNS CLEANUP COMPLETE"
+          - "========================================"
+          - ""
+          - "Provider: {{ dns_provider }}"
+          - "Domain: {{ ddns_domain }}"
+          - ""
+          - "Status:"
+          - "  ✓ Stale _acme-challenge TXT records removed"
+          - "  ✓ DNS zone is clean for certificate issuance"
+          - ""
+          - "Next Step:"
+          - "  Caddy will now issue certificates with clean DNS state"
+          - ""
+          - "========================================"
