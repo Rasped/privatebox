@@ -63,7 +63,8 @@ class DynDNSOrchestrator:
             "DynDNS 3: Configure AdGuard",
             "DynDNS 4: Cleanup DNS Records",
             "DynDNS 5: Configure Caddy",
-            "DynDNS 6: Verify Complete Setup"
+            "DynDNS 6: Update Homer Dashboard",
+            "DynDNS 7: Verify Complete Setup"
         ]
 
         if not self.api_token:

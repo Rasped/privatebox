@@ -530,7 +530,8 @@
               - "  3. DynDNS 3: Configure AdGuard"
               - "  4. DynDNS 4: Cleanup DNS Records"
               - "  5. DynDNS 5: Configure Caddy Let's Encrypt"
-              - "  6. DynDNS 6: Verify Setup"
+              - "  6. DynDNS 6: Update Homer Dashboard"
+              - "  7. DynDNS 7: Verify Setup"
               - ""
               - "Monitor progress in Semaphore UI under Tasks"
               - ""
@@ -549,7 +550,8 @@
               - "  3. Run 'DynDNS 3: Configure AdGuard'"
               - "  4. Run 'DynDNS 4: Cleanup DNS Records'"
               - "  5. Run 'DynDNS 5: Configure Caddy Let's Encrypt'"
-              - "  6. Run 'DynDNS 6: Verify Setup'"
+              - "  6. Run 'DynDNS 6: Update Homer Dashboard'"
+              - "  7. Run 'DynDNS 7: Verify Setup'"
 
     - name: Orchestrate template not found warning
       when: not orchestrate_template
@@ -562,4 +564,5 @@
           - "  3. DynDNS 3: Configure AdGuard"
           - "  4. DynDNS 4: Cleanup DNS Records"
           - "  5. DynDNS 5: Configure Caddy Let's Encrypt"
-          - "  6. DynDNS 6: Verify Setup"
+          - "  6. DynDNS 6: Update Homer Dashboard"
+          - "  7. DynDNS 7: Verify Setup"
