@@ -7,11 +7,16 @@
   gather_facts: no
   vars:
     config_dir: "/opt/homer"
+    credentials_dir: "/opt/privatebox/credentials"
+
+    # Template variables for Homer config
+    custom_domain: "lan"
+    headplane_api_key: "{{ lookup('file', credentials_dir + '/headplane-api-key.txt', errors='ignore') | default('', true) }}"
 
   tasks:
     - name: Deploy updated Homer configuration
-      copy:
-        src: ../../templates/homer/config.yml
+      template:
+        src: ../../templates/homer/config.yml.j2
         dest: "{{ config_dir }}/config.yml"
         owner: root
         group: root

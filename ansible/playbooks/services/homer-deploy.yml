@@ -13,6 +13,7 @@
     homer_version: "latest"
     service_name: "homer"
     config_dir: "/opt/homer"
+    credentials_dir: "/opt/privatebox/credentials"
 
     # Container image
     homer_image: "b4bz/homer"
@@ -23,6 +24,10 @@
 
     # Get password from Semaphore
     services_password: "{{ lookup('env', 'SERVICES_PASSWORD') | default('NOT_SET', true) }}"
+
+    # Template variables for Homer config
+    custom_domain: "lan"
+    headplane_api_key: "{{ lookup('file', credentials_dir + '/headplane-api-key.txt', errors='ignore') | default('', true) }}"
 
   tasks:
     - name: Display deployment header
@@ -73,8 +78,8 @@
             group: root
 
     - name: Deploy Homer configuration
-      copy:
-        src: ../../templates/homer/config.yml
+      template:
+        src: ../../templates/homer/config.yml.j2
         dest: "{{ config_dir }}/config.yml"
         owner: root
         group: root
