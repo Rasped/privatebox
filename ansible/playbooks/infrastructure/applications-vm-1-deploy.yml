@@ -196,6 +196,7 @@
         --serial0 socket
         --vga serial0
         --agent enabled=1
+        --onboot 1
       register: vm_created
 
     - name: Import disk image
