@@ -37,11 +37,6 @@ colors:
     card-shadow: rgba(0, 0, 0, 0.4)
     link-hover: "#ffdd57"
 
-message:
-  style: "is-info"
-  title: "Welcome!"
-  content: "PrivateBox Network Services - Access via .lan domains or custom domain (when configured) with HTTPS."
-
 links: []
 
 services:
