@@ -30,6 +30,34 @@ This document tracks known bugs and issues that need to be addressed in PrivateB
 **Description**: Ping functionality from HOMER dashboard does not work, at least on HTTPS without domain configuration.
 **Affected Components**: HOMER service
 
+## Medium Priority Issues
+
+### 5. Headscale Uses Non-Standard Port 4443
+**Status**: Open
+**Impact**: Medium - UX/Professional Polish
+**Description**: Headscale is accessible via port 4443 instead of standard HTTPS port 443. This requires users to specify the port when connecting Tailscale clients: `tailscale up --login-server=https://subrosa.dedyn.io:4443`
+
+**Current Configuration:**
+- OPNsense port forward: WAN:4443 → 10.10.20.10:4443
+- Direct connection to Headscale (bypasses Caddy)
+- Self-signed certificate from Headscale
+
+**Recommended Solution:**
+1. Move OPNsense web UI to non-standard port (e.g., 10443)
+2. Change port forward to: WAN:443 → 10.10.20.10:443 (Caddy)
+3. Add `subrosa.dedyn.io` (root domain) to Caddyfile that proxies to Headscale
+4. Result: Clean URL `https://subrosa.dedyn.io` with Let's Encrypt certificate
+
+**Why It Matters for PrivateBox:**
+- Competing with Firewalla/Ubiquiti - professional polish expected
+- Consumers shouldn't need to remember port numbers
+- Trusted Let's Encrypt certificates = better UX
+- Standard practice for €399 consumer appliance
+
+**Affected Components**: Headscale, OPNsense NAT rules, Caddyfile
+
+**Workaround**: Current setup works, users just need to include `:4443` in the URL.
+
 ---
 
 **Last Updated**: 2025-10-22
