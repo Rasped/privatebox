@@ -1,0 +1,249 @@
+---
+- name: "Applications VM 2: Register Services (Caddy + AdGuard + Homer)"
+  hosts: privatebox-management
+  become: true
+  gather_facts: true
+
+  vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "privatebox-env-passwords"
+      semaphore_inventory: "privatebox-management"
+      semaphore_survey_vars: []  # No variables needed - fully automated
+
+    # Applications VM configuration
+    applications_vm_ip: "10.10.20.30"
+    applications_vm_domain: "application.lan"
+    applications_vm_port: 9443
+
+    # AdGuard configuration
+    adguard_ip: "10.10.20.10"
+    adguard_port: 3443
+    adguard_url: "https://{{ adguard_ip }}:{{ adguard_port }}"
+    adguard_username: "admin"
+    adguard_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
+
+    # Caddy configuration
+    caddy_config_dir: "/opt/caddy"
+    caddy_snippets_dir: "/opt/caddy/conf.d"
+
+    # Homer configuration
+    homer_config_dir: "/opt/homer"
+
+  tasks:
+    - name: Display registration header
+      debug:
+        msg:
+          - "=========================================="
+          - "   APPLICATIONS VM SERVICE REGISTRATION"
+          - "=========================================="
+          - "Domain: {{ applications_vm_domain }}"
+          - "Target: {{ applications_vm_ip }}:{{ applications_vm_port }}"
+          - ""
+          - "Registering with:"
+          - "  - Caddy (reverse proxy)"
+          - "  - AdGuard (DNS rewrite)"
+          - "  - Homer (dashboard link)"
+
+    # ============================================
+    # Phase 1: Validate Prerequisites
+    # ============================================
+
+    - name: Validate SERVICES_PASSWORD is set
+      fail:
+        msg: |
+          SERVICES_PASSWORD not found in privatebox-env-passwords environment.
+          This playbook requires the privatebox-env-passwords environment.
+      when: adguard_password == 'changeme'
+
+    - name: Check if Applications VM is reachable
+      wait_for:
+        host: "{{ applications_vm_ip }}"
+        port: "{{ applications_vm_port }}"
+        timeout: 10
+      register: vm_check
+      failed_when: false
+
+    - name: Warn if Applications VM is not reachable
+      debug:
+        msg:
+          - "⚠ WARNING: Applications VM not reachable at {{ applications_vm_ip }}:{{ applications_vm_port }}"
+          - "  This is OK if VM is not deployed yet, but services will not work until VM is running"
+      when: vm_check is failed
+
+    # ============================================
+    # Phase 2: Register with Caddy
+    # ============================================
+
+    - name: Ensure Caddy snippets directory exists
+      file:
+        path: "{{ caddy_snippets_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Check if Caddyfile imports snippets directory
+      shell: grep -q "import {{ caddy_snippets_dir }}/\\*" {{ caddy_config_dir }}/Caddyfile
+      register: import_check
+      failed_when: false
+      changed_when: false
+
+    - name: Add import directive to Caddyfile
+      lineinfile:
+        path: "{{ caddy_config_dir }}/Caddyfile"
+        line: "import {{ caddy_snippets_dir }}/*"
+        insertafter: "^}"
+        state: present
+      when: import_check.rc != 0
+
+    - name: Create Caddy snippet for application.lan
+      copy:
+        dest: "{{ caddy_snippets_dir }}/application.lan"
+        mode: '0644'
+        owner: root
+        group: root
+        content: |
+          # Applications VM (User Applications Portainer)
+          {{ applications_vm_domain }} {
+              tls internal
+
+              reverse_proxy https://{{ applications_vm_ip }}:{{ applications_vm_port }} {
+                  header_up Host {upstream_hostport}
+                  header_up X-Real-IP {remote_host}
+                  header_up X-Forwarded-For {remote_host}
+                  header_up X-Forwarded-Proto {scheme}
+
+                  transport http {
+                      tls_insecure_skip_verify
+                  }
+              }
+
+              header {
+                  -Server
+                  X-Content-Type-Options nosniff
+                  X-Frame-Options DENY
+              }
+          }
+      register: caddy_snippet_created
+
+    - name: Reload Caddy configuration
+      systemd:
+        name: caddy.service
+        state: reloaded
+      when: caddy_snippet_created.changed
+
+    - name: Display Caddy registration status
+      debug:
+        msg: "✓ Caddy: Registered {{ applications_vm_domain }} → {{ applications_vm_ip }}:{{ applications_vm_port }}"
+
+    # ============================================
+    # Phase 3: Register with AdGuard
+    # ============================================
+
+    - name: Test AdGuard API authentication
+      uri:
+        url: "{{ adguard_url }}/control/status"
+        validate_certs: no
+        method: GET
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: adguard_status
+
+    - name: Get existing DNS rewrites
+      uri:
+        url: "{{ adguard_url }}/control/rewrite/list"
+        validate_certs: no
+        method: GET
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: existing_rewrites
+
+    - name: Check if rewrite already exists
+      set_fact:
+        rewrite_exists: "{{ existing_rewrites.json | selectattr('domain', 'equalto', applications_vm_domain) | list | length > 0 }}"
+
+    - name: Add DNS rewrite for application.lan
+      uri:
+        url: "{{ adguard_url }}/control/rewrite/add"
+        validate_certs: no
+        method: POST
+        user: "{{ adguard_username }}"
+        password: "{{ adguard_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          domain: "{{ applications_vm_domain }}"
+          answer: "{{ adguard_ip }}"
+        status_code: 200
+      when: not rewrite_exists
+      register: rewrite_added
+
+    - name: Display AdGuard registration status
+      debug:
+        msg: "{{ '✓ AdGuard: Added DNS rewrite ' + applications_vm_domain + ' → ' + adguard_ip if rewrite_added.changed else '✓ AdGuard: DNS rewrite already exists' }}"
+
+    # ============================================
+    # Phase 4: Register with Homer Dashboard
+    # ============================================
+
+    - name: Check if Homer already has Applications service
+      shell: grep -q "name: \"Applications\"" {{ homer_config_dir }}/config.yml
+      register: homer_check
+      failed_when: false
+      changed_when: false
+
+    - name: Add Applications service to Homer dashboard
+      blockinfile:
+        path: "{{ homer_config_dir }}/config.yml"
+        marker: "      # {mark} APPLICATIONS VM SERVICE"
+        insertbefore: "^$"
+        block: |2
+                - name: "Applications"
+                  logo: "assets/tools/portainer.png"
+                  subtitle: "User Applications"
+                  tag: "apps"
+                  url: "https://{{ applications_vm_domain }}"
+                  type: "Ping"
+                  target: "_blank"
+      when: homer_check.rc != 0
+      register: homer_updated
+
+    - name: Restart Homer if configuration changed
+      systemd:
+        name: homer.service
+        state: restarted
+      when: homer_updated.changed
+
+    - name: Display Homer registration status
+      debug:
+        msg: "{{ '✓ Homer: Added Applications service to dashboard' if homer_updated.changed else '✓ Homer: Applications service already exists' }}"
+
+    # ============================================
+    # Phase 5: Summary
+    # ============================================
+
+    - name: Display registration summary
+      debug:
+        msg:
+          - ""
+          - "=========================================="
+          - "   REGISTRATION COMPLETE"
+          - "=========================================="
+          - ""
+          - "Applications VM services registered successfully:"
+          - ""
+          - "✓ Caddy: https://{{ applications_vm_domain }}"
+          - "✓ AdGuard: DNS rewrite {{ applications_vm_domain }} → {{ adguard_ip }}"
+          - "✓ Homer: Dashboard link added"
+          - ""
+          - "Access Portainer:"
+          - "  https://{{ applications_vm_domain }}"
+          - ""
+          - "Note: Services will be accessible once Applications VM is fully deployed"
+          - "      and Portainer container is running"
+          - ""

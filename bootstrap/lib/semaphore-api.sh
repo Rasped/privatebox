@@ -292,6 +292,15 @@ create_orchestrate_ddns_task() {
         "$@"
 }
 
+# Create Orchestrate Applications VM task
+create_orchestrate_applications_vm_task() {
+    create_python_template \
+        "Orchestrate Applications VM" \
+        "tools/orchestrate-applications-vm.py" \
+        "Deploy Applications VM with Docker + Portainer and register services" \
+        "$@"
+}
+
 # Create privatebox-env-proxmox environment
 create_proxmox_api_environment() {
     local project_id="$1"
@@ -512,7 +521,7 @@ setup_template_synchronization() {
     log_info "✓ Using repository ID: $repo_id and inventory ID: $inv_id"
 
     # Create Generate Templates task
-    log_info "Step 4/8: Creating Generate Templates task..."
+    log_info "Step 4/9: Creating Generate Templates task..."
     local template_id=$(create_template_generator_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$template_id" ]; then
         log_error "Failed to create template generator task"
@@ -521,7 +530,7 @@ setup_template_synchronization() {
     log_info "✓ Task created with ID: $template_id"
 
     # Create Orchestrate Services task
-    log_info "Step 5/8: Creating Orchestrate Services task..."
+    log_info "Step 5/9: Creating Orchestrate Services task..."
     local orchestrate_id=$(create_orchestrate_services_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$orchestrate_id" ]; then
         log_error "Failed to create orchestrate services task"
@@ -530,7 +539,7 @@ setup_template_synchronization() {
     log_info "✓ Orchestrate Services task created with ID: $orchestrate_id"
 
     # Create Orchestrate DynDNS task
-    log_info "Step 6/8: Creating Orchestrate DynDNS task..."
+    log_info "Step 6/9: Creating Orchestrate DynDNS task..."
     local orchestrate_ddns_id=$(create_orchestrate_ddns_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
     if [ -z "$orchestrate_ddns_id" ]; then
         log_error "Failed to create orchestrate DynDNS task"
@@ -538,8 +547,17 @@ setup_template_synchronization() {
     fi
     log_info "✓ Orchestrate DynDNS task created with ID: $orchestrate_ddns_id"
 
+    # Create Orchestrate Applications VM task
+    log_info "Step 7/9: Creating Orchestrate Applications VM task..."
+    local orchestrate_apps_id=$(create_orchestrate_applications_vm_task "$project_id" "$repo_id" "$inv_id" "$env_id" "$admin_session")
+    if [ -z "$orchestrate_apps_id" ]; then
+        log_error "Failed to create orchestrate applications VM task"
+        return 1
+    fi
+    log_info "✓ Orchestrate Applications VM task created with ID: $orchestrate_apps_id"
+
     # Auto-run the Generate Templates task once to sync templates
-    log_info "Step 7/8: Running Generate Templates task..."
+    log_info "Step 8/9: Running Generate Templates task..."
     echo "PROGRESS:Generating service templates" >> /etc/privatebox-install-complete
     local gen_task_id=$(run_generate_templates_task "$project_id" "$template_id" "$admin_session")
     if [ -n "$gen_task_id" ]; then
@@ -550,7 +568,7 @@ setup_template_synchronization() {
             log_info "✓ Templates generated successfully"
 
             # Run service orchestration
-            log_info "Step 8/8: Running service orchestration..."
+            log_info "Step 9/9: Running service orchestration..."
             if run_service_orchestration "$project_id" "$admin_session"; then
                 log_info "✅ Service orchestration completed successfully"
                 log_info "Template synchronization setup COMPLETED"
