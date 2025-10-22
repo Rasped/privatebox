@@ -18,6 +18,7 @@
     caddy_config_dir: "/opt/caddy"
     homer_config_dir: "/opt/homer"
     homer_config_file: "{{ homer_config_dir }}/config.yml"
+    credentials_dir: "/opt/privatebox/credentials"
 
     enable_debug: true
 
@@ -51,80 +52,62 @@
           - "Custom Domain: {{ ddns_domain }}"
 
     # ============================================
-    # Phase 2: Discover Services from Caddyfile
+    # Phase 2: Load Headplane API Key (if exists)
     # ============================================
 
-    - name: Extract services from Caddyfile
-      shell: |
-        awk '
-        /^[a-z]+\.lan \{/ {
-          service = $1
-          gsub(/\.lan/, "", service)
-          in_block = 1
-          next
-        }
-        in_block && /reverse_proxy/ {
-          print service
-          in_block = 0
-        }
-        /^\}/ {
-          in_block = 0
-        }
-        ' {{ caddy_config_dir }}/Caddyfile | grep -v '^\*'
-      register: caddyfile_parse
-      changed_when: false
+    - name: Check for Headplane API key
+      stat:
+        path: "{{ credentials_dir }}/headplane-api-key.txt"
+      register: api_key_file
 
-    - name: Build services list from parsed Caddyfile
+    - name: Load Headplane API key
       set_fact:
-        discovered_services: "{{ caddyfile_parse.stdout_lines }}"
+        headplane_api_key: "{{ lookup('file', credentials_dir + '/headplane-api-key.txt') }}"
+      when: api_key_file.stat.exists
 
-    - name: Display discovered services
-      debug:
-        msg: "Found {{ discovered_services | length }} services: {{ discovered_services | join(', ') }}"
+    - name: Set empty API key if not found
+      set_fact:
+        headplane_api_key: ""
+      when: not api_key_file.stat.exists
 
     # ============================================
-    # Phase 3: Update Homer Configuration
+    # Phase 3: Render Homer Configuration with Custom Domain
     # ============================================
 
-    - name: Read existing Homer configuration
-      slurp:
-        src: "{{ homer_config_file }}"
-      register: homer_config_content
-
-    - name: Backup Homer configuration
+    - name: Backup existing Homer configuration
       copy:
-        content: "{{ homer_config_content.content | b64decode }}"
+        src: "{{ homer_config_file }}"
         dest: "{{ homer_config_file }}.bak"
+        remote_src: yes
         mode: '0644'
 
-    - name: Replace .lan URLs with custom domain for each service
-      replace:
-        path: "{{ homer_config_file }}"
-        regexp: 'url: "https://{{ item }}\.lan"'
-        replace: 'url: "https://{{ item }}.{{ ddns_domain }}"'
-      loop: "{{ discovered_services }}"
-      register: homer_updates
-
-    - name: Check if any URLs were changed
-      set_fact:
-        homer_changed: "{{ homer_updates.results | selectattr('changed', 'equalto', true) | list | length > 0 }}"
+    - name: Deploy Homer configuration with custom domain
+      template:
+        src: ../../templates/homer/config.yml.j2
+        dest: "{{ homer_config_file }}"
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        custom_domain: "{{ ddns_domain }}"
+      register: homer_updated
 
     - name: Display update status
       debug:
-        msg: "{{ 'Homer URLs updated to use custom domain' if homer_changed else 'Homer URLs already using custom domain' }}"
+        msg: "{{ 'Homer configuration updated to use custom domain: ' + ddns_domain if homer_updated.changed else 'Homer configuration already up to date' }}"
 
     # ============================================
     # Phase 4: Restart Homer Service
     # ============================================
 
     - name: Restart Homer service
-      when: homer_changed
+      when: homer_updated.changed
       systemd:
         name: homer.service
         state: restarted
 
     - name: Wait for Homer to start
-      when: homer_changed
+      when: homer_updated.changed
       wait_for:
         timeout: 5
 
@@ -157,11 +140,9 @@
           - "Configuration: {{ homer_config_file }}"
           - "Backup: {{ homer_config_file }}.bak"
           - ""
-          - "Updated Services:"
-          - "{% for service in discovered_services %}  - https://{{ service }}.{{ ddns_domain }}{% endfor %}"
-          - ""
           - "Status:"
-          - "  • URLs updated to use custom domain"
+          - "  • Homer rendered with custom domain"
+          - "  • All service URLs now use {{ ddns_domain }}"
           - "  • Ping checks now use Let's Encrypt certificates"
           - "  • Homer dashboard: https://privatebox.{{ ddns_domain }}"
           - ""

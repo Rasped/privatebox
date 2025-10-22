@@ -437,6 +437,23 @@
             headscale_api_key: "{{ api_key.stdout | trim }}"
           when: api_key.rc == 0
 
+        - name: Create credentials directory
+          file:
+            path: "/opt/privatebox/credentials"
+            state: directory
+            mode: '0755'
+            owner: root
+            group: root
+
+        - name: Save API key for Headplane web UI authentication
+          copy:
+            content: "{{ headscale_api_key }}"
+            dest: "/opt/privatebox/credentials/headplane-api-key.txt"
+            mode: '0644'
+            owner: root
+            group: root
+          when: api_key.rc == 0
+
         - name: Submit privatebox-env-headscale environment to Semaphore
           shell: |
             jq -n \
