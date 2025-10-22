@@ -24,6 +24,12 @@
   become: false
 
   vars:
+    # Template configuration for Semaphore
+    template_config:
+      semaphore_environment: "Empty"
+      semaphore_inventory: "privatebox-proxmox"
+      semaphore_survey_vars: []  # No variables needed - fully automated
+
     services_vlan_ip: "10.10.20.20"
     services_gateway: "10.10.20.1"
     adguard_dns: "10.10.20.10"
@@ -46,13 +52,8 @@
           - "  2. ISP modem in bridge mode (not router mode)"
           - "  3. You are running this from Proxmox console (NOT SSH)"
           - ""
-          - "The playbook will pause for 10 seconds. Press Ctrl+C to abort."
+          - "Running via Semaphore - will start immediately."
           - "================================================================"
-
-    - name: Pause for confirmation
-      ansible.builtin.pause:
-        seconds: 10
-        prompt: "Continuing in 10 seconds... Press Ctrl+C to abort"
 
     - name: Pre-flight checks started
       ansible.builtin.debug:
@@ -149,6 +150,59 @@
         msg: "Gateway already configured on vmbr1.20. Skipping network reconfiguration."
       when: has_gateway
 
+    - name: Check if vmbr0 has IP address configured
+      ansible.builtin.set_fact:
+        vmbr0_has_address: "{{ (current_interfaces.content | b64decode) | regex_search('iface vmbr0 inet static\\s+address') }}"
+      when: not has_gateway
+
+    - name: Check if vmbr0 has gateway configured
+      ansible.builtin.set_fact:
+        vmbr0_has_gateway: "{{ (current_interfaces.content | b64decode) | regex_search('iface vmbr0.*?gateway', multiline=True, dotall=True) }}"
+      when: not has_gateway
+
+    - name: Remove vmbr0 address and gateway configuration
+      ansible.builtin.blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} PRIVATEBOX REMOVED vmbr0 CONFIG"
+        insertafter: "^iface vmbr0 inet static"
+        block: |
+          # vmbr0 (WAN) should not have an IP address or gateway
+          # These have been removed and moved to vmbr1.20 (Services VLAN)
+        state: absent
+      when: not has_gateway and (vmbr0_has_address or vmbr0_has_gateway)
+
+    - name: Remove address line from vmbr0
+      ansible.builtin.lineinfile:
+        path: /etc/network/interfaces
+        regexp: '^\s+address\s+.*'
+        state: absent
+        insertafter: "^iface vmbr0 inet static"
+      when: not has_gateway and vmbr0_has_address
+
+    - name: Remove netmask line from vmbr0
+      ansible.builtin.lineinfile:
+        path: /etc/network/interfaces
+        regexp: '^\s+netmask\s+.*'
+        state: absent
+        insertafter: "^iface vmbr0 inet static"
+      when: not has_gateway and vmbr0_has_address
+
+    - name: Remove gateway line from vmbr0
+      ansible.builtin.lineinfile:
+        path: /etc/network/interfaces
+        regexp: '^\s+gateway\s+.*'
+        state: absent
+        insertafter: "^iface vmbr0 inet static"
+      when: not has_gateway and vmbr0_has_gateway
+
+    - name: Display vmbr0 cleanup result
+      ansible.builtin.debug:
+        msg:
+          - "✓ Removed IP address and gateway from vmbr0 (WAN)"
+          - "  vmbr0 will no longer have network configuration"
+          - "  All management access will be via vmbr1.20 (Services VLAN)"
+      when: not has_gateway and (vmbr0_has_address or vmbr0_has_gateway)
+
     - name: Create rollback script
       ansible.builtin.template:
         src: proxmox-network-rollback.sh.j2
@@ -197,14 +251,7 @@
           - "  - May require console access if something fails"
           - ""
           - "Rollback: {{ rollback_script }}"
-          - ""
-          - "Pausing 5 seconds before restart..."
           - "================================================================"
-      when: not has_gateway
-
-    - name: Pause before network restart
-      ansible.builtin.pause:
-        seconds: 5
       when: not has_gateway
 
     - name: Apply network configuration
