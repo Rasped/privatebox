@@ -21,13 +21,9 @@
     adguard_username: "admin"
     adguard_password: "{{ SERVICES_PASSWORD | default('changeme') }}"
 
-    # Default services to configure
-    default_services:
-      - portainer
-      - semaphore
-      - adguard
-      - headplane
-      - privatebox
+    # Caddy configuration for service discovery
+    caddy_config_dir: "/opt/caddy"
+    management_vm_ip: "10.10.20.10"
 
     enable_debug: true
 
@@ -104,7 +100,39 @@
       when: enable_debug | bool
 
     # ============================================
-    # Phase 4: Get Existing DNS Rewrites
+    # Phase 4: Discover Services from Caddyfile
+    # ============================================
+
+    - name: Extract services from Caddyfile on management VM
+      shell: |
+        ssh -o StrictHostKeyChecking=no root@{{ management_vm_ip }} "awk '
+        /^[a-z]+\.lan \{/ {
+          service = \$1
+          gsub(/\.lan/, \"\", service)
+          in_block = 1
+          next
+        }
+        in_block && /reverse_proxy/ {
+          print service
+          in_block = 0
+        }
+        /^\}/ {
+          in_block = 0
+        }
+        ' {{ caddy_config_dir }}/Caddyfile | grep -v '^\*'"
+      register: caddyfile_parse
+      changed_when: false
+
+    - name: Build services list from parsed Caddyfile
+      set_fact:
+        discovered_services: "{{ caddyfile_parse.stdout_lines }}"
+
+    - name: Display discovered services
+      debug:
+        msg: "Found {{ discovered_services | length }} services: {{ discovered_services | join(', ') }}"
+
+    # ============================================
+    # Phase 5: Get Existing DNS Rewrites
     # ============================================
 
     - name: Get existing DNS rewrites
@@ -123,16 +151,29 @@
         msg: "Found {{ existing_rewrites.json | length }} existing DNS rewrites"
       when: enable_debug | bool
 
+    - name: Build list of existing custom domain rewrites
+      set_fact:
+        existing_domains: "{{ existing_rewrites.json | selectattr('domain', 'search', ddns_domain) | map(attribute='domain') | list }}"
+
+    - name: Display existing custom domain rewrites
+      debug:
+        msg: "Existing rewrites for {{ ddns_domain }}: {{ existing_domains | join(', ') if existing_domains | length > 0 else 'none' }}"
+      when: enable_debug | bool
+
     # ============================================
-    # Phase 5: Add DNS Rewrites for Custom Domain
+    # Phase 6: Add DNS Rewrites for Custom Domain
     # ============================================
+
+    - name: Build list of services needing rewrites
+      set_fact:
+        services_to_add: "{{ discovered_services | reject('in', existing_domains | map('regex_replace', '\\.' + ddns_domain, '') | list) | list }}"
 
     - name: Display rewrites to add
       debug:
-        msg: "Will add {{ default_services | length }} DNS rewrites for {{ ddns_domain }}"
-      when: enable_debug | bool
+        msg: "Will add {{ services_to_add | length }} DNS rewrites ({{ services_to_add | join(', ') if services_to_add | length > 0 else 'none needed' }})"
 
     - name: Add DNS rewrites for custom domain
+      when: services_to_add | length > 0
       uri:
         url: "{{ adguard_url }}/control/rewrite/add"
         validate_certs: no
@@ -146,20 +187,17 @@
           answer: "{{ adguard_ip }}"
         status_code: 200
       register: rewrite_result
-      loop: "{{ default_services }}"
+      loop: "{{ services_to_add }}"
       loop_control:
         label: "{{ item }}.{{ ddns_domain }} → {{ adguard_ip }}"
-      ignore_errors: true  # Continue if rewrite already exists
 
     - name: Display rewrite results
+      when: services_to_add | length > 0
       debug:
-        msg:
-          - "Successfully added {{ rewrite_result.results | selectattr('status', 'equalto', 200) | list | length }} DNS rewrites"
-          - "Skipped {{ rewrite_result.results | rejectattr('status', 'equalto', 200) | list | length }} (already exist or failed)"
-      when: enable_debug | bool
+        msg: "Successfully added {{ rewrite_result.results | selectattr('status', 'equalto', 200) | list | length }} DNS rewrites"
 
     # ============================================
-    # Phase 6: Verification
+    # Phase 7: Verification
     # ============================================
 
     - name: Get updated DNS rewrites list
@@ -192,12 +230,12 @@
     - name: Verify all expected rewrites exist
       assert:
         that:
-          - custom_rewrites | length >= default_services | length
+          - custom_rewrites | length >= discovered_services | length
         fail_msg: "Not all expected rewrites were added"
         success_msg: "✓ All expected rewrites verified"
 
     # ============================================
-    # Phase 7: Display Summary
+    # Phase 8: Display Summary
     # ============================================
 
     - name: Display final summary
@@ -208,11 +246,11 @@
           - "========================================"
           - ""
           - "Custom Domain: {{ ddns_domain }}"
-          - "DNS Rewrites Added: {{ rewrite_result.results | selectattr('status', 'equalto', 200) | list | length }}"
+          - "DNS Rewrites Added: {{ services_to_add | length }}"
           - "Total Custom Rewrites: {{ custom_rewrites | length }}"
           - ""
           - "Services Now Accessible Via:"
-          - "{% for service in default_services %}  - https://{{ service }}.{{ ddns_domain }}{% endfor %}"
+          - "{% for service in discovered_services %}  - https://{{ service }}.{{ ddns_domain }}{% endfor %}"
           - ""
           - "Note:"
           - "  • These domains resolve internally to {{ adguard_ip }}"
