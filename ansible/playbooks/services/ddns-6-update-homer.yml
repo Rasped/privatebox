@@ -97,42 +97,34 @@
         dest: "{{ homer_config_file }}.bak"
         mode: '0644'
 
-    - name: Replace .lan URLs with custom domain
-      shell: |
-        # Create pattern for services that exist in Caddyfile
-        services="{{ discovered_services | join('|') }}"
+    - name: Replace .lan URLs with custom domain for each service
+      replace:
+        path: "{{ homer_config_file }}"
+        regexp: 'url: "https://{{ item }}\.lan"'
+        replace: 'url: "https://{{ item }}.{{ ddns_domain }}"'
+      loop: "{{ discovered_services }}"
+      register: homer_updates
 
-        # Replace URLs for discovered services only
-        sed -E "s|(url: \"https://)(${services})(\.lan\")|\\1\\2.{{ ddns_domain }}|g" \
-          {{ homer_config_file }} > {{ homer_config_file }}.tmp
-
-        # Check if any changes were made
-        if ! diff -q {{ homer_config_file }} {{ homer_config_file }}.tmp > /dev/null 2>&1; then
-          mv {{ homer_config_file }}.tmp {{ homer_config_file }}
-          echo "changed"
-        else
-          rm {{ homer_config_file }}.tmp
-          echo "unchanged"
-        fi
-      register: homer_update
-      changed_when: homer_update.stdout == "changed"
+    - name: Check if any URLs were changed
+      set_fact:
+        homer_changed: "{{ homer_updates.results | selectattr('changed', 'equalto', true) | list | length > 0 }}"
 
     - name: Display update status
       debug:
-        msg: "{{ 'Homer URLs updated to use custom domain' if homer_update.changed else 'Homer URLs already using custom domain' }}"
+        msg: "{{ 'Homer URLs updated to use custom domain' if homer_changed else 'Homer URLs already using custom domain' }}"
 
     # ============================================
     # Phase 4: Restart Homer Service
     # ============================================
 
     - name: Restart Homer service
-      when: homer_update.changed
+      when: homer_changed
       systemd:
         name: homer.service
         state: restarted
 
     - name: Wait for Homer to start
-      when: homer_update.changed
+      when: homer_changed
       wait_for:
         timeout: 5
 
