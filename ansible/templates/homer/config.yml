@@ -40,7 +40,7 @@ colors:
 message:
   style: "is-info"
   title: "Welcome!"
-  content: "PrivateBox Network Services - Access via .lan domains for HTTPS with trusted certificates."
+  content: "PrivateBox Network Services - Access via .lan domains or custom domain (when configured) with HTTPS."
 
 links: []
 
@@ -53,7 +53,6 @@ services:
         subtitle: "DNS Filtering"
         tag: "privacy"
         url: "https://adguard.lan"
-        type: "Ping"
         target: "_blank"
 
       - name: "OPNsense"
@@ -78,7 +77,6 @@ services:
         subtitle: "Container Management"
         tag: "management"
         url: "https://portainer.lan"
-        type: "Ping"
         target: "_blank"
 
       - name: "Semaphore"
@@ -86,7 +84,6 @@ services:
         subtitle: "Ansible Automation"
         tag: "automation"
         url: "https://semaphore.lan"
-        type: "Ping"
         target: "_blank"
 
       - name: "Proxmox"
