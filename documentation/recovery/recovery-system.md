@@ -95,13 +95,15 @@ This plan replaces LUKS with ZFS native encryption, which is simpler and more fl
    zfs create -o encryption=on -o keylocation=file:///tmp/vault.key -o keyformat=raw rpool/VAULT
    ```
 
-3. The vault.key file is then stored in two secure locations:
-   - In the initramfs of the [RECOVERY-OS] on sda3
-   - In a secure location within rpool/ASSETS (e.g., in the cloud-init config), for the main OS to use
+3. The vault.key file is stored in ONE secure location:
+   - In the initramfs of the [RECOVERY-OS] on sda3 (embedded in read-only image)
+   - **NOT stored on rpool/ASSETS** - Main OS cannot access the key
 
 **Security Properties:**
-- **Proxmox cannot access vault (by default)**: The rpool/VAULT dataset is not auto-mounted. It is only mounted by the cloud-init script, which knows where to find the key and how to load it
-- **Recovery OS has key**: The recovery environment's initramfs contains the key, allowing it to mount rpool/VAULT if needed (e.g., to verify credentials)
+- **Proxmox CANNOT access vault**: The main OS has no way to decrypt or mount rpool/VAULT. The key exists only in the recovery OS initramfs on sda3
+- **Recovery OS has exclusive key access**: Only the recovery environment can mount rpool/VAULT
+- **Password injection happens during reset only**: The recovery script mounts the vault, reads passwords, and injects them into the cloud-init config on rpool/ASSETS just before triggering the reinstall
+- **Protects against root compromise**: Even if an attacker gains root on Proxmox, they cannot access the vault or steal the permanent passwords
 
 ## Recovery Flow
 
@@ -115,9 +117,9 @@ This plan replaces LUKS with ZFS native encryption, which is simpler and more fl
    - Creates datasets: `zfs create rpool/ROOT`, `zfs create rpool/ASSETS`
    - Generates vault.key and creates encrypted dataset: `zfs create -o encryption=on ... rpool/VAULT`
    - Installs the OS (Debian + Proxmox + cloud-init) into rpool/ROOT
-   - Installs the [RECOVERY-OS] onto sda3 and injects the vault.key into its initramfs
-   - Mounts rpool/ASSETS and populates it with all offline assets (installer files, cloud-init configs, vault.key)
-   - Mounts rpool/VAULT (using the key) and populates it with the generated passwords
+   - Installs the [RECOVERY-OS] onto sda3 and injects the vault.key into its initramfs (then deletes vault.key from disk)
+   - Mounts rpool/ASSETS and populates it with all offline assets (installer files, cloud-init configs)
+   - Mounts rpool/VAULT (using the key from recovery OS) and populates it with the generated passwords
 4. Preseed Configures Bootloader: GRUB is installed on sda1, configured to boot from sda2 (/boot) and rpool/ROOT (/). It includes the "PrivateBox Factory Reset" entry
 5. The appliance reboots. The cloud-init process runs for the first time
 
@@ -133,7 +135,11 @@ This plan replaces LUKS with ZFS native encryption, which is simpler and more fl
      zfs destroy -r rpool/ROOT
      zfs create rpool/ROOT
      ```
+   - Mounts rpool/VAULT using the vault.key from its own initramfs
+   - Reads the preserved passwords from rpool/VAULT
    - Mounts rpool/ASSETS
+   - Injects the passwords into the cloud-init user-data config on rpool/ASSETS
+   - Unmounts rpool/VAULT (vault is now inaccessible until next reset)
    - Executes kexec to load the Debian installer kernel (vmlinuz) and initrd (initrd.gz) from rpool/ASSETS
 5. **Unattended Re-install**: The Debian Installer starts from RAM
    - It loads the recovery_preseed.cfg from rpool/ASSETS
@@ -143,9 +149,8 @@ This plan replaces LUKS with ZFS native encryption, which is simpler and more fl
 7. **First Boot (cloud-init)**:
    - The fresh Proxmox system boots
    - cloud-init starts automatically
-   - It finds its user-data config on rpool/ASSETS
-   - It finds the vault.key on rpool/ASSETS, uses it to load the rpool/VAULT encryption, and mounts the vault
-   - It reads the preserved passwords and provisions the entire appliance from the offline assets
+   - It finds its user-data config on rpool/ASSETS (with passwords already injected by recovery script)
+   - It provisions the entire appliance from the offline assets using the preserved passwords
 
 ## What Gets Preserved
 
@@ -195,10 +200,9 @@ Identical to the v2 plan, but the asset path is now a ZFS mountpoint.
 │   ├── vmlinuz
 │   ├── initrd.gz
 │   ├── preseed.cfg
-│   ├── cloud-init/
-│   │   ├── user-data
-│   │   ├── meta-data
-│   │   └── vault.key
+│   └── cloud-init/
+│       ├── user-data          (passwords injected by recovery script)
+│       └── meta-data
 ├── images/
 │   ├── debian-13-cloudimg-amd64.qcow2
 │   └── ...
@@ -213,6 +217,8 @@ Identical to the v2 plan, but the asset path is now a ZFS mountpoint.
 └── source/
     └── privatebox-main.tar.gz
 ```
+
+**Note:** The vault.key does NOT exist in rpool/ASSETS. It exists only in the recovery OS initramfs on sda3.
 
 ### Script Modifications
 
