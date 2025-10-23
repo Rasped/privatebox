@@ -40,9 +40,15 @@ rpool/
 │       ├── vm-100-disk-0
 │       └── vm-9000-disk-0
 ├── ASSETS   - (Filesystem) - Offline assets & installer files (Preserved)
+│   ├── factory/  - (Subdir) - Immutable original shipped assets (never modified)
+│   └── updated/  - (Subdir) - Latest assets (atomically replaced on updates)
 ├── VAULT    - (Filesystem) - Encrypted passwords (Preserved, Encrypted)
 └── ... (Other ZFS datasets for VMs, containers, etc.)
 ```
+
+**Asset Slot Architecture:**
+- **factory/**: Populated once during initial PXE provisioning, then made read-only. Never modified. Permanent failsafe for "restore to shipped state."
+- **updated/**: Initially empty. Atomically replaced when new assets are available. Provides "restore to latest known-good version."
 
 (Note: ZFS datasets are dynamic and don't have fixed sizes, which is a major advantage.)
 
@@ -190,9 +196,14 @@ d-i preseed/late_command string \
    - Installs ZFS packages
    - Creates the ZFS rpool on sda4
    - Creates datasets: `zfs create rpool/ROOT`, `zfs create rpool/ASSETS`
-   - **Downloads all offline assets** from provisioning server to rpool/ASSETS:
+   - Creates factory asset slot: `mkdir -p /rpool/ASSETS/factory`
+   - **Downloads all offline assets** from provisioning server to factory slot:
      ```bash
-     wget -r -np -nH --cut-dirs=2 http://provisioning-server/assets/ -P /rpool/ASSETS/
+     wget -r -np -nH --cut-dirs=2 http://provisioning-server/assets/ -P /rpool/ASSETS/factory/
+     ```
+   - **Makes factory slot read-only** (permanent immutable state):
+     ```bash
+     chmod -R u-w /rpool/ASSETS/factory
      ```
    - Downloads pre-built recovery OS: `wget http://provisioning-server/assets/recovery/recovery.squashfs -O /tmp/recovery.squashfs`
    - Generates vault.key and creates encrypted dataset: `zfs create -o encryption=on ... rpool/VAULT`
@@ -205,8 +216,8 @@ d-i preseed/late_command string \
    - Generates unique passwords (SERVICES_PASSWORD, etc.)
    - Mounts rpool/VAULT (using the key) and populates it with the generated passwords
    - Deletes vault.key from disk (only exists in recovery OS and for initial cloud-init)
-7. **Preseed Configures Bootloader**: GRUB is installed on sda1, configured to boot from sda2 (/boot) and rpool/ROOT (/). It includes the "PrivateBox Factory Reset" entry
-8. **Appliance reboots from local disk**. The cloud-init process runs for the first time, provisioning all VMs and services using assets from rpool/ASSETS
+7. **Preseed Configures Bootloader**: GRUB is installed on sda1, configured to boot from sda2 (/boot) and rpool/ROOT (/). It includes the "PrivateBox Factory Reset Options" menu
+8. **Appliance reboots from local disk**. The cloud-init process runs for the first time, provisioning all VMs and services using assets from rpool/ASSETS/factory/
 
 **Total provisioning time:** 20-30 minutes (depending on network speed for asset download)
 
@@ -214,10 +225,43 @@ d-i preseed/late_command string \
 
 ### During a Factory Reset (User-initiated)
 
-1. User selects "PrivateBox Factory Reset" from the GRUB menu
-2. The immutable [RECOVERY-OS] from sda3 boots
-3. User sees the warning prompt and types "YES"
-4. The recovery script executes:
+1. **User selects recovery option from the GRUB menu**
+
+   The user sees two options:
+   ```
+   PrivateBox Factory Reset Options:
+   1. Restore to Latest Version (recommended)
+   2. Restore to Original Shipped Version (ultimate failsafe)
+   ```
+
+   **Option 1 (Latest Version):**
+   - Uses `rpool/ASSETS/updated/` if it exists and is valid
+   - Auto-falls back to `rpool/ASSETS/factory/` if `updated/` is missing or corrupt
+   - Recommended for normal use
+
+   **Option 2 (Original Shipped Version):**
+   - Always uses `rpool/ASSETS/factory/` (immutable)
+   - Permanent failsafe: "I don't trust updates, give me what shipped"
+   - Guaranteed to work (never modified after initial provisioning)
+
+2. **The immutable [RECOVERY-OS] from sda3 boots**
+
+3. **User sees the warning prompt**
+   ```
+   ========================================
+   PRIVATEBOX FACTORY RECOVERY
+   ========================================
+   Restoring to: [Latest Version / Original Shipped Version]
+
+   WARNING: This will completely erase and
+   reinstall PrivateBox to factory defaults.
+
+   Your unique passwords will be preserved.
+
+   Do you wish to proceed? (type YES to confirm):
+   ```
+
+4. **The recovery script executes:**
    - Imports the ZFS rpool
    - Executes ZFS reset:
      ```bash
@@ -227,18 +271,36 @@ d-i preseed/late_command string \
    - Mounts rpool/VAULT using the vault.key from its own initramfs
    - Reads the preserved passwords from rpool/VAULT
    - Mounts rpool/ASSETS
-   - Injects the passwords into the cloud-init user-data config on rpool/ASSETS
+   - **Selects asset slot** based on user's GRUB choice:
+     ```bash
+     if [[ "$USER_CHOICE" == "latest" ]]; then
+         if [[ -d /rpool/ASSETS/updated ]] && validate_assets /rpool/ASSETS/updated; then
+             ASSET_SLOT="updated"
+         else
+             echo "Updated assets missing or corrupt, falling back to factory"
+             ASSET_SLOT="factory"
+         fi
+     else
+         ASSET_SLOT="factory"
+     fi
+
+     ASSET_PATH="/rpool/ASSETS/$ASSET_SLOT"
+     ```
+   - Injects the passwords into the cloud-init user-data config at `$ASSET_PATH/installer/cloud-init/user-data`
    - Unmounts rpool/VAULT (vault is now inaccessible until next reset)
-   - Executes kexec to load the Debian installer kernel (vmlinuz) and initrd (initrd.gz) from rpool/ASSETS
+   - Executes kexec to load the Debian installer kernel (vmlinuz) and initrd (initrd.gz) from `$ASSET_PATH/installer/`
+
 5. **Unattended Re-install**: The Debian Installer starts from RAM
-   - It loads the recovery_preseed.cfg from rpool/ASSETS
-   - The preseed file's "partitioning" recipe is now very simple: it's configured to find the existing rpool/ROOT and sda2 and use them as / and /boot
+   - It loads the recovery_preseed.cfg from the selected asset slot
+   - The preseed file's "partitioning" recipe is configured to find the existing rpool/ROOT and sda2 and use them as / and /boot
    - It installs a fresh, virgin Debian + Proxmox + cloud-init onto rpool/ROOT
+
 6. **System Reboots**: The installer finishes and reboots
+
 7. **First Boot (cloud-init)**:
    - The fresh Proxmox system boots
    - cloud-init starts automatically
-   - It finds its user-data config on rpool/ASSETS (with passwords already injected by recovery script)
+   - It finds its user-data config at the selected asset slot (with passwords already injected by recovery script)
    - It provisions the entire appliance from the offline assets using the preserved passwords
 
 ## What Gets Preserved
@@ -434,43 +496,125 @@ zfs --version  # Should match Proxmox version
 
 ## Asset Management for Offline Operation
 
-Identical to the v2 plan, but the asset path is now a ZFS mountpoint.
+The rpool/ASSETS dataset uses a two-slot architecture: `factory/` and `updated/`. This prevents version creep and provides a permanent failsafe.
 
-### Assets Dataset Structure (Logical)
+### Assets Dataset Structure (Two-Slot Architecture)
 
 ```
 /rpool/ASSETS/
-├── installer/
-│   ├── vmlinuz
-│   ├── initrd.gz
-│   ├── preseed.cfg
-│   └── cloud-init/
-│       ├── user-data          (passwords injected by recovery script)
-│       └── meta-data
-├── images/
-│   ├── debian-13-cloudimg-amd64.qcow2
-│   └── ...
-├── containers/
-│   ├── adguard-home-latest.tar
-│   ├── homer-latest.tar
-│   ├── portainer-ce-latest.tar
-│   ├── semaphore-latest.tar
-│   └── manifest.json
-├── templates/
-│   └── opnsense-template.tar.gz
-└── source/
-    └── privatebox-main.tar.gz
+├── factory/                   ← Immutable (populated once, never modified)
+│   ├── installer/
+│   │   ├── vmlinuz
+│   │   ├── initrd.gz
+│   │   ├── preseed.cfg
+│   │   └── cloud-init/
+│   │       ├── user-data      (passwords injected by recovery script)
+│   │       └── meta-data
+│   ├── images/
+│   │   └── debian-13-cloudimg-amd64.qcow2
+│   ├── containers/
+│   │   ├── adguard-home-latest.tar
+│   │   ├── homer-latest.tar
+│   │   ├── portainer-ce-latest.tar
+│   │   └── semaphore-latest.tar
+│   ├── templates/
+│   │   └── opnsense-template.tar.gz
+│   └── source/
+│       └── privatebox-main.tar.gz
+│
+└── updated/                   ← Mutable (atomically replaced on asset updates)
+    ├── installer/
+    ├── images/
+    ├── containers/
+    ├── templates/
+    └── source/
 ```
+
+**Slot Behavior:**
+- **factory/**: Populated during initial PXE provisioning. Made read-only after first boot. Never touched again. Permanent escape hatch.
+- **updated/**: Initially empty. When new assets are released, this entire directory is atomically replaced (destroy + create + populate).
 
 **Note:** The vault.key does NOT exist in rpool/ASSETS. It exists only in the recovery OS initramfs on sda3.
 
+### Atomic Asset Update Process
+
+When new assets are released (e.g., "v3" with updated container images), the update script performs an atomic replacement:
+
+```bash
+#!/bin/bash
+# Asset update script (run from Proxmox host or via Semaphore)
+
+set -e
+
+NEW_ASSET_VERSION="v3"
+DOWNLOAD_URL="https://update-server/privatebox-assets-${NEW_ASSET_VERSION}.tar.gz"
+TEMP_DIR="/tmp/privatebox-asset-update"
+
+# 1. Download new assets
+echo "Downloading asset version ${NEW_ASSET_VERSION}..."
+mkdir -p "$TEMP_DIR"
+wget "$DOWNLOAD_URL" -O "$TEMP_DIR/assets.tar.gz"
+
+# 2. Verify checksum
+echo "Verifying checksum..."
+wget "${DOWNLOAD_URL}.sha256" -O "$TEMP_DIR/assets.tar.gz.sha256"
+cd "$TEMP_DIR"
+sha256sum -c assets.tar.gz.sha256 || { echo "Checksum failed!"; exit 1; }
+
+# 3. Extract to temp location
+echo "Extracting assets..."
+tar -xzf assets.tar.gz -C "$TEMP_DIR/"
+
+# 4. Validate asset structure
+echo "Validating asset structure..."
+for required_dir in installer images containers templates source; do
+    [[ -d "$TEMP_DIR/assets/$required_dir" ]] || { echo "Missing $required_dir"; exit 1; }
+done
+
+# 5. Atomically replace updated slot
+echo "Atomically replacing rpool/ASSETS/updated..."
+zfs destroy -r rpool/ASSETS/updated 2>/dev/null || true  # OK if doesn't exist
+zfs create rpool/ASSETS/updated
+
+# 6. Copy new assets
+echo "Copying new assets to updated slot..."
+cp -r "$TEMP_DIR/assets/"* /rpool/ASSETS/updated/
+
+# 7. Make updated slot read-only (optional security hardening)
+chmod -R u-w /rpool/ASSETS/updated
+
+# 8. Cleanup
+rm -rf "$TEMP_DIR"
+
+echo "Asset update complete. Version ${NEW_ASSET_VERSION} now in updated slot."
+echo "Next factory reset will use these assets (or fallback to factory if corrupt)."
+```
+
+**Key Benefits:**
+- **Atomic**: Old assets remain until new assets are verified and copied
+- **No version creep**: Always exactly two slots (factory + updated)
+- **Automatic fallback**: Recovery script validates `updated/` and falls back to `factory/` if corrupt
+- **No manual cleanup**: Destroying the dataset removes all old files
+
 ### Script Modifications
 
-All provisioning scripts (now part of the cloud-init user-data) must be modified to check these local paths first:
+All provisioning scripts (now part of the cloud-init user-data) must check the appropriate asset slot:
 
-- **Debian Cloud Image**: Check `/rpool/ASSETS/images/debian-13...`
-- **Container Images**: Check `/rpool/ASSETS/containers/<service>.tar` and use `podman load`
-- **OPNsense Template**: Check `/rpool/ASSETS/templates/opnsense...`
+```bash
+# cloud-init determines which slot to use based on how it was invoked
+# (recovery script sets ASSET_SLOT environment variable)
+
+ASSET_BASE="/rpool/ASSETS/${ASSET_SLOT:-factory}"
+
+# Debian Cloud Image
+cp "$ASSET_BASE/images/debian-13-cloudimg-amd64.qcow2" /var/lib/vz/template/qemu/
+
+# Container Images
+podman load -i "$ASSET_BASE/containers/adguard-home-latest.tar"
+
+# OPNsense Template
+cp "$ASSET_BASE/templates/opnsense-template.tar.gz" /tmp/
+```
 
 ## User Experience
 
