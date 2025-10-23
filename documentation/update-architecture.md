@@ -29,9 +29,9 @@ Each layer serves a different recovery scenario.
 
 ### 1. Proxmox Host (Rare)
 - **Frequency**: Monthly security updates, major version updates annually
-- **Risk**: Medium (stable Debian base, but critical component)
-- **Strategy**: Manual updates only, no automatic snapshots (host manages VMs)
-- **Rollback**: Factory reset if catastrophic (rare)
+- **Risk**: HIGH (kernel/ZFS breakage = no boot, highest impact)
+- **Strategy**: Manual snapshot of rpool/ROOT before updates
+- **Rollback**: Boot from recovery USB, import pool, ZFS rollback (or factory reset if pool corrupted)
 
 ### 2. OPNsense VM (Regular)
 - **Frequency**: Weekly/monthly firmware updates
@@ -88,21 +88,61 @@ rpool/data/vm-100-disk-0@manual-20251023-before-config-change
 - `daily`: Automated daily snapshots (retention: 7 days)
 - `weekly`: Automated weekly snapshots (retention: 4 weeks)
 - `manual`: User-initiated snapshots via Semaphore
-- `golden`: Initial deployment state (kept indefinitely)
+- `pre-host-update`: Manual snapshot before Proxmox host updates
 
 ### Snapshot Retention Policy
 
 | Type | Retention | Purpose |
 |------|-----------|---------|
-| `pre-update` | 14 days | Rollback recent updates |
+| `pre-update` | 14 days | Rollback recent VM updates |
 | `daily` | 7 days | Recover from recent mistakes |
 | `weekly` | 4 weeks | Longer-term recovery point |
 | `manual` | Until deleted | User-controlled checkpoints |
-| `golden` | Indefinitely | Fresh deployment reference |
+| `pre-host-update` | 30 days | Rollback catastrophic host updates |
 
 Automated cleanup runs daily, removing expired snapshots.
 
+**Note:** The "golden" deployment state lives in rpool/ASSETS (offline installer files and cloud-init configs), not as a ZFS snapshot. Factory reset uses these assets to provision a fresh system.
+
 ## Safe Update Flow
+
+### Proxmox Host Update Example
+
+**User Action:** SSH to Proxmox host, manually update
+
+**Manual Steps:**
+1. **Create snapshot of entire root**
+   ```bash
+   zfs snapshot -r rpool/ROOT@pre-host-update-$(date +%Y%m%d)
+   ```
+   The `-r` flag creates recursive snapshots of all datasets under rpool/ROOT
+
+2. **Apply updates**
+   ```bash
+   apt update && apt upgrade -y
+   ```
+
+3. **Reboot and test**
+   ```bash
+   reboot
+   ```
+   - System should boot normally
+   - All VMs should be accessible
+   - Proxmox web UI should load
+
+4. **If boot fails:**
+   - Boot from Debian live USB
+   - Import the pool: `zpool import -f rpool`
+   - Rollback: `zfs rollback -r rpool/ROOT@pre-host-update-YYYYMMDD`
+   - Reboot to restored system
+
+5. **If boot succeeds:**
+   - Keep snapshot for 30 days
+   - Manual cleanup: `zfs destroy -r rpool/ROOT@pre-host-update-YYYYMMDD`
+
+**Total time:** 10-20 minutes (depends on update size)
+
+**Note:** Host updates cannot be automated safely due to reboot requirement and potential for catastrophic failure. Manual snapshot + testing is the safest approach.
 
 ### OPNsense Update Example
 
