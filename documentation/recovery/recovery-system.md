@@ -188,6 +188,161 @@ rpool/
 
 The `-r` flag on `zfs destroy -r rpool/ROOT` destroys ROOT and all nested datasets. ASSETS and VAULT survive because they are siblings, not children.
 
+### Building the Recovery OS
+
+The recovery OS on sda3 must be a custom minimal Debian environment, not Alpine Linux or a full-featured rescue distribution.
+
+**Why Custom Debian (Not Alpine or Finnix):**
+
+1. **Tooling Compatibility (Critical):** The recovery script must manipulate the Proxmox ZFS pool using `zfs-utils-linux`. Proxmox is built on Debian (glibc-based). Alpine Linux uses musl libc instead of glibc, which can cause subtle incompatibilities with ZFS tools. Using the same Debian base guarantees binary compatibility.
+
+2. **Minimal Size:** We need ~100-200MB, not 500MB+. Finnix and other full rescue distributions are overkill. We need exactly: kernel, BusyBox, zfs-utils-linux, and the recovery script. Nothing else.
+
+3. **Immutable Security:** A read-only SquashFS image cannot be modified by the main OS or by an attacker. This is perfect for a security-critical recovery tool.
+
+**Build Process Using debootstrap:**
+
+```bash
+# 1. Create minimal Debian rootfs
+RECOVERY_ROOT="/tmp/recovery-build"
+mkdir -p "$RECOVERY_ROOT"
+
+debootstrap --variant=minbase --include=busybox,zfsutils-linux \
+    trixie "$RECOVERY_ROOT" http://deb.debian.org/debian/
+
+# 2. Configure the recovery environment
+cat > "$RECOVERY_ROOT/etc/fstab" <<EOF
+# Recovery OS runs entirely from RAM
+tmpfs  /tmp  tmpfs  defaults  0 0
+EOF
+
+# 3. Install the recovery script
+cat > "$RECOVERY_ROOT/usr/local/bin/privatebox-recovery" <<'EOF'
+#!/bin/bash
+# The actual recovery script (shown in "During a Factory Reset" section)
+set -e
+
+# Display warning prompt
+echo "========================================"
+echo "PRIVATEBOX FACTORY RECOVERY"
+echo "========================================"
+echo "WARNING: This will completely erase and"
+echo "reinstall PrivateBox to factory defaults."
+echo ""
+echo "Your unique passwords will be preserved."
+echo ""
+read -p "Do you wish to proceed? (type YES to confirm): " confirm
+
+[[ "$confirm" != "YES" ]] && { echo "Aborted."; exit 1; }
+
+# Import ZFS pool
+zpool import -f rpool
+
+# Destroy and recreate ROOT
+zfs destroy -r rpool/ROOT
+zfs create rpool/ROOT
+
+# Mount VAULT using embedded key
+zfs load-key -L file:///etc/vault.key rpool/VAULT
+zfs mount rpool/VAULT
+
+# Read passwords from vault
+SERVICES_PASSWORD=$(cat /rpool/VAULT/services_password)
+
+# Mount ASSETS
+zfs mount rpool/ASSETS
+
+# Inject passwords into cloud-init config
+sed -i "s/__SERVICES_PASSWORD__/$SERVICES_PASSWORD/" /rpool/ASSETS/installer/cloud-init/user-data
+
+# Unmount vault (inaccessible until next reset)
+zfs unmount rpool/VAULT
+
+# Load installer kernel and initrd from ASSETS
+kexec -l /rpool/ASSETS/installer/vmlinuz \
+    --initrd=/rpool/ASSETS/installer/initrd.gz \
+    --append="auto=true priority=critical url=file:///rpool/ASSETS/installer/preseed.cfg"
+
+# Execute installer
+kexec -e
+EOF
+
+chmod +x "$RECOVERY_ROOT/usr/local/bin/privatebox-recovery"
+
+# 4. Create auto-login and auto-run recovery script
+cat > "$RECOVERY_ROOT/etc/inittab" <<EOF
+# Auto-login to root and run recovery script
+::sysinit:/etc/init.d/rcS
+::respawn:/usr/local/bin/privatebox-recovery
+::ctrlaltdel:/sbin/reboot
+EOF
+
+# 5. Embed vault.key in the recovery initramfs
+mkdir -p "$RECOVERY_ROOT/etc"
+cp /path/to/vault.key "$RECOVERY_ROOT/etc/vault.key"
+chmod 400 "$RECOVERY_ROOT/etc/vault.key"
+
+# 6. Create SquashFS image
+mksquashfs "$RECOVERY_ROOT" /tmp/recovery.squashfs -comp xz -b 1M
+
+# 7. Copy to sda3 partition
+dd if=/tmp/recovery.squashfs of=/dev/sda3 bs=1M
+
+# 8. Configure GRUB to boot recovery OS
+cat >> /etc/grub.d/40_custom <<EOF
+menuentry 'PrivateBox Factory Reset' {
+    insmod ext2
+    insmod squashfs
+    set root='hd0,gpt3'
+    linux /vmlinuz boot=live live-media=/dev/sda3
+    initrd /initrd.img
+}
+EOF
+
+update-grub
+```
+
+**Key Implementation Details:**
+
+1. **debootstrap --variant=minbase:** Creates the smallest possible Debian base (no documentation, no recommended packages)
+
+2. **BusyBox:** Provides minimal shell and core utilities (~2MB instead of hundreds of MB for bash + coreutils)
+
+3. **zfsutils-linux:** The critical package - must be the same version as on Proxmox host
+
+4. **Auto-boot behavior:** The recovery OS automatically logs in as root and immediately runs the recovery script. No user interaction except the "YES" confirmation.
+
+5. **Vault key embedding:** The vault.key is copied into /etc/vault.key inside the recovery root filesystem BEFORE creating the SquashFS. Once the SquashFS is created, the key is embedded and immutable.
+
+6. **kexec usage:** The recovery OS uses kexec to load the Debian installer directly from rpool/ASSETS without rebooting. This preserves the ZFS pool state and injected passwords.
+
+**Size Estimate:**
+- Debian minbase: ~40MB
+- BusyBox: ~2MB
+- zfsutils-linux: ~20MB
+- Kernel + initrd: ~50MB
+- Recovery script: <1MB
+- **Total: ~120MB** (well under 1GB sda3 partition)
+
+**Testing the Recovery OS:**
+
+Before deploying to sda3, test the recovery environment:
+
+```bash
+# Mount the SquashFS and chroot into it
+mkdir /tmp/test-recovery
+mount -t squashfs /tmp/recovery.squashfs /tmp/test-recovery
+chroot /tmp/test-recovery /bin/sh
+
+# Verify tools are available
+which zfs
+which zpool
+zfs --version  # Should match Proxmox version
+
+# Verify recovery script exists
+/usr/local/bin/privatebox-recovery --help  # (or dry-run mode)
+```
+
 ## Asset Management for Offline Operation
 
 Identical to the v2 plan, but the asset path is now a ZFS mountpoint.
