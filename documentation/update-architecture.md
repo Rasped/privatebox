@@ -530,6 +530,380 @@ zfs list -t snapshot -o name,used,refer
 
 Can be automated via Semaphore playbook or systemd timer.
 
+## Production Considerations
+
+These are critical requirements that separate a proof-of-concept from a production-ready appliance. All three must be addressed before Product Release.
+
+### 1. Reliability: Power Loss and Space Constraints
+
+**Problem:** Updates can be interrupted by power loss, disk full errors, or system crashes. A half-completed update or snapshot can leave the system in an inconsistent state.
+
+**Requirements:**
+
+#### Idempotent Operations
+All update and rollback operations must be safely re-runnable:
+
+```bash
+# Example: Snapshot creation must handle existing snapshots
+SNAPSHOT_NAME="rpool/data/vm-100-disk-0@pre-update-$(date +%Y%m%d-%H%M)"
+
+# Check if snapshot already exists (from interrupted previous run)
+if zfs list -t snapshot "$SNAPSHOT_NAME" >/dev/null 2>&1; then
+    echo "Snapshot already exists, using existing snapshot"
+else
+    zfs snapshot "$SNAPSHOT_NAME"
+fi
+
+# Rollback must handle partial rollback state
+if qm status 100 | grep -q "running"; then
+    qm stop 100
+fi
+
+zfs rollback "$SNAPSHOT_NAME"
+qm start 100
+```
+
+#### Space Guardrails
+Fail early if insufficient space for snapshots:
+
+```bash
+# Pre-flight check before any update
+check_disk_space() {
+    local pool="rpool"
+    local min_free_percent=10
+
+    local capacity=$(zpool list -H -o capacity "$pool" | tr -d '%')
+    local free_percent=$((100 - capacity))
+
+    if [[ $free_percent -lt $min_free_percent ]]; then
+        error_exit "Insufficient disk space: ${free_percent}% free (need ${min_free_percent}% minimum)"
+    fi
+
+    echo "Disk space check passed: ${free_percent}% free"
+}
+```
+
+#### Interrupted Snapshot Detection
+Detect and clean up snapshots from interrupted operations:
+
+```bash
+# Find snapshots older than 7 days with "pre-update" prefix but no corresponding completion marker
+cleanup_orphaned_snapshots() {
+    local cutoff_date=$(date -d '7 days ago' +%s)
+
+    zfs list -H -t snapshot -o name,creation | grep '@pre-update-' | while read snap creation; do
+        if [[ $creation -lt $cutoff_date ]]; then
+            echo "Found orphaned snapshot (>7 days old): $snap"
+            # Check if update completed (marker file, log entry, etc.)
+            if ! check_update_completed "$snap"; then
+                echo "Cleaning up orphaned snapshot: $snap"
+                zfs destroy "$snap"
+            fi
+        fi
+    done
+}
+```
+
+**Testing Requirements:**
+- Simulate power loss during snapshot creation (kill -9)
+- Simulate power loss during rollback (kill -9)
+- Simulate disk full during update
+- Verify system can recover from all interrupted states
+
+### 2. Deep Health Checks: Beyond HTTP 200
+
+**Problem:** A web UI responding with HTTP 200 doesn't mean the service is actually working. Updates can break functionality while leaving the service "running."
+
+**Shallow Check (Insufficient):**
+```bash
+# This only proves the web server is running
+curl -sSk https://10.10.20.1 >/dev/null && echo "OPNsense OK"
+```
+
+**Deep Check (Required):**
+```bash
+# OPNsense health check (comprehensive)
+opnsense_health_check() {
+    local failures=0
+
+    # 1. Web UI responds
+    if ! curl -sSk https://10.10.20.1 -o /dev/null -w '%{http_code}' | grep -q '^200$'; then
+        echo "FAIL: Web UI not responding"
+        ((failures++))
+    fi
+
+    # 2. Firewall is passing traffic (test from Management VM)
+    if ! ping -c 3 -W 2 8.8.8.8 >/dev/null 2>&1; then
+        echo "FAIL: Cannot reach internet (firewall not routing)"
+        ((failures++))
+    fi
+
+    # 3. DNS resolution working (Unbound)
+    if ! dig @10.10.20.1 +short google.com | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo "FAIL: DNS resolution not working"
+        ((failures++))
+    fi
+
+    # 4. DNSSEC validation working
+    if ! dig @10.10.20.1 +dnssec cloudflare.com | grep -q "ad;"; then
+        echo "FAIL: DNSSEC validation not working"
+        ((failures++))
+    fi
+
+    # 5. DHCP server responding (if OPNsense is DHCP server)
+    if ! timeout 5 dhcping -s 10.10.20.1 >/dev/null 2>&1; then
+        echo "WARN: DHCP server not responding (may not be critical)"
+    fi
+
+    # 6. Gateway is reachable from clients
+    if ! ssh debian@10.10.20.10 "ping -c 3 10.10.20.1" >/dev/null 2>&1; then
+        echo "FAIL: Gateway not reachable from Management VM"
+        ((failures++))
+    fi
+
+    return $failures
+}
+```
+
+**Service-Specific Health Checks:**
+
+```bash
+# AdGuard Home health check
+adguard_health_check() {
+    # 1. Container running
+    ssh debian@10.10.20.10 "podman ps | grep -q adguard" || return 1
+
+    # 2. DNS port responding
+    dig @10.10.20.10 +short google.com | grep -qE '^[0-9.]+$' || return 1
+
+    # 3. Actually blocking ads (test with known ad domain)
+    if dig @10.10.20.10 +short ads.example.com | grep -qE '^[0-9.]+$'; then
+        echo "FAIL: AdGuard not blocking ads"
+        return 1
+    fi
+
+    # 4. Web UI accessible
+    curl -sSk http://10.10.20.10:3000 >/dev/null || return 1
+
+    return 0
+}
+
+# Management VM health check
+management_vm_health_check() {
+    # 1. VM is running
+    qm status 9000 | grep -q "running" || return 1
+
+    # 2. SSH accessible
+    timeout 5 ssh -o ConnectTimeout=2 debian@10.10.20.10 "echo ok" >/dev/null 2>&1 || return 1
+
+    # 3. All containers running
+    local expected_containers="portainer semaphore adguard caddy homer"
+    for container in $expected_containers; do
+        if ! ssh debian@10.10.20.10 "podman ps | grep -q $container"; then
+            echo "FAIL: Container $container not running"
+            return 1
+        fi
+    done
+
+    # 4. Caddy reverse proxy working
+    curl -sSk https://portainer.lan >/dev/null || return 1
+
+    return 0
+}
+```
+
+**Health Check Strategy:**
+- Run shallow checks first (fast, fail early)
+- Run deep checks only if shallow checks pass
+- Wait 30-60 seconds after update for services to stabilize
+- Retry failed checks once before declaring failure
+- Log all health check results for debugging
+
+### 3. Management Plane Failure: Out-of-Band Recovery
+
+**Problem:** If the Management VM is broken, Semaphore is inaccessible. Users cannot trigger updates or rollbacks via the web UI.
+
+**Requirement:** Emergency CLI tools on Proxmox host for out-of-band management.
+
+#### Emergency Rollback Script
+
+Create `/usr/local/bin/privatebox-emergency-rollback` on Proxmox host:
+
+```bash
+#!/bin/bash
+# Emergency rollback script for when Management VM is broken
+# Run from Proxmox host SSH session
+
+set -e
+
+VMID="${1:-}"
+SNAPSHOT="${2:-}"
+
+usage() {
+    echo "Usage: privatebox-emergency-rollback <VMID> [snapshot]"
+    echo ""
+    echo "Examples:"
+    echo "  privatebox-emergency-rollback 100               # Show available snapshots for VM 100"
+    echo "  privatebox-emergency-rollback 100 pre-update-20251023-1430"
+    echo ""
+    echo "Common VMIDs:"
+    echo "  100   - OPNsense"
+    echo "  9000  - Management VM"
+    echo "  101   - Subnet Router"
+    exit 1
+}
+
+[[ -z "$VMID" ]] && usage
+
+# List available snapshots if none specified
+if [[ -z "$SNAPSHOT" ]]; then
+    echo "Available snapshots for VM $VMID:"
+    zfs list -t snapshot -r rpool/data | grep "vm-${VMID}-disk" | awk '{print $1}' | sed 's/.*@/  @/'
+    echo ""
+    echo "Run: privatebox-emergency-rollback $VMID <snapshot-name>"
+    exit 0
+fi
+
+# Confirm with user
+echo "WARNING: This will rollback VM $VMID to snapshot: $SNAPSHOT"
+echo "Any changes since the snapshot will be LOST."
+echo ""
+read -p "Type 'YES' to proceed: " confirm
+
+[[ "$confirm" != "YES" ]] && { echo "Aborted."; exit 1; }
+
+# Stop VM
+echo "Stopping VM $VMID..."
+qm stop "$VMID" || true
+sleep 5
+
+# Rollback
+echo "Rolling back to snapshot $SNAPSHOT..."
+zfs rollback "rpool/data/vm-${VMID}-disk-0@${SNAPSHOT}"
+
+# Start VM
+echo "Starting VM $VMID..."
+qm start "$VMID"
+
+echo ""
+echo "Rollback complete. VM $VMID is starting."
+echo "Wait 30-60 seconds for services to come online."
+echo ""
+echo "Verify with: qm status $VMID"
+```
+
+#### Emergency Snapshot Script
+
+Create `/usr/local/bin/privatebox-emergency-snapshot` on Proxmox host:
+
+```bash
+#!/bin/bash
+# Emergency snapshot creation when Semaphore is unavailable
+
+set -e
+
+VMID="${1:-}"
+DESCRIPTION="${2:-manual-emergency}"
+
+usage() {
+    echo "Usage: privatebox-emergency-snapshot <VMID> [description]"
+    echo ""
+    echo "Examples:"
+    echo "  privatebox-emergency-snapshot 100"
+    echo "  privatebox-emergency-snapshot 9000 before-manual-fix"
+    exit 1
+}
+
+[[ -z "$VMID" ]] && usage
+
+TIMESTAMP=$(date +%Y%m%d-%H%M)
+SNAPSHOT_NAME="rpool/data/vm-${VMID}-disk-0@${DESCRIPTION}-${TIMESTAMP}"
+
+echo "Creating snapshot: $SNAPSHOT_NAME"
+zfs snapshot "$SNAPSHOT_NAME"
+
+echo "Snapshot created successfully."
+echo "To rollback: privatebox-emergency-rollback $VMID ${DESCRIPTION}-${TIMESTAMP}"
+```
+
+#### Installation During Bootstrap
+
+These scripts should be installed during the initial Proxmox setup:
+
+```bash
+# In bootstrap/prepare-host.sh or similar
+install_emergency_tools() {
+    echo "Installing emergency recovery tools..."
+
+    cp /path/to/privatebox-emergency-rollback /usr/local/bin/
+    cp /path/to/privatebox-emergency-snapshot /usr/local/bin/
+
+    chmod +x /usr/local/bin/privatebox-emergency-rollback
+    chmod +x /usr/local/bin/privatebox-emergency-snapshot
+
+    echo "Emergency tools installed."
+    echo "Available commands:"
+    echo "  - privatebox-emergency-rollback"
+    echo "  - privatebox-emergency-snapshot"
+}
+```
+
+#### Documentation for Users
+
+Create `/root/EMERGENCY-RECOVERY.txt` on Proxmox host:
+
+```
+PRIVATEBOX EMERGENCY RECOVERY GUIDE
+
+If the Management VM is broken and you cannot access Semaphore:
+
+1. SSH to Proxmox host:
+   ssh root@10.10.20.20
+
+2. List available snapshots:
+   privatebox-emergency-rollback 9000
+
+3. Rollback to a snapshot:
+   privatebox-emergency-rollback 9000 pre-update-20251023-1430
+
+4. Or create emergency snapshot before attempting fixes:
+   privatebox-emergency-snapshot 9000 before-manual-fix
+
+Common VM IDs:
+  100  - OPNsense (firewall/router)
+  9000 - Management VM (Portainer, Semaphore, etc.)
+  101  - Subnet Router (Tailscale VPN)
+
+For OPNsense rollback:
+  privatebox-emergency-rollback 100
+
+If everything is broken:
+  Boot to "PrivateBox Factory Reset" from GRUB menu
+  This will reinstall the entire system (passwords preserved)
+```
+
+**Testing Requirements:**
+- Intentionally break Management VM (kill Semaphore container)
+- Verify emergency rollback works from Proxmox SSH
+- Verify emergency snapshot creation works
+- Test with no network connectivity to Management VM
+- Test with completely corrupted Management VM disk
+
+### Summary: Production Readiness Checklist
+
+Before Product Release, verify:
+
+- [ ] All update operations are idempotent (can survive power loss)
+- [ ] Space guardrails prevent disk-full failures
+- [ ] Orphaned snapshot detection and cleanup working
+- [ ] Deep health checks validate actual functionality (not just HTTP 200)
+- [ ] Service-specific health checks for OPNsense, AdGuard, Management VM
+- [ ] Emergency CLI tools installed on Proxmox host
+- [ ] Emergency recovery documentation in /root/EMERGENCY-RECOVERY.txt
+- [ ] All three scenarios tested: power loss, space exhaustion, management plane failure
+
+**Without these safeguards, the update system is not production-ready.**
+
 ## Future Enhancements
 
 Potential improvements not in initial implementation:
