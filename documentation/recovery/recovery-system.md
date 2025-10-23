@@ -1,170 +1,207 @@
-# PrivateBox Recovery System
+# PrivateBox Recovery System (v3 - ZFS Edition)
 
 ## Overview
 
 PrivateBox includes a built-in recovery system that provides factory reset capability while preserving unique installation passwords. This creates a true appliance experience - users can always recover to a known-good state without losing their credentials.
 
+This (v3) plan replaces LVM and LUKS with a ZFS-native layout. This provides the high-performance snapshots and data integrity features Proxmox is known for, while retaining the flexible, asset-preserving recovery model from the v2 plan.
+
 ## Design Goals
 
-- **Simple**: One-button factory reset like a router
+- **Simple**: One-button factory reset experience via boot menu
 - **Secure**: Passwords encrypted and inaccessible from main OS
-- **Offline**: No network required for recovery
+- **Offline**: No network required for recovery or re-provisioning
 - **Physical-only**: Must be at the device to initiate
 - **Preserves passwords**: Services continue working after reset
+- **Fast Snapshots**: Leverages ZFS for instantaneous, low-impact system snapshots
+- **Flexible**: ZFS datasets replace LVs for a more dynamic data structure
 
 ## Partition Layout
 
+This design uses a ZFS-native layout. A single ZFS pool (rpool) manages all data, using datasets as "logical partitions."
+
+### Physical Partition Layout
+
 ```
-/dev/sda1 - [EFI]            - 512MB  - FAT32    - Normal boot
-/dev/sda2 - [PROXMOX]        - Rest   - ZFS      - Main system
-/dev/sda3 - [RECOVERY-ASSETS]- 4GB    - EXT4     - Downloaded assets for offline operation
-/dev/sda4 - [VAULT]          - 100MB  - LUKS     - Encrypted passwords
-/dev/sda5 - [RECOVERY-OS]    - 500MB  - SQUASHFS - Immutable Alpine Linux
-/dev/sda6 - [RECOVERY-IMG]   - 10GB   - SQUASHFS - Compressed Proxmox image
-/dev/sda7 - [RECOVERY-WRK]   - 2GB    - EXT4     - Temp workspace
+/dev/sda1 - [EFI]           - 512MB  - FAT32    - GRUB Bootloader
+/dev/sda2 - [/boot]         - 1GB    - EXT4     - Unencrypted kernels (required to boot ZFS)
+/dev/sda3 - [RECOVERY-OS]   - 1GB    - SQUASHFS - Immutable recovery environment
+/dev/sda4 - [ZFS_RPOOL]     - Rest   - ZFS      - Main ZFS pool for all system data
 ```
+
+### ZFS Dataset Layout
+
+(Inside the /dev/sda4 ZFS Pool rpool)
+
+```
+rpool/
+├── ROOT     - (Filesystem) - Main Proxmox OS (Wiped on reset)
+│   └── data/
+│       ├── vm-100-disk-0
+│       └── vm-9000-disk-0
+├── ASSETS   - (Filesystem) - Offline assets & installer files (Preserved)
+├── VAULT    - (Filesystem) - Encrypted passwords (Preserved, Encrypted)
+└── ... (Other ZFS datasets for VMs, containers, etc.)
+```
+
+(Note: ZFS datasets are dynamic and don't have fixed sizes, which is a major advantage.)
 
 ## Implementation Strategy
 
-### Two-Phase Approach
+### ZFS-Native, Installer-Based Approach
+
+The implementation leverages ZFS as the core storage technology, managed by a Debian Preseed installer.
 
 **Phase 1: Offline Capability (Low Risk)**
-- Download and store all required assets locally
-- Modify existing scripts to use local copies instead of internet downloads
-- Enable PrivateBox to run completely offline after initial setup
-- Test each component's offline operation incrementally
+- Download all assets (cloud images, container images, Debian installer files) to a staging area
 
-**Phase 2: Recovery Infrastructure (High Risk)**
-- Create encrypted password vault
-- Generate and store golden Proxmox image
-- Build recovery OS and partition structure
-- Implement factory reset capability
+**Phase 2: Installer, Recovery & Configuration**
+- Create a Debian Preseed configuration (preseed.cfg)
+- The preseed/late_command script is critical. It will be responsible for:
+  - Installing ZFS packages (zfs-utils-linux)
+  - Creating the rpool on /dev/sda4
+  - Creating the ROOT, ASSETS, and VAULT datasets
+- The Preseed process installs a minimal Debian, the Proxmox packages, and cloud-init directly into the rpool/ROOT dataset
 
-### Critical Timing Correction
+### Key Technology Shift: "ZFS Datasets as Volumes"
 
-The golden Proxmox image must be created **immediately** after Proxmox installation, before ANY PrivateBox components are installed. This ensures recovery restores to truly virgin state.
+This plan replaces LVM entirely. Instead of lv_proxmox, lv_assets, and lv_vault, we use ZFS datasets.
 
-**Assets Requiring Local Storage:**
-- Debian 13 cloud image (~500MB)
-- Container images: AdGuard, Homer, Portainer, Semaphore (~2GB)
-- OPNsense template/backup (~500MB)
-- PrivateBox source code (~100MB)
-- Required packages and dependencies (~500MB)
+**Factory Reset Action:**
+- LVM (v2): `mkfs.ext4 /dev/vg_privatebox/lv_proxmox` (Slow)
+- ZFS (v3): `zfs destroy -r rpool/ROOT && zfs create rpool/ROOT` (Instant)
 
-## Recovery Flow
+This is dramatically faster and cleaner. The recovery script simply destroys the main OS dataset and creates a new empty one, leaving rpool/ASSETS and rpool/VAULT completely untouched.
 
-### During Initial Install
+### Configuration Management: cloud-init
 
-1. Bootstrap checks for recovery partitions
-2. If missing, creates partition structure
-3. **Downloads all required assets to RECOVERY-ASSETS partition** (Phase 1)
-4. **Creates golden Proxmox image IMMEDIATELY** (truly virgin, before ANY PrivateBox components)
-5. Generates unique passwords (SERVICES_PASSWORD, etc.)
-6. Encrypts and stores passwords in VAULT partition
-7. Installs Alpine-based recovery OS
-8. Continues normal PrivateBox installation using local assets
-
-### During Recovery
-
-1. User selects "PrivateBox Recovery Mode" from GRUB menu
-2. Alpine recovery OS boots (no password, auto-login)
-3. User sees warning prompt:
-   ```
-   ========================================
-   PRIVATEBOX FACTORY RECOVERY
-   ========================================
-   WARNING: This will completely erase and
-   reinstall PrivateBox to factory defaults.
-
-   Your unique passwords will be preserved.
-
-   Do you wish to proceed? (type YES to confirm):
-   ```
-4. If confirmed:
-   - Mounts encrypted vault (key embedded in recovery OS)
-   - Retrieves stored passwords
-   - Wipes main Proxmox partition
-   - Restores golden Proxmox image
-   - Configures network settings
-   - Injects passwords into `/etc/privatebox/config.env`
-   - Reboots to fresh system
-5. Proxmox boots and runs bootstrap automatically with preserved passwords
+This remains identical to the v2 plan. cloud-init runs on first boot, reads its configuration from rpool/ASSETS, and provisions the appliance.
 
 ## Security Implementation
 
-### Vault Encryption
+### ZFS Native Encryption
 
-The VAULT partition uses LUKS encryption with a key embedded in the recovery OS:
+This plan replaces LUKS with ZFS native encryption, which is simpler and more flexible. We only encrypt the VAULT dataset.
 
-```bash
-# During setup
-dd if=/dev/urandom of=/tmp/vault.key bs=512 count=1
-cryptsetup luksFormat /dev/sda3 /tmp/vault.key
+**Vault Creation (During Initial Install):**
 
-# Embed key in recovery initramfs
-cp /tmp/vault.key /recovery/initramfs/etc/vault.key
-shred -u /tmp/vault.key
-```
+1. A raw encryption key is generated:
+   ```bash
+   dd if=/dev/urandom of=/tmp/vault.key bs=32 count=1
+   ```
 
-### Why This Is "Good Enough"
+2. The VAULT dataset is created with this key:
+   ```bash
+   zfs create -o encryption=on -o keylocation=file:///tmp/vault.key -o keyformat=raw rpool/VAULT
+   ```
 
-- **Proxmox cannot decrypt vault** - Doesn't have the key
-- **Recovery OS has key built-in** - No user interaction needed
-- **Protects against remote attacks** - Primary threat for home users
-- **Physical access assumed safe** - Home environment
-- **Simple and reliable** - No complex key derivation
+3. The vault.key file is then stored in two secure locations:
+   - In the initramfs of the [RECOVERY-OS] on sda3
+   - In a secure location within rpool/ASSETS (e.g., in the cloud-init config), for the main OS to use
 
-### Recovery OS Properties
+**Security Properties:**
+- **Proxmox cannot access vault (by default)**: The rpool/VAULT dataset is not auto-mounted. It is only mounted by the cloud-init script, which knows where to find the key and how to load it
+- **Recovery OS has key**: The recovery environment's initramfs contains the key, allowing it to mount rpool/VAULT if needed (e.g., to verify credentials)
 
-- **No network services** - No SSH, no open ports
-- **Console only** - Physical keyboard required
-- **Immutable** - SquashFS filesystem, runs from RAM
-- **Single purpose** - Only runs recovery script
+## Recovery Flow
+
+### During Initial Install (Booting from temporary USB)
+
+1. A technician boots the appliance from a custom Debian Installer USB
+2. The Preseed installer auto-partitions sda1, sda2, and sda3
+3. Preseed late_command script runs:
+   - Installs ZFS packages
+   - Creates the ZFS rpool on sda4
+   - Creates datasets: `zfs create rpool/ROOT`, `zfs create rpool/ASSETS`
+   - Generates vault.key and creates encrypted dataset: `zfs create -o encryption=on ... rpool/VAULT`
+   - Installs the OS (Debian + Proxmox + cloud-init) into rpool/ROOT
+   - Installs the [RECOVERY-OS] onto sda3 and injects the vault.key into its initramfs
+   - Mounts rpool/ASSETS and populates it with all offline assets (installer files, cloud-init configs, vault.key)
+   - Mounts rpool/VAULT (using the key) and populates it with the generated passwords
+4. Preseed Configures Bootloader: GRUB is installed on sda1, configured to boot from sda2 (/boot) and rpool/ROOT (/). It includes the "PrivateBox Factory Reset" entry
+5. The appliance reboots. The cloud-init process runs for the first time
+
+### During a Factory Reset (User-initiated)
+
+1. User selects "PrivateBox Factory Reset" from the GRUB menu
+2. The immutable [RECOVERY-OS] from sda3 boots
+3. User sees the warning prompt and types "YES"
+4. The recovery script executes:
+   - Imports the ZFS rpool
+   - Executes ZFS reset:
+     ```bash
+     zfs destroy -r rpool/ROOT
+     zfs create rpool/ROOT
+     ```
+   - Mounts rpool/ASSETS
+   - Executes kexec to load the Debian installer kernel (vmlinuz) and initrd (initrd.gz) from rpool/ASSETS
+5. **Unattended Re-install**: The Debian Installer starts from RAM
+   - It loads the recovery_preseed.cfg from rpool/ASSETS
+   - The preseed file's "partitioning" recipe is now very simple: it's configured to find the existing rpool/ROOT and sda2 and use them as / and /boot
+   - It installs a fresh, virgin Debian + Proxmox + cloud-init onto rpool/ROOT
+6. **System Reboots**: The installer finishes and reboots
+7. **First Boot (cloud-init)**:
+   - The fresh Proxmox system boots
+   - cloud-init starts automatically
+   - It finds its user-data config on rpool/ASSETS
+   - It finds the vault.key on rpool/ASSETS, uses it to load the rpool/VAULT encryption, and mounts the vault
+   - It reads the preserved passwords and provisions the entire appliance from the offline assets
 
 ## What Gets Preserved
 
 ### Preserved Across Recovery
-- All generated passwords (SERVICES_PASSWORD, etc.)
-- Installation UUID
+- **ZFS Datasets**: rpool/ASSETS and rpool/VAULT are never touched by the reset
+- **Physical Partitions**: sda1, sda2, sda3, and sda4 (the pool) are untouched
 
 ### Reset to Defaults
-- Network configuration (always 192.168.1.10/24)
-- All VMs and containers
-- All service configurations
-- User data and customizations
+- **ZFS Dataset**: rpool/ROOT is completely destroyed and recreated (recursive)
+- All VMs and containers (which live on datasets under rpool/ROOT)
+- All service configurations and user data
 
 ## Implementation Notes
 
-### Golden Image Creation
+### ZFS on Debian Preseed
 
-**CRITICAL**: The Proxmox golden image must be created at the correct time:
-1. Minimal Proxmox installed (clean base system)
-2. Recovery partitions created
-3. Assets downloaded to RECOVERY-ASSETS
-4. **Image created IMMEDIATELY** - before any PrivateBox components installed
-5. Image compressed and stored in RECOVERY-IMG partition
-6. PrivateBox installation continues using local assets
+The most complex part of this plan is the preseed/late_command script for the initial install. It must reliably install ZFS into the installer environment and bootstrap the pool before the OS is installed. This is a common procedure for "ZFS on Root" Debian installations and is well-documented.
 
-This ensures recovery restores to truly virgin Proxmox, then bootstrap re-runs with preserved passwords.
+The recovery script (sda3) is now dramatically simpler, as it only needs to run `zfs destroy`.
 
-### Recovery Workspace
+### Dataset Hierarchy
 
-The RECOVERY-WRK partition provides temporary space for:
-- Decompressing the golden image
-- Temporary mount points
-- Log files during recovery
+Understanding the dataset hierarchy is critical:
 
-This partition is wiped after each recovery operation.
+```
+rpool/
+├── ROOT/              ← Destroyed recursively on reset
+│   ├── data/         ← All VM disks live here
+│   │   ├── vm-100-disk-0
+│   │   └── vm-9000-disk-0
+│   └── ... (all Proxmox system data)
+├── ASSETS/            ← Preserved (sibling, not child of ROOT)
+└── VAULT/             ← Preserved (sibling, not child of ROOT)
+```
+
+The `-r` flag on `zfs destroy -r rpool/ROOT` destroys ROOT and all nested datasets. ASSETS and VAULT survive because they are siblings, not children.
 
 ## Asset Management for Offline Operation
 
-### Recovery Assets Partition Structure
+Identical to the v2 plan, but the asset path is now a ZFS mountpoint.
+
+### Assets Dataset Structure (Logical)
 
 ```
-/recovery-assets/
+/rpool/ASSETS/
+├── installer/
+│   ├── vmlinuz
+│   ├── initrd.gz
+│   ├── preseed.cfg
+│   ├── cloud-init/
+│   │   ├── user-data
+│   │   ├── meta-data
+│   │   └── vault.key
 ├── images/
 │   ├── debian-13-cloudimg-amd64.qcow2
-│   └── checksums.sha256
+│   └── ...
 ├── containers/
 │   ├── adguard-home-latest.tar
 │   ├── homer-latest.tar
@@ -172,43 +209,18 @@ This partition is wiped after each recovery operation.
 │   ├── semaphore-latest.tar
 │   └── manifest.json
 ├── templates/
-│   ├── opnsense-template.tar.gz
-│   └── configs/
-├── source/
-│   ├── privatebox-main.tar.gz
-│   └── ansible-playbooks.tar.gz
-└── packages/
-    ├── debian-packages.tar.gz
-    └── requirements.txt
+│   └── opnsense-template.tar.gz
+└── source/
+    └── privatebox-main.tar.gz
 ```
 
-### Download Script Modifications
+### Script Modifications
 
-Each current download operation must be modified to check local assets first:
+All provisioning scripts (now part of the cloud-init user-data) must be modified to check these local paths first:
 
-1. **Debian Cloud Image**: `bootstrap/bootstrap.sh` Phase 2
-   - Check `/recovery-assets/images/debian-13-cloudimg-amd64.qcow2`
-   - Fall back to cloud.debian.org if missing
-
-2. **Container Images**: Ansible container deployments
-   - Check `/recovery-assets/containers/<service>-latest.tar`
-   - Fall back to `podman pull` if missing
-
-3. **OPNsense Template**: OPNsense deployment playbook
-   - Check `/recovery-assets/templates/opnsense-template.tar.gz`
-   - Fall back to GitHub if missing
-
-4. **Source Code**: Template generation and updates
-   - Check `/recovery-assets/source/privatebox-main.tar.gz`
-   - Fall back to git operations if missing
-
-### Asset Update Strategy
-
-Assets should be refreshed periodically (manual operation):
-- Download latest versions to staging area
-- Verify checksums and functionality
-- Replace production assets atomically
-- Update manifests and version tracking
+- **Debian Cloud Image**: Check `/rpool/ASSETS/images/debian-13...`
+- **Container Images**: Check `/rpool/ASSETS/containers/<service>.tar` and use `podman load`
+- **OPNsense Template**: Check `/rpool/ASSETS/templates/opnsense...`
 
 ## User Experience
 
@@ -216,11 +228,31 @@ From the user's perspective:
 1. System problem occurs
 2. Reboot and select recovery from GRUB
 3. Type "YES" to confirm
-4. Wait ~10 minutes
-5. System returns to factory state with same passwords
+4. Wait ~10-15 minutes (for a full re-install and cloud-init run)
+5. System returns to factory state with the same passwords
 6. All services work immediately
 
 This matches the experience of commercial home routers and NAS appliances - simple, predictable, and reliable.
+
+## Integration with Update Architecture
+
+This recovery system complements the update architecture (see `documentation/update-architecture.md`):
+
+**For Updates:** ZFS snapshots of rpool/ROOT before changes (instant, reversible)
+```bash
+zfs snapshot rpool/ROOT@pre-update-20251023
+# If update fails:
+zfs rollback rpool/ROOT@pre-update-20251023
+```
+
+**For Recovery:** ZFS destroy rpool/ROOT and reinstall (nuclear option)
+```bash
+zfs destroy -r rpool/ROOT
+zfs create rpool/ROOT
+# Then: reinstall via recovery
+```
+
+Both strategies use the same ZFS foundation and preserve rpool/ASSETS and rpool/VAULT.
 
 ## Future Enhancements
 
@@ -229,6 +261,7 @@ Potential improvements (not in initial implementation):
 - LED status indicators during recovery
 - Backup user data to separate partition before reset
 - Multiple recovery points (versioned golden images)
+- ZFS send/receive for external backups
 
 ## Testing Recovery
 
@@ -239,4 +272,4 @@ To test the recovery system:
 4. Verify system returns to original state
 5. Verify passwords still work
 
-Recovery can be tested as often as needed without wearing out flash storage (reads only, no writes to recovery partitions during normal operation).
+Recovery can be tested as often as needed. ZFS snapshots can be used to speed up testing (snapshot before test, rollback after).
