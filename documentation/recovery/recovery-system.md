@@ -105,23 +105,112 @@ This plan replaces LUKS with ZFS native encryption, which is simpler and more fl
 - **Password injection happens during reset only**: The recovery script mounts the vault, reads passwords, and injects them into the cloud-init config on rpool/ASSETS just before triggering the reinstall
 - **Protects against root compromise**: Even if an attacker gains root on Proxmox, they cannot access the vault or steal the permanent passwords
 
+## Factory Provisioning Setup
+
+**Production Method:** All appliances are provisioned via PXE boot from a factory provisioning server. USB installation is only used for development and testing.
+
+### Provisioning Server Requirements
+
+The factory provisioning server must provide:
+
+1. **DHCP Server**: Assigns IP addresses and provides PXE boot information
+2. **TFTP Server**: Serves the network boot loader and kernel/initrd
+3. **HTTP Server**: Hosts preseed configuration and offline assets
+4. **Asset Repository**: Stores all required assets (container images, VM templates, installer files)
+
+### Provisioning Server Directory Structure
+
+```
+/srv/privatebox-provisioning/
+├── tftp/
+│   ├── pxelinux.0           # PXE boot loader
+│   ├── ldlinux.c32          # Required by pxelinux
+│   ├── pxelinux.cfg/
+│   │   └── default          # PXE menu configuration
+│   ├── debian-installer/
+│   │   ├── amd64/
+│   │   │   ├── linux        # Debian installer kernel
+│   │   │   └── initrd.gz    # Debian installer initrd
+├── http/
+│   ├── preseed.cfg          # Automated installation configuration
+│   └── assets/              # All offline assets
+│       ├── images/
+│       │   └── debian-13-cloudimg-amd64.qcow2
+│       ├── containers/
+│       │   ├── adguard-home-latest.tar
+│       │   ├── portainer-ce-latest.tar
+│       │   ├── semaphore-latest.tar
+│       │   └── homer-latest.tar
+│       ├── templates/
+│       │   └── opnsense-template.tar.gz
+│       ├── installer/
+│       │   ├── vmlinuz
+│       │   ├── initrd.gz
+│       │   ├── preseed.cfg
+│       │   └── cloud-init/
+│       │       ├── user-data
+│       │       └── meta-data
+│       └── recovery/
+│           └── recovery.squashfs  # Pre-built recovery OS
+```
+
+### PXE Boot Configuration
+
+```
+# /srv/privatebox-provisioning/tftp/pxelinux.cfg/default
+DEFAULT install
+LABEL install
+  KERNEL debian-installer/amd64/linux
+  APPEND initrd=debian-installer/amd64/initrd.gz auto=true priority=critical url=http://provisioning-server/preseed.cfg
+```
+
+### Preseed Configuration (Key Sections)
+
+The preseed.cfg on the provisioning server includes special commands to download assets:
+
+```bash
+# In preseed/late_command:
+d-i preseed/late_command string \
+    in-target wget -r -np -nH --cut-dirs=2 \
+    http://provisioning-server/assets/ \
+    -P /rpool/ASSETS/
+```
+
 ## Recovery Flow
 
-### During Initial Install (Booting from temporary USB)
+### During Initial Install (PXE Boot from Factory)
 
-1. A technician boots the appliance from a custom Debian Installer USB
-2. The Preseed installer auto-partitions sda1, sda2, and sda3
-3. Preseed late_command script runs:
+1. **Appliance powers on**, network boots via PXE
+2. **DHCP assigns IP** and directs to TFTP server
+3. **PXE boot loader** downloads Debian installer kernel and initrd from TFTP
+4. **Installer boots** and automatically loads preseed.cfg from HTTP server
+5. **Preseed installer** runs non-interactively:
+   - Auto-partitions sda1 (EFI), sda2 (/boot), sda3 (RECOVERY-OS), sda4 (ZFS pool)
+6. **Preseed late_command script** runs:
    - Installs ZFS packages
    - Creates the ZFS rpool on sda4
    - Creates datasets: `zfs create rpool/ROOT`, `zfs create rpool/ASSETS`
+   - **Downloads all offline assets** from provisioning server to rpool/ASSETS:
+     ```bash
+     wget -r -np -nH --cut-dirs=2 http://provisioning-server/assets/ -P /rpool/ASSETS/
+     ```
+   - Downloads pre-built recovery OS: `wget http://provisioning-server/assets/recovery/recovery.squashfs -O /tmp/recovery.squashfs`
    - Generates vault.key and creates encrypted dataset: `zfs create -o encryption=on ... rpool/VAULT`
+   - Installs the [RECOVERY-OS] onto sda3:
+     ```bash
+     dd if=/tmp/recovery.squashfs of=/dev/sda3 bs=1M
+     ```
+   - Injects the vault.key into the recovery OS SquashFS metadata (or rebuilds with key embedded)
    - Installs the OS (Debian + Proxmox + cloud-init) into rpool/ROOT
-   - Installs the [RECOVERY-OS] onto sda3 and injects the vault.key into its initramfs (then deletes vault.key from disk)
-   - Mounts rpool/ASSETS and populates it with all offline assets (installer files, cloud-init configs)
-   - Mounts rpool/VAULT (using the key from recovery OS) and populates it with the generated passwords
-4. Preseed Configures Bootloader: GRUB is installed on sda1, configured to boot from sda2 (/boot) and rpool/ROOT (/). It includes the "PrivateBox Factory Reset" entry
-5. The appliance reboots. The cloud-init process runs for the first time
+   - Generates unique passwords (SERVICES_PASSWORD, etc.)
+   - Mounts rpool/VAULT (using the key) and populates it with the generated passwords
+   - Deletes vault.key from disk (only exists in recovery OS and for initial cloud-init)
+7. **Preseed Configures Bootloader**: GRUB is installed on sda1, configured to boot from sda2 (/boot) and rpool/ROOT (/). It includes the "PrivateBox Factory Reset" entry
+8. **Appliance reboots from local disk**. The cloud-init process runs for the first time, provisioning all VMs and services using assets from rpool/ASSETS
+
+**Total provisioning time:** 20-30 minutes (depending on network speed for asset download)
+
+**Development/Testing Alternative:** For development, a bootable USB can be created with preseed.cfg and assets bundled. The flow is identical except assets are copied from USB instead of downloaded via HTTP.
 
 ### During a Factory Reset (User-initiated)
 
