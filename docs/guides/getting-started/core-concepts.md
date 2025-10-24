@@ -13,8 +13,8 @@ Your PrivateBox comes with several pre-configured "rooms" for different purposes
 *   **Trusted:** Your personal computers, laptops, and phones
 *   **Guest:** Visitor devices (internet only, cannot access your network)
 *   **IoT:** Smart devices like TVs and speakers (with separate cloud/local networks)
+*   **Cameras:** Security cameras (with separate cloud/local networks)
 *   **Services:** Where PrivateBox services run (only accessible from Trusted)
-*   **And more:** Camera networks and additional segments
 
 For complete details on all seven network segments, see the [VLAN configuration guide](../../advanced/how-to-use-vlans.md).
 
