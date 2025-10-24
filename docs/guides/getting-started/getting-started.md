@@ -29,16 +29,21 @@ Welcome to PrivateBox! This guide will walk you through setting up your new netw
 
 For PrivateBox to manage your network, you must prevent your old router from conflicting with it. The easiest way to do this is to **disable the DHCP server** on your existing Wi-Fi router or access point.
 
+**Alternative:** Some routers have an "Access Point" or "AP Mode" setting. This automatically disables DHCP and is the preferred method if available.
+
 1.  **Log in to your Wi-Fi router.** This usually involves visiting an IP address like `192.168.1.1` in your web browser and entering the admin password found on the router itself.
 2.  **Find the DHCP Server setting.** It is commonly found in the "LAN", "Network", or "Advanced Settings" section.
 3.  **Disable the DHCP Server.** Select the "Disable" or "Off" option and save your changes. Your router may need to restart.
 
-*Note: Every router is different. If you cannot find this setting, please search online for "how to disable DHCP on [Your Router's Model Name]". For more help, see our [Troubleshooting Guide](troubleshooting-guide.md).*
+**Note:** Every router is different. See our [Finding Router Settings](./finding-router-settings.md) guide or [Router Configuration Guide](./router-configuration.md) for specific router instructions.
 
 ## 4. First access
 
 1.  **Connect to Your Network:** Make sure your computer is connected to your network (either via an Ethernet cable to the port on the right, or to your existing Wi-Fi).
 2.  **Visit the Dashboard:** Open a web browser and go to: **`http://privatebox.lan`**
+
+    *If privatebox.lan does not work, try `http://10.10.10.1` instead.*
+
 3.  **Accept the Security Warning:** You will likely see a security warning page. **This is normal and expected.** It appears because your PrivateBox is using a private, self-signed security certificate instead of one from a public authority.
     *   Click the **"Advanced"** button.
     *   Click **"Proceed to privatebox.lan"** or **"Accept the Risk and Continue"**.
