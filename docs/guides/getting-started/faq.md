@@ -8,7 +8,7 @@ PrivateBox is a pre-configured network security appliance running open-source so
 
 ### Is this really open source?
 
-Yes. All software running on PrivateBox is open source. The automation scripts used to deploy it are also open source and available at https://github.com/subrosadev/privatebox. You can inspect, modify, and rebuild everything.
+Yes. All software running on PrivateBox is open source. The automation scripts used to deploy it are also open source and available at https://github.com/Rasped/privatebox. You can inspect, modify, and rebuild everything.
 
 ### What's the difference between the open-source project and the hardware appliance?
 
@@ -16,13 +16,13 @@ The open-source project provides scripts to deploy the PrivateBox stack on any c
 
 ### Are there any subscriptions or ongoing fees?
 
-No. Never. All features are included with your purchase. Software updates are provided for free, forever. You own the hardware, you own the software, you own your data.
+No subscriptions or fees. All features are included with your purchase. Software updates are provided for free, forever. You own the hardware, you own the software, you own your data.
 
 ### What happens if Sub Rosa goes out of business?
 
 Nothing changes. You have complete control over the system. All software is open source, and you can maintain, update, and modify it independently. There's no cloud dependency or licensing server.
 
-## Hardware & specifications
+## Hardware and specifications
 
 ### What are the hardware specifications?
 
@@ -49,7 +49,7 @@ No. The active cooling system is designed to be quiet enough for home office or 
 
 The standard chassis is a small form factor desktop. Third-party rack mounting brackets for this form factor are available separately. Future versions may offer official rack mount options.
 
-## Network & performance
+## Network and performance
 
 ### What network speeds does it support?
 
@@ -71,7 +71,7 @@ Hundreds. The exact number depends on your network activity, but the hardware is
 
 Yes. OPNsense has full VLAN support. You can create isolated network segments for IoT devices, guests, servers, etc.
 
-## Software & features
+## Software and features
 
 ### What operating system does it run?
 
@@ -96,7 +96,7 @@ Yes. You have full access to OPNsense and can configure any firewall rules, NAT,
 
 OPNsense includes IDS/IPS (Intrusion Detection/Prevention) capabilities via Suricata. AdGuard Home blocks malicious domains at the DNS level. Together, these provide network-wide threat protection.
 
-## Setup & configuration
+## Setup and configuration
 
 ### How long does initial setup take?
 
@@ -104,19 +104,19 @@ Physical setup takes about 5 minutes (plug in cables, power on). First login and
 
 ### Do I need technical knowledge to use it?
 
-Basic network knowledge is helpful but not required. The Quick Start Guide and online documentation walk you through initial setup step-by-step. For advanced features (VLANs, VPN, custom firewall rules), some networking knowledge is beneficial.
+Basic network knowledge is helpful but not required. The Getting Started Guide and online documentation walk you through initial setup step-by-step. For advanced features (VLANs, VPN, custom firewall rules), some networking knowledge is beneficial.
 
 ### Can I reset to factory defaults if I mess something up?
 
-Yes. Proxmox includes VM snapshots and backups. You can roll back to a previous state at any time. Full factory reset instructions are included in the documentation.
+Yes. PrivateBox includes a built-in factory reset system that works entirely offline. You can reset to factory defaults via the boot menu by connecting a keyboard and monitor directly to the device. The system preserves your unique installation passwords, so all services will work immediately after reset. No network connection or vendor support required.
 
 ### Where can I get help if I'm stuck?
 
-- **Documentation:** https://privatebox.com/docs (comprehensive guides and how-tos)
+- **Documentation:** See the [documentation](../../) for comprehensive guides and how-tos
 - **Community:** r/homelab and r/selfhosted communities are excellent resources
 - **Direct Support:** support@subrosa.dev for hardware or warranty issues
 
-## Privacy & security
+## Privacy and security
 
 ### Does it phone home or send telemetry?
 
@@ -134,7 +134,7 @@ OPNsense releases security updates regularly (often weekly). We test these updat
 
 Yes. By placing IoT devices on an isolated VLAN, you can allow them internet access while blocking them from accessing your main network or sending telemetry to manufacturers.
 
-## Warranty & support
+## Warranty and support
 
 ### What's the warranty period?
 
@@ -152,7 +152,7 @@ EU customers have a 14-day right of withdrawal. You can return the product for a
 
 Currently, support is provided on a best-effort basis via email and community resources. Paid support tiers may be introduced in the future based on demand.
 
-## Shipping & availability
+## Shipping and availability
 
 ### Where do you ship?
 
@@ -230,4 +230,4 @@ OPNsense supports HA (High Availability) clustering. This is an advanced configu
 
 ---
 
-**Still have questions?** Email support@subrosa.dev or check the full documentation at https://privatebox.com/docs
+**Still have questions?** Email support@subrosa.dev or check the [full documentation](../../)
