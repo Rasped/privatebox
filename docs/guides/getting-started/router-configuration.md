@@ -16,6 +16,25 @@ You have two options for any router:
 - Cleaner configuration
 - Router becomes a simple Wi-Fi access point
 
+## ISP-provided routers
+
+Many ISPs provide a combined modem/router unit. These often need special configuration.
+
+**Check if your ISP device has bridge mode or modem-only mode:**
+
+1. Log in to your ISP router (check sticker for address and password)
+2. Look for settings called:
+   - "Bridge mode"
+   - "Modem mode"
+   - "Router mode: Off"
+   - "Passthrough mode"
+
+**Search online:** "[ISP name] [router model] bridge mode" or "[ISP name] modem mode"
+
+**If bridge mode is not available:** Follow the DHCP disable instructions instead.
+
+**Note:** Bridge mode may disable your ISP router's Wi-Fi. This is expected - your existing Wi-Fi router or access point will handle wireless connections after PrivateBox is connected.
+
 ## Common router brands
 
 ### Asus routers
