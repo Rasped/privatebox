@@ -1,6 +1,6 @@
 # Getting Started Guide
 
-Welcome to PrivateBox! This guide will walk you through setting up your new network hardware in just a few minutes.
+Welcome to PrivateBox! This guide will walk you through setting up your new network hardware in a few minutes.
 
 ## 1. What's in the box
 
@@ -14,13 +14,13 @@ Welcome to PrivateBox! This guide will walk you through setting up your new netw
 
 ![Diagram of the back of the PrivateBox, labeling the left port as WAN and the right port as LAN]
 
-1.  **Connect WAN (Internet):** Plug your internet source (e.g., your modem from your ISP) into the **LEFT** port.
+1.  **Connect WAN (Internet):** Plug your internet source (e.g., your modem from your ISP) into the **port on the left**.
 
-2.  **Connect LAN (Your Network):** Use the included Ethernet cable to connect your main computer or a network switch to the **RIGHT** port.
+2.  **Connect LAN (Your Network):** Use the included Ethernet cable to connect your main computer or a network switch to the **port on the right**.
 
 3.  **Power On:** Plug the power adapter into your PrivateBox. The device will turn on automatically. The light on the front will illuminate.
 
-4.  **Reboot Your Modem (Recommended):** Many ISP modems need to be power-cycled to recognize PrivateBox as the new network gateway. This simple step prevents 90% of initial connection issues:
+4.  **Reboot Your Modem (Recommended):** Many ISP modems need to be power-cycled to recognize PrivateBox as the new network gateway:
     - Unplug your modem's power
     - Wait 30 seconds
     - Plug it back in and wait 2-3 minutes for it to fully reconnect
@@ -43,13 +43,13 @@ For PrivateBox to manage your network, you must prevent your old router from con
     *   Click the **"Advanced"** button.
     *   Click **"Proceed to privatebox.lan"** or **"Accept the Risk and Continue"**.
 
-## 5. You're all set!
+## 5. That's it
 
-Congratulations! Your network is now protected by PrivateBox. All devices connected to your network will have their ads and trackers blocked automatically.
+Your network is now protected by PrivateBox. All devices connected to your network will have their ads and trackers blocked automatically.
 
 ### Next steps
 
 Now that you're up and running, here's what you can do next:
 
 *   To understand the new security features of your network, read the **[Core Concepts](core-concepts.md)** guide.
-*   To learn how to segment your network for IoT devices or guests, see the **[How to Use VLANs](advanced/how-to-use-vlans.md)** guide.
+*   To learn how to segment your network for IoT devices or guests, see the **[How to Use VLANs](../advanced/how-to-use-vlans.md)** guide.
