@@ -4,6 +4,8 @@ This guide helps you locate and access your router's admin interface.
 
 ## Finding your router's admin page
 
+If an address doesn't work, your browser will show an error like 'This site can’t be reached'. This is normal. Simply try the next address in the list until one loads a login page.
+
 Common router admin URLs (try these in order):
 - http://192.168.1.1
 - http://192.168.0.1

@@ -18,22 +18,23 @@ You have two options for any router:
 
 ## ISP-provided routers
 
-Many ISPs provide a combined modem/router unit. These often need special configuration.
+Many ISPs provide a combined modem/router unit. To use PrivateBox correctly, you generally cannot use the Wi-Fi from your ISP-provided router. You have one primary option:
 
-**Check if your ISP device has bridge mode or modem-only mode:**
+**Enable "Bridge Mode" on your ISP router**
 
-1. Log in to your ISP router (check sticker for address and password)
-2. Look for settings called:
-   - "Bridge mode"
-   - "Modem mode"
-   - "Router mode: Off"
-   - "Passthrough mode"
+This turns your ISP device into a simple modem and disables its routing and Wi-Fi features. This is the correct way to allow PrivateBox to fully manage your network.
 
-**Search online:** "[ISP name] [router model] bridge mode" or "[ISP name] modem mode"
+1.  Log in to your ISP router (check the sticker for the address and password).
+2.  Look for a setting called "Bridge mode", "Modem mode", or "Passthrough mode".
+3.  Enable this mode. Your ISP router will likely restart.
 
-**If bridge mode is not available:** Follow the DHCP disable instructions instead.
+**Search online:** "[ISP name] [router model] bridge mode" for specific instructions.
 
-**Note:** Bridge mode may disable your ISP router's Wi-Fi. This is expected - your existing Wi-Fi router or access point will handle wireless connections after PrivateBox is connected.
+**Warning: You will need a separate Wi-Fi solution.**
+Enabling bridge mode will disable the Wi-Fi on your ISP's router. You must have a separate device to provide Wi-Fi for your network, such as a dedicated Wi-Fi access point or another router set to "AP Mode", connected to your PrivateBox.
+
+**What if my ISP router has no bridge mode?**
+If your router does not offer a bridge mode, your options are limited and can be problematic. Disabling DHCP while trying to use the router's Wi-Fi can lead to an unstable network. The most reliable solution is to acquire a simple modem that works with your ISP and use that in place of the ISP-provided router.
 
 ## Common router brands
 
@@ -136,9 +137,9 @@ Cons:
 
 After disabling DHCP or enabling AP mode:
 
-1. Your router may reboot (1-2 minutes)
-2. Your devices may need to reconnect to Wi-Fi
-3. Return to the [Getting Started Guide](./getting-started.md) to complete setup
+1.  Your router may reboot (1-2 minutes).
+2.  You will need to force your devices to get a new IP address. The easiest way is to turn Wi-Fi off and on again on each device. For wired devices, unplug and replug their network cables.
+3.  Return to the [Getting Started Guide](./getting-started.md) to complete setup.
 
 ## Still stuck?
 
