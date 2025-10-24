@@ -1,3 +1,15 @@
+---
+status: implemented
+implemented_in: v1.0.0
+category: core
+complexity: high
+dependencies:
+  - ansible
+  - semaphore
+maintenance_priority: high
+last_updated: 2025-10-24
+---
+
 # PrivateBox Bootstrap Execution Flow
 
 This document maps out the complete order of script execution during PrivateBox bootstrap.
