@@ -14,7 +14,6 @@ If you've found a bug in the automation scripts or a problem that you believe is
 *   A clear title and description of the issue.
 *   The steps you took to encounter the bug.
 *   What you expected to happen, and what actually happened.
-*   If possible, the **Report ID** from the [Health Check System](./advanced/health-check.md) is incredibly helpful.
 
 **[→ Open a Bug Report on GitHub](https://github.com/Rasped/privatebox/issues)**
 

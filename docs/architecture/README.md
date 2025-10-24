@@ -2,14 +2,14 @@
 
 This directory contains architectural documentation for PrivateBox features, organized by feature/component.
 
-## How to Use This Documentation
+## How to use this documentation
 
-### Feature Overviews
+### Feature overviews
 Each feature has a dedicated directory containing:
 - `overview.md` - Comprehensive feature documentation with frontmatter metadata
 - `adr-NNNN-*.md` - Architecture Decision Records explaining key choices
 
-### Status Tracking
+### Status tracking
 Each overview document includes frontmatter with status information:
 ```yaml
 status: implemented | planned | deprecated
@@ -18,9 +18,9 @@ category: core | security | networking | services | management
 complexity: low | medium | high
 ```
 
-## Implemented Features
+## Implemented features
 
-### Core Infrastructure
+### Core infrastructure
 - **[Recovery System](./recovery-system/)** - Factory reset with password preservation
   - Status: Implemented (v1.0.0)
   - Complexity: High
@@ -53,14 +53,14 @@ complexity: low | medium | high
   - Priority: Normal
   - API at https://10.10.20.10:4443
 
-### Management & Automation
+### Management and automation
 - **[Deployment Automation](./deployment-automation/)** - Ansible-based provisioning
   - Status: Implemented (v1.0.0)
   - Complexity: High
   - Priority: High
   - Semaphore orchestration with Ansible playbooks
 
-## Planned Features
+## Planned features
 
 _(No planned features documented yet)_
 
@@ -69,7 +69,7 @@ _(No planned features documented yet)_
 - [ADR Template](./adr-template.md) - Architecture Decision Record template
 - [Feature Overview Template](./feature-overview-template.md) - Feature documentation template
 
-## Architecture Decision Records (ADRs)
+## Architecture decision records (ADRs)
 
 Cross-feature architectural decisions:
 - [ADR-0001: Seven-Partition Recovery Layout](./recovery-system/adr-0001-seven-partition-recovery-layout.md)
