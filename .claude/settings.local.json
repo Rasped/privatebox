@@ -47,7 +47,10 @@
       "WebFetch(domain:www.amazon.com)",
       "Bash(xmllint:*)",
       "WebFetch(domain:community-scripts.github.io)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Read(//Users/rasped/.claude/**)",
+      "Bash(tree:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": [],
