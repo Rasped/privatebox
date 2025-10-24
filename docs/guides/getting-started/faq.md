@@ -106,10 +106,6 @@ Physical setup takes about 5 minutes (plug in cables, power on). First login and
 
 Basic network knowledge is helpful but not required. The Getting Started Guide and online documentation walk you through initial setup step-by-step. For advanced features (VLANs, VPN, custom firewall rules), some networking knowledge is beneficial.
 
-### Can I reset to factory defaults if I mess something up?
-
-Yes. PrivateBox includes a built-in factory reset system that works entirely offline. You can reset to factory defaults via the boot menu by connecting a keyboard and monitor directly to the device. The system preserves your unique installation passwords, so all services will work immediately after reset. No network connection or vendor support required.
-
 ### Where can I get help if I'm stuck?
 
 - **Documentation:** See the [documentation](../../) for comprehensive guides and how-tos
