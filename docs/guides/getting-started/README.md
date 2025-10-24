@@ -4,21 +4,14 @@ Welcome to PrivateBox! This section contains guides for setting up and using you
 
 ## First-Time Setup
 
-1. [Unboxing and Hardware Setup](./unboxing.md) *(to be created)*
-2. [Initial Configuration](./initial-configuration.md) *(to be created)*
-3. [Connecting Your Devices](./connecting-devices.md) *(to be created)*
+1. [Quick Start Guide](./quick-start-guide.md) - 5-minute setup
+2. [Getting Started Guide](./getting-started.md) - Detailed setup walkthrough
+3. [Core Concepts](./core-concepts.md) - Understanding your PrivateBox features
 
-## Essential Guides
+## Essential Resources
 
-- [Understanding Your Network](./understanding-network.md) *(to be created)*
-- [Using the Web Interface](./web-interface.md) *(to be created)*
-- [Managing DNS and Ad Blocking](./dns-adblocking.md) *(to be created)*
-
-## Troubleshooting
-
-- [Factory Reset](./factory-reset.md) *(to be created)*
-- [Common Issues](./common-issues.md) *(to be created)*
-- [Getting Help](./getting-help.md) *(to be created)*
+- [FAQ](./faq.md) - Frequently asked questions
+- [Troubleshooting Guide](./troubleshooting-guide.md) - Common issues and solutions
 
 ## Next Steps
 
@@ -27,3 +20,4 @@ Once you're comfortable with the basics, check out the [Advanced Guides](../adva
 - VPN access to your home network
 - Advanced firewall rules
 - Service customization
+- Adding your own applications
