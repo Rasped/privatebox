@@ -1,3 +1,15 @@
+---
+status: implemented
+implemented_in: v1.0.0
+category: core
+complexity: high
+dependencies:
+  - pxe-server
+  - debian-preseed
+maintenance_priority: critical
+last_updated: 2025-10-24
+---
+
 # Factory Setup - Parallel Production System
 
 ## Overview

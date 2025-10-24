@@ -1,3 +1,16 @@
+---
+status: planned
+implemented_in: null
+category: core
+complexity: high
+dependencies:
+  - zfs
+  - proxmox
+maintenance_priority: high
+target_version: v1.5.0
+last_updated: 2025-10-24
+---
+
 # PrivateBox Update Architecture
 
 ## Overview
