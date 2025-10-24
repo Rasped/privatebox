@@ -10,9 +10,13 @@ Your PrivateBox is designed around a single, core principle: *your data is not a
 
 Your PrivateBox comes with several pre-configured "rooms" for different purposes:
 
-*   **Trusted:** For your personal computers, laptops, and phones. This is your secure home office.
-*   **Guest:** For visitors' devices. They get internet access, but the "door" to your trusted room is locked. They can't see your personal files or devices.
-*   **IoT (Internet of Things):** For your smart devices like TVs, speakers, or light bulbs. Many of these devices have poor security. Placing them in their own room prevents a vulnerability in your smart toaster from being used to attack your laptop. We provide two IoT rooms: one with internet access and one without, for devices that only need to talk to a local hub.
+*   **Trusted:** Your personal computers, laptops, and phones
+*   **Guest:** Visitor devices (internet only, cannot access your network)
+*   **IoT:** Smart devices like TVs and speakers (with separate cloud/local networks)
+*   **Services:** Where PrivateBox services run (only accessible from Trusted)
+*   **And more:** Camera networks and additional segments
+
+For complete details on all seven network segments, see the [VLAN configuration guide](../../advanced/how-to-use-vlans.md).
 
 ---
 
