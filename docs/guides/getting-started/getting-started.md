@@ -37,7 +37,7 @@ For PrivateBox to manage your network, you must prevent your old router from con
 
 ## 4. First access
 
-1.  **Connect to Your Network:** Make sure your computer is connected to your network (either via an Ethernet cable to the RIGHT port, or to your existing Wi-Fi).
+1.  **Connect to Your Network:** Make sure your computer is connected to your network (either via an Ethernet cable to the port on the right, or to your existing Wi-Fi).
 2.  **Visit the Dashboard:** Open a web browser and go to: **`http://privatebox.lan`**
 3.  **Accept the Security Warning:** You will likely see a security warning page. **This is normal and expected.** It appears because your PrivateBox is using a private, self-signed security certificate instead of one from a public authority.
     *   Click the **"Advanced"** button.
