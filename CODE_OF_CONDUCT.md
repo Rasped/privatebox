@@ -2,14 +2,10 @@
 
 **In short:** Don't be a jerk. Be professional, respectful, and focus on making PrivateBox better.
 
-## Expected behavior
-
 - No harassment, discrimination, or personal attacks
 - Respect diverse perspectives
 - Critique ideas, not people
 - Keep discussions relevant and constructive
-
-This is a commercial project - we value your contributions and expect professional conduct in return.
 
 ## Enforcement
 
