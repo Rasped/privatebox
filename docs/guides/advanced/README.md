@@ -7,43 +7,34 @@ These guides are for technical users who want to customize and optimize their Pr
 Before diving into advanced topics:
 - Complete all [Getting Started](../getting-started/) guides
 - Understand basic networking concepts (IP addresses, subnets, DNS)
-- Have SSH access to your PrivateBox configured
+- Have access to your PrivateBox web interfaces
 
 ## Network Configuration
 
-- [Understanding VLAN Segmentation](./vlan-configuration.md) *(to be created)*
-- [Creating Custom Firewall Rules](./custom-firewall-rules.md) *(to be created)*
-- [Setting Up Guest Networks](./guest-networks.md) *(to be created)*
-- [IoT Device Isolation](./iot-isolation.md) *(to be created)*
-
-## VPN and Remote Access
-
-- [Configuring Headscale VPN](./headscale-vpn.md) *(to be created)*
-- [Adding Remote Devices](./remote-devices.md) *(to be created)*
-- [Subnet Routing](./subnet-routing.md) *(to be created)*
-
-## DNS and Security
-
-- [Custom DNS Filtering](./custom-dns-filtering.md) *(to be created)*
-- [Managing Blocklists](./managing-blocklists.md) *(to be created)*
-- [DNS Rewrites for Local Services](./dns-rewrites.md) *(to be created)*
-- [Setting Up Custom TLS Certificates](./custom-tls.md) *(to be created)*
+- [How to Use VLANs](./how-to-use-vlans.md) - Network segmentation for security
+- [Add a Port Forward](./add-a-port-forward.md) - Expose services to the internet
+- [Enable Dynamic DNS](./enable-dynamic-dns.md) - Access your network with a domain name
+- [Add a Subdomain](./add-a-subdomain.md) - Custom domains for services
 
 ## Service Management
 
-- [Using Portainer for Container Management](./portainer.md) *(to be created)*
-- [Deploying Custom Services](./custom-services.md) *(to be created)*
-- [Monitoring and Logs](./monitoring-logs.md) *(to be created)*
+- [Setup Portainer](./setup-portainer.md) - Container management interface
+- [Add Applications](./add-apps.md) - Installing custom self-hosted apps
+- [Health Check System](./health-check.md) - Diagnose and troubleshoot issues
 
 ## System Administration
 
-- [SSH Access and Security](./ssh-access.md) *(to be created)*
-- [Backup and Restore](./backup-restore.md) *(to be created)*
-- [System Updates](./system-updates.md) *(to be created)*
-- [Performance Tuning](./performance-tuning.md) *(to be created)*
+- [Backup and Restore](./backup-restore.md) - Protect your configuration
+- [Update System](./update-system.md) - Safe system updates with rollback
+
+## Need More Help?
+
+- [Troubleshooting Guide](../getting-started/troubleshooting-guide.md)
+- [FAQ](../getting-started/faq.md)
+- [How to Contribute](../../contributing/how-to-contribute.md)
 
 ## Developer Resources
 
-For developers contributing to PrivateBox, see:
-- [Architecture Documentation](/docs/architecture/)
-- [Contributing Guide](/docs/contributing/)
+For developers contributing to PrivateBox:
+- [Architecture Documentation](../../architecture/)
+- [Developer Contributing Guide](../../contributing/README.md)
