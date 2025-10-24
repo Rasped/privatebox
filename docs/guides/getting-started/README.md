@@ -4,9 +4,8 @@ Welcome to PrivateBox! This section contains guides for setting up and using you
 
 ## First-time setup
 
-1. [Quick Start Guide](./quick-start-guide.md) - 5-minute setup
-2. [Getting Started Guide](./getting-started.md) - Detailed setup walkthrough
-3. [Core Concepts](./core-concepts.md) - Understanding your PrivateBox features
+1. [Getting Started Guide](./getting-started.md) - Setup walkthrough
+2. [Core Concepts](./core-concepts.md) - Understanding your PrivateBox features
 
 ## Essential resources
 

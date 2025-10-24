@@ -4,7 +4,7 @@ Welcome to the PrivateBox documentation!
 
 ## Quick links
 
-- **[Quick Start Guide](./guides/getting-started/quick-start-guide.md)** - Get up and running in 5 minutes
+- **[Getting Started](./guides/getting-started/getting-started.md)** - Setup your PrivateBox
 - **[Contributing](./contributing/how-to-contribute.md)** - Help improve PrivateBox
 - **[FAQ](./guides/getting-started/faq.md)** - Common questions answered
 - **[Troubleshooting](./guides/getting-started/troubleshooting-guide.md)** - Fix common issues
