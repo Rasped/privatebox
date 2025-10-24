@@ -11,10 +11,11 @@ Your PrivateBox is designed around a single, core principle: *your data is not a
 Your PrivateBox comes with several pre-configured "rooms" for different purposes:
 
 *   **Trusted:** Your personal computers, laptops, and phones
+*   **Services:** Where PrivateBox services run (only accessible from Trusted)
 *   **Guest:** Visitor devices (internet only, cannot access your network)
 *   **IoT:** Smart devices like TVs and speakers (with separate cloud/local networks)
 *   **Cameras:** Security cameras (with separate cloud/local networks)
-*   **Services:** Where PrivateBox services run (only accessible from Trusted)
+
 
 For complete details on all seven network segments, see the [VLAN configuration guide](../../advanced/how-to-use-vlans.md).
 
@@ -46,6 +47,6 @@ For complete details on all seven network segments, see the [VLAN configuration 
 
 **The concept:** The VPN creates a secure, encrypted "tunnel" from your device (like your laptop at a coffee shop) back to your home network.
 
-**Primary use case:** It allows you to securely access your files and services at home as if you were sitting on your own couch. It also protects your internet traffic when you are on an untrusted public Wi-Fi network by routing it through your secure home connection first.
+**What it does:** It allows you to securely access your files and services at home as if you were sitting on your own couch. It also protects your internet traffic when you are on an untrusted public Wi-Fi network by routing it through your secure home connection first.
 
 **What it is not:** This is not a commercial VPN service designed to make you anonymous or change your geographic location to bypass content restrictions. Its purpose is to give you secure access to *your own network*, not to hide your identity from third-party websites.
