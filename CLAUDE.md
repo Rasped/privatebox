@@ -48,7 +48,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Proxmox: latest only. Hardware: Intel N150 with 16GB RAM.
 - VM OS: Debian 13 cloud image.
 - Bridges: `vmbr0` = WAN, `vmbr1` = LAN (VLAN-aware).
-- Network design: See `documentation/network-architecture/vlan-design.md` for complete architecture.
+- Network design: See `/docs/architecture/network-architecture/overview.md` for complete architecture.
 - OPNsense: use VM template approach (manual config → convert to template → store on GitHub).
 
 ## Infrastructure Map
@@ -95,7 +95,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Use dedicated subdomain (e.g., `pb.example.com`) → wildcard `*.pb.example.com` via DNS‑01.
 - Split‑horizon DNS: internal A records only (AdGuard); no public exposure.
 - Store DNS API creds in Semaphore environments for Caddy.
-- All services bind to management VM IP (see `documentation/vlan-design.md`).
+- All services bind to management VM IP (see `/docs/architecture/network-architecture/overview.md`).
 
 ## Secrets
 - Ansible Vault for static/encrypted repo data.
@@ -157,6 +157,12 @@ Notes
 - Logs and completion markers written?
 - Docs updated if flow/UX changed?
 
+## Documentation
+- User guides: `/docs/guides/getting-started/` and `/docs/guides/advanced/`
+- Architecture & ADRs: `/docs/architecture/` (feature-specific folders with overview.md and adr-*.md files)
+- Contributing: `/docs/contributing/`
+- Style guide: `/docs/style-guide.md`
+
 ## See Also
-- Extended guide: `documentation/LLM-GUIDE.md` (deeper details and rationale)
-- Repo pointers: `bootstrap/*`, `ansible/playbooks/services/*`, `documentation/*`
+- Code: `bootstrap/*`, `ansible/playbooks/services/*`, `tools/*`
+- Architecture docs: `/docs/architecture/` for design decisions and system details
