@@ -10,6 +10,8 @@ Welcome to PrivateBox! This section contains guides for setting up and using you
 
 ## Essential resources
 
+- [Finding Router Settings](./finding-router-settings.md) - How to access your router's admin page
+- [Router Configuration Guide](./router-configuration.md) - Specific instructions for common routers
 - [FAQ](./faq.md) - Frequently asked questions
 - [Troubleshooting Guide](./troubleshooting-guide.md) - Common issues and solutions
 
