@@ -50,7 +50,8 @@
       "Bash(curl:*)",
       "Read(//Users/rasped/.claude/**)",
       "Bash(tree:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch:*)"
     ],
     "deny": [],
     "ask": [],
