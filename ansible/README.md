@@ -6,7 +6,7 @@ This directory contains Ansible automation for deploying containerized services 
 
 This implementation uses a **service-oriented approach** where each container service has its own dedicated playbook. This design is optimized for use with SemaphoreUI and prioritizes simplicity and maintainability.
 
-### Self-Contained Playbooks
+### Self-contained playbooks
 
 Each service playbook is completely self-contained:
 - All variables are defined within the playbook (with sensible defaults)
@@ -15,7 +15,7 @@ Each service playbook is completely self-contained:
 - Variables can be overridden via command line (-e flag)
 - Designed for easy understanding and modification
 
-## Directory Structure
+## Directory structure
 
 ```
 ansible/
@@ -26,7 +26,7 @@ ansible/
 └── README.md            # This file
 ```
 
-## Quick Start
+## Quick start
 
 ### Prerequisites
 
@@ -40,15 +40,15 @@ ansible/
    - When creating job templates, select "container-host" from the SSH Key dropdown
 4. SSH keys are automatically configured during bootstrap
 
-### Deploy AdGuard Home
+### Deploy adguard home
 
 Services are deployed through SemaphoreUI job templates. The inventory is specified within each playbook.
 
-## Automatic Template Synchronization
+## Automatic template synchronization
 
 PrivateBox includes automatic template synchronization that creates Semaphore job templates from your Ansible playbooks. This eliminates the need to manually create templates in the Semaphore UI.
 
-### How It Works
+### How it works
 
 1. **Annotate Your Playbooks**: Add `semaphore_*` metadata to `vars_prompt` in your playbooks
 2. **Run Template Sync**: Use the "Generate Templates" task in Semaphore (created during bootstrap)
@@ -56,7 +56,7 @@ PrivateBox includes automatic template synchronization that creates Semaphore jo
    - Run manually for new or updated playbooks
 3. **Templates Are Created**: Semaphore automatically creates or updates job templates with proper survey variables
 
-### Example Annotated Playbook
+### Example annotated playbook
 
 ```yaml
 vars_prompt:
@@ -79,7 +79,7 @@ vars_prompt:
     semaphore_required: false
 ```
 
-### Supported Metadata Fields
+### Supported metadata fields
 
 - `semaphore_type`: Variable type (text, integer, boolean)
 - `semaphore_description`: Help text shown in UI
@@ -87,7 +87,7 @@ vars_prompt:
 - `semaphore_min`: Minimum value (integer only)
 - `semaphore_max`: Maximum value (integer only)
 
-### Running Template Sync
+### Running template sync
 
 1. Navigate to Task Templates in Semaphore UI
 2. Click "Run" on "Generate Templates"
@@ -95,18 +95,18 @@ vars_prompt:
 
 For a complete example, see `playbooks/services/test-semaphore-sync.yml`.
 
-### Deploy via SemaphoreUI
+### Deploy via semaphoreui
 
 You have two options:
 
-#### Option 1: Use Automatically Generated Templates (Recommended)
+#### Option 1: use automatically generated templates (recommended)
 
 If your playbook has `semaphore_*` metadata in `vars_prompt`:
 1. Run the "Generate Templates" task to sync your playbooks
 2. Find your automatically created template (e.g., "Deploy: adguard")
 3. Click "Run" and fill in the survey variables
 
-#### Option 2: Create Templates Manually
+#### Option 2: create templates manually
 
 For playbooks without metadata or custom configurations:
 1. Create a new job template in SemaphoreUI:
@@ -123,14 +123,14 @@ For playbooks without metadata or custom configurations:
    
 3. Save and run the job template
 
-## Available Services
+## Available services
 
 ### Implemented
 
 - **AdGuard Home** (`playbooks/services/adguard-deploy.yml`) - DNS-level ad blocking and filtering
 - **AdGuard DNS Configuration** (`playbooks/services/adguard-configure-dns.yml`) - Configure system to use AdGuard DNS
 
-### In Development
+### In development
 
 - **OPNsense VM Template** - Deploy OPNsense from pre-configured Proxmox template
 
@@ -143,20 +143,20 @@ For playbooks without metadata or custom configurations:
 
 ## Configuration
 
-### Service Configuration
+### Service configuration
 
 All service configuration is contained within each playbook. Variables have sensible defaults and can be overridden through Semaphore's survey variables when running job templates.
 
 
-## Naming Conventions
+## Naming conventions
 
-### Playbook Files
+### Playbook files
 All service playbooks follow a consistent naming pattern:
 - **File naming**: `service-action.yml` (lowercase, hyphenated)
   - Examples: `adguard-deploy.yml`, `opnsense-discover-ip.yml`, `unbound-configure.yml`
 - **Location**: All service playbooks go in `playbooks/services/` (flat structure, no subfolders)
 
-### Playbook Names
+### Playbook names
 The `name` field inside playbooks follows this pattern:
 - **Format**: `"Service: Action description"`
 - **Examples**:
@@ -170,7 +170,7 @@ This convention ensures:
 - Clear, consistent naming in Semaphore UI
 - Easy to find related playbooks
 
-## Adding New Services
+## Adding new services
 
 Each service playbook is self-contained, including all necessary variables, tasks, and configurations within a single file. This design prioritizes simplicity and maintainability.
 
@@ -213,18 +213,18 @@ Each service playbook is self-contained, including all necessary variables, task
 
 7. **Test deployment**: Run the job template through Semaphore UI
 
-## Podman Quadlet
+## Podman quadlet
 
 This project uses Podman Quadlet for systemd integration. Quadlet automatically generates systemd service units from `.container` files.
 
-### Key Benefits
+### Key benefits
 
 - Native systemd integration
 - Automatic service management
 - Better than docker-compose for single-host deployments
 - Supports health checks and dependencies
 
-### Service Management
+### Service management
 
 ```bash
 # Check service status
@@ -240,9 +240,9 @@ sudo systemctl restart adguard-container
 sudo systemctl stop adguard-container
 ```
 
-## Variables Reference
+## Variables reference
 
-### Container Defaults
+### Container defaults
 
 Each playbook defines its own container settings:
 - Container runtime settings
@@ -250,7 +250,7 @@ Each playbook defines its own container settings:
 - Security defaults
 - Network configuration
 
-### Service Variables
+### Service variables
 
 Each service has variables following this pattern:
 - `<service>_enabled` - Enable/disable service
@@ -264,7 +264,7 @@ Each service has variables following this pattern:
 
 ## Testing
 
-### Manual Testing
+### Manual testing
 
 After deploying a service:
 
@@ -283,13 +283,13 @@ After deploying a service:
    curl -I http://<host-ip>:8080
    ```
 
-### Automated Testing
+### Automated testing
 
 Testing is performed through Semaphore job templates. Create test playbooks and sync them using the template generation process.
 
 ## Troubleshooting
 
-### Common Issues
+### Common issues
 
 1. **Port conflicts**: Check if ports are already in use
    ```bash
@@ -308,11 +308,11 @@ Testing is performed through Semaphore job templates. Create test playbooks and 
    sudo journalctl -u adguard-container -n 50
    ```
 
-### Debug Mode
+### Debug mode
 
 Enable verbose output in Semaphore job templates by adding `-vvv` to the CLI arguments field.
 
-## Security Considerations
+## Security considerations
 
 - Services run with `NoNewPrivileges=true`
 - Capabilities are dropped by default
@@ -320,7 +320,7 @@ Enable verbose output in Semaphore job templates by adding `-vvv` to the CLI arg
 - Each service runs in its own container namespace
 - Avoid running services as root when possible
 
-## Backup and Recovery
+## Backup and recovery
 
 Container data is stored in:
 - Data: `/opt/privatebox/data/<service>/`

@@ -37,7 +37,7 @@ PrivateBox is a commercial consumer appliance requiring factory reset capability
 
 We will implement a **7-partition layout using ZFS** for the recovery system:
 
-### Physical Partitions
+### Physical partitions
 1. `/dev/sda1` - EFI boot (512MB, FAT32)
 2. `/dev/sda2` - /boot (1GB, ext4, unencrypted kernels)
 3. `/dev/sda3` - Recovery OS (1GB, SquashFS, immutable)
@@ -50,7 +50,7 @@ We will implement a **7-partition layout using ZFS** for the recovery system:
    - `updated/` slot - atomically updated assets
 7. `rpool/VAULT` - Encrypted password storage (preserved, ZFS native encryption)
 
-### Key Design Elements
+### Key design elements
 
 **Two-Slot Asset Architecture:**
 - `factory/`: Populated during PXE provisioning, made read-only, never modified
@@ -133,9 +133,9 @@ We will implement a **7-partition layout using ZFS** for the recovery system:
 - 7-partition structure set at first install, can't be changed without full wipe
 - Asset slot architecture can't easily be expanded (factory + updated only)
 
-## Alternatives Considered
+## Alternatives considered
 
-### Alternative 1: Simple Partition Imaging (rsync to backup partition)
+### Alternative 1: simple partition imaging (rsync to backup partition)
 **Approach:** Reserve partition for rsync'd system backup, restore by copying back
 
 **Pros:**
@@ -149,7 +149,7 @@ We will implement a **7-partition layout using ZFS** for the recovery system:
 - No atomic updates
 - **Rejected because:** Too slow for consumer appliance expectations, no advantage over ZFS
 
-### Alternative 2: LVM with Logical Volumes
+### Alternative 2: LVM with logical volumes
 **Approach:** Use LVM instead of ZFS datasets
 
 **Pros:**
@@ -163,7 +163,7 @@ We will implement a **7-partition layout using ZFS** for the recovery system:
 - No native encryption (would still need LUKS)
 - **Rejected because:** Proxmox already uses ZFS, LVM adds no value
 
-### Alternative 3: External USB Recovery Media
+### Alternative 3: external USB recovery media
 **Approach:** Ship USB stick with recovery image, user boots from USB to recover
 
 **Pros:**
@@ -176,7 +176,7 @@ We will implement a **7-partition layout using ZFS** for the recovery system:
 - Can't guarantee offline operation (USB could be lost during network outage)
 - **Rejected because:** Poor customer experience, support burden too high
 
-### Alternative 4: Cloud-Based Recovery
+### Alternative 4: Cloud-Based recovery
 **Approach:** Download recovery image from vendor servers
 
 **Pros:**
@@ -190,7 +190,7 @@ We will implement a **7-partition layout using ZFS** for the recovery system:
 - Fails if vendor goes out of business
 - **Rejected because:** Violates core product philosophy (offline-first, no vendor lock-in)
 
-## Implementation Notes
+## Implementation notes
 
 **Key files affected:**
 - `bootstrap/preseed.cfg` - Debian installer automation

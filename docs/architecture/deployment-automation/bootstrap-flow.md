@@ -28,9 +28,9 @@ The bootstrap process consists of 5 phases, starting from a workstation and culm
 
 ---
 
-## Execution Flow
+## Execution flow
 
-### Entry Point: Workstation
+### Entry point: workstation
 
 **1. quickstart.sh**
 - **Location:** Repository root
@@ -46,7 +46,7 @@ The bootstrap process consists of 5 phases, starting from a workstation and culm
 
 ---
 
-### Main Orchestrator: Proxmox Host
+### Main orchestrator: proxmox host
 
 **2. bootstrap/bootstrap.sh**
 - **Location:** `bootstrap/bootstrap.sh`
@@ -56,7 +56,7 @@ The bootstrap process consists of 5 phases, starting from a workstation and culm
 
 ---
 
-#### Phase 1: Host Preparation
+#### Phase 1: host preparation
 
 **3. prepare-host.sh**
 - **Location:** `bootstrap/prepare-host.sh`
@@ -75,7 +75,7 @@ The bootstrap process consists of 5 phases, starting from a workstation and culm
 
 ---
 
-#### Phase 2: OPNsense Deployment
+#### Phase 2: opnsense deployment
 
 **4. deploy-opnsense.sh**
 - **Location:** `bootstrap/deploy-opnsense.sh`
@@ -93,7 +93,7 @@ The bootstrap process consists of 5 phases, starting from a workstation and culm
 
 ---
 
-#### Phase 3: Management VM Provisioning
+#### Phase 3: management VM provisioning
 
 **5. create-vm.sh**
 - **Location:** `bootstrap/create-vm.sh`
@@ -119,7 +119,7 @@ The bootstrap process consists of 5 phases, starting from a workstation and culm
 
 ---
 
-#### Phase 4: Service Configuration (Inside VM)
+#### Phase 4: service configuration (Inside VM)
 
 **6. setup-guest.sh** (via cloud-init)
 - **Location:** Embedded in cloud-init by create-vm.sh
@@ -161,7 +161,7 @@ The bootstrap process consists of 5 phases, starting from a workstation and culm
 
 ---
 
-#### Phase 4 (continued): Semaphore API Bootstrap
+#### Phase 4 (continued): semaphore API bootstrap
 
 **7. lib/semaphore-api.sh functions** (sourced by setup-guest.sh)
 - **Location:** Embedded in cloud-init, placed at `/usr/local/lib/semaphore-api.sh`
@@ -221,7 +221,7 @@ create_default_projects()
 
 ---
 
-#### Phase 4 (continued): Python Orchestration
+#### Phase 4 (continued): python orchestration
 
 **8. tools/generate-templates.py** (via Semaphore container)
 - **Location:** `tools/generate-templates.py`
@@ -348,7 +348,7 @@ create_default_projects()
 
 ---
 
-#### Phase 5: Installation Verification
+#### Phase 5: installation verification
 
 **10. verify-install.sh**
 - **Location:** `bootstrap/verify-install.sh`
@@ -367,7 +367,7 @@ create_default_projects()
 
 ---
 
-## Script Execution Context
+## Script execution context
 
 | Script | Executed On | Execution Context | Triggered By |
 |--------|-------------|-------------------|--------------|
@@ -393,7 +393,7 @@ create_default_projects()
 
 ---
 
-## Visual Call Tree
+## Visual call tree
 
 ```
 [Workstation]
@@ -468,15 +468,15 @@ create_default_projects()
 
 ---
 
-## Key Files and Their Locations
+## Key files and their locations
 
-### Configuration Files (Generated)
+### Configuration files (Generated)
 - `/tmp/privatebox-config.conf` - Network and credential config (Proxmox host)
 - `/etc/privatebox/config.env` - Same config, inside VM
 - `/etc/privatebox-install-complete` - Progress marker file (VM)
 - `/etc/privatebox-proxmox-host` - Proxmox IP for inventory creation (VM)
 
-### Embedded Files (Written by cloud-init)
+### Embedded files (Written by cloud-init)
 - `/usr/local/bin/setup-guest.sh` - Phase 4 main script
 - `/usr/local/lib/semaphore-api.sh` - API interaction library
 - `/etc/privatebox/certs/privatebox.{crt,key}` - Self-signed HTTPS cert
@@ -485,14 +485,14 @@ create_default_projects()
 - `/root/.credentials/proxmox_ssh_key` - Semaphore → Proxmox (temporary, deleted after upload)
 - `/root/.credentials/semaphore_vm_key` - Semaphore → VM self-management (retained)
 
-### Service Data (Persistent)
+### Service data (Persistent)
 - `/opt/semaphore/data` - Semaphore database
 - `/opt/semaphore/config` - Semaphore config.json
 - `/opt/semaphore/projects` - Playbook workspace
 
 ---
 
-## Progress Markers
+## Progress markers
 
 Throughout execution, scripts write progress markers to `/etc/privatebox-install-complete`:
 
@@ -521,7 +521,7 @@ These markers allow bootstrap.sh (Phase 5) to monitor progress in real-time.
 
 ---
 
-## Error Handling
+## Error handling
 
 - Each script uses `set -euo pipefail` for fail-fast behavior
 - Errors write `ERROR` to `/etc/privatebox-install-complete`

@@ -17,7 +17,7 @@ last_updated: 2025-10-24
 
 PrivateBox provides safe, rollback-capable updates for all system components using ZFS snapshots. This creates a professional appliance experience where users can confidently apply updates without fear of breaking their system.
 
-## Design Goals
+## Design goals
 
 - **Safe**: Always have a rollback point before updates
 - **Automated**: Snapshot creation and health checks built into update process
@@ -26,7 +26,7 @@ PrivateBox provides safe, rollback-capable updates for all system components usi
 - **User-friendly**: One-button updates via Semaphore UI
 - **Efficient**: Minimal disk overhead compared to full backups
 
-## Philosophy: Defense in Depth
+## Philosophy: defense in depth
 
 PrivateBox uses a layered update safety strategy:
 
@@ -38,9 +38,9 @@ PrivateBox uses a layered update safety strategy:
 
 Each layer serves a different recovery scenario.
 
-## What Gets Updated
+## What gets updated
 
-### 1. Proxmox Host (Rare)
+### 1. proxmox host (Rare)
 - **Frequency**: Monthly security updates, major version updates annually
 - **Risk**: HIGH (kernel/ZFS breakage = no boot, highest impact)
 - **Strategy**: Manual snapshot of rpool/ROOT before updates
@@ -52,19 +52,19 @@ Each layer serves a different recovery scenario.
 - **Strategy**: Automatic ZFS snapshot + health check
 - **Rollback**: Instant via ZFS snapshot
 
-### 3. Management VM Services (Frequent)
+### 3. management VM services (Frequent)
 - **Frequency**: Container image updates as needed
 - **Risk**: Medium (services fail but network still works)
 - **Strategy**: Per-service snapshots or full VM snapshot
 - **Rollback**: Instant via ZFS snapshot
 
-### 4. Individual Containers (Frequent)
+### 4. individual containers (Frequent)
 - **Frequency**: Ad-hoc (AdGuard, Portainer, etc.)
 - **Risk**: Low (only affects that service)
 - **Strategy**: VM-level snapshot covers all containers
 - **Rollback**: Instant via ZFS snapshot
 
-## ZFS Snapshot Strategy
+## ZFS snapshot strategy
 
 ### Why ZFS?
 
@@ -84,7 +84,7 @@ Each layer serves a different recovery scenario.
 - Sufficient RAM (1GB per TB recommended, 16GB total for 256GB SSD is excellent)
 - Single disk RAID0 acceptable (factory reset provides disaster recovery)
 
-### Snapshot Naming Convention
+### Snapshot naming convention
 
 ```
 rpool/data/vm-{VMID}-disk-0@{type}-{timestamp}-{description}
@@ -103,7 +103,7 @@ rpool/data/vm-100-disk-0@manual-20251023-before-config-change
 - `manual`: User-initiated snapshots via Semaphore
 - `pre-host-update`: Manual snapshot before Proxmox host updates
 
-### Snapshot Retention Policy
+### Snapshot retention policy
 
 | Type | Retention | Purpose |
 |------|-----------|---------|
@@ -117,9 +117,9 @@ Automated cleanup runs daily, removing expired snapshots.
 
 **Note:** The "golden" deployment state lives in rpool/ASSETS (offline installer files and cloud-init configs), not as a ZFS snapshot. Factory reset uses these assets to provision a fresh system.
 
-## Safe Update Flow
+## Safe update flow
 
-### Proxmox Host Update Example
+### Proxmox host update example
 
 **User Action:** SSH to Proxmox host, manually update
 
@@ -157,7 +157,7 @@ Automated cleanup runs daily, removing expired snapshots.
 
 **Note:** Host updates cannot be automated safely due to reboot requirement and potential for catastrophic failure. Manual snapshot + testing is the safest approach.
 
-### OPNsense Update Example
+### OPNsense update example
 
 **User Action:** Click "Update OPNsense (Safe)" in Semaphore
 
@@ -190,7 +190,7 @@ Automated cleanup runs daily, removing expired snapshots.
 
 **Total time:** 5-10 minutes (most of it waiting for OPNsense update)
 
-### Management VM Update Example
+### Management VM update example
 
 Similar flow but health checks are different:
 - Portainer API responding
@@ -198,7 +198,7 @@ Similar flow but health checks are different:
 - AdGuard DNS responding
 - Caddy reverse proxy working
 
-### Rollback Flow
+### Rollback flow
 
 **Automatic Rollback (health check failed):**
 ```bash
@@ -221,11 +221,11 @@ User clicks "Rollback OPNsense" in Semaphore, selects snapshot from list, confir
 
 **Rollback time:** ~60 seconds (VM stop + snapshot rollback + VM start)
 
-## ZFS Requirement Check
+## ZFS requirement check
 
 Bootstrap must verify ZFS before proceeding with PrivateBox installation.
 
-### Detection Script
+### Detection script
 
 ```bash
 # Check if Proxmox is using ZFS
@@ -260,7 +260,7 @@ check_zfs() {
 }
 ```
 
-### Where to Add Check
+### Where to add check
 
 **In bootstrap/prepare-host.sh:**
 - After Proxmox detection
@@ -282,7 +282,7 @@ To use PrivateBox:
 For more information, see: documentation/update-architecture.md
 ```
 
-## Storage Backend Configuration
+## Storage backend configuration
 
 ### Current (LVM-based)
 ```bash
@@ -307,9 +307,9 @@ detect_storage() {
 }
 ```
 
-## Snapshot Automation (Future Implementation)
+## Snapshot automation (future implementation)
 
-### Daily Snapshots
+### Daily snapshots
 
 **Systemd Timer on Proxmox Host:**
 ```
@@ -331,7 +331,7 @@ WantedBy=timers.target
 - VM 9000 (Management): Daily
 - Retention: 7 daily snapshots
 
-### Weekly Snapshots
+### Weekly snapshots
 
 **Systemd Timer on Proxmox Host:**
 ```
@@ -350,7 +350,7 @@ WantedBy=timers.target
 
 **Retention:** 4 weekly snapshots (1 month history)
 
-### Snapshot Cleanup
+### Snapshot cleanup
 
 **Daily cleanup job removes expired snapshots:**
 - Runs after daily snapshot creation
@@ -358,9 +358,9 @@ WantedBy=timers.target
 - Deletes based on retention policy
 - Logs what was deleted
 
-## Integration with Semaphore UI
+## Integration with semaphore UI
 
-### Update Templates (Future)
+### Update templates (future)
 
 **Templates to Create:**
 1. "Update OPNsense (Safe)" - Automatic snapshot + update + health check + rollback on failure
@@ -371,7 +371,7 @@ WantedBy=timers.target
 6. "List Snapshots" - Show all snapshots with dates/descriptions
 7. "Create Manual Snapshot" - User-initiated checkpoint
 
-### User Experience
+### User experience
 
 **Happy Path (Update Succeeds):**
 1. User clicks "Update OPNsense (Safe)"
@@ -398,9 +398,9 @@ WantedBy=timers.target
 7. Rollback executes in 60 seconds
 8. Success: "OPNsense rolled back to October 21 snapshot"
 
-## Update vs Recovery: When to Use What
+## Update vs recovery: when to use what
 
-### Use ZFS Snapshots (This Document) When:
+### Use ZFS snapshots (this document) when:
 - ✅ Update broke something
 - ✅ Config change had unexpected consequences
 - ✅ Want to test something and easily undo
@@ -409,7 +409,7 @@ WantedBy=timers.target
 
 **Recovery time:** 60 seconds
 
-### Use Factory Reset (recovery-system.md) When:
+### Use factory reset (recovery-system.md) when:
 - ❌ System completely broken (won't boot, networking dead)
 - ❌ Unknown state after many changes
 - ❌ Want truly fresh start
@@ -418,7 +418,7 @@ WantedBy=timers.target
 
 **Recovery time:** 10-15 minutes
 
-### Use Configuration Backups When:
+### Use configuration backups when:
 - 📝 Want to migrate to new hardware
 - 📝 Disaster recovery planning
 - 📝 Compliance/audit requirements
@@ -426,61 +426,61 @@ WantedBy=timers.target
 
 **Recovery time:** 30 minutes (reinstall + restore configs)
 
-## Security Considerations
+## Security considerations
 
-### Snapshot Access Control
+### Snapshot access control
 - Snapshots readable by Proxmox root only
 - No access from VMs to their own snapshots (prevents malware from deleting rollback points)
 - Semaphore playbooks use Proxmox API with limited permissions
 
-### Update Authentication
+### Update authentication
 - Updates require Semaphore login (services password)
 - No remote trigger capability
 - Audit log of all updates and rollbacks
 
-### Snapshot Integrity
+### Snapshot integrity
 - ZFS checksumming ensures snapshot validity
 - Corrupted snapshots detected automatically
 - Weekly scrub recommended (low priority, can run in background)
 
-## Implementation Roadmap
+## Implementation roadmap
 
-### Phase 1: Foundation (Before FOSS Release)
+### Phase 1: foundation (Before FOSS Release)
 - ✅ Document update architecture (this file)
 - ⬜ Add ZFS requirement check to bootstrap
 - ⬜ Update STORAGE variable to local-zfs
 - ⬜ Test fresh Proxmox install with ZFS
 - ⬜ Update CLAUDE.md with ZFS requirement
 
-### Phase 2: Manual Snapshot Tools (FOSS Release)
+### Phase 2: manual snapshot tools (FOSS Release)
 - ⬜ Create manual snapshot playbook
 - ⬜ Create manual rollback playbook
 - ⬜ Create snapshot listing playbook
 - ⬜ Add to Semaphore templates
 - ⬜ Document snapshot workflow in user guide
 
-### Phase 3: Safe Update Automation (Post-FOSS)
+### Phase 3: safe update automation (Post-FOSS)
 - ⬜ Create OPNsense safe update playbook
 - ⬜ Create Management VM safe update playbook
 - ⬜ Implement health check framework
 - ⬜ Add automatic rollback on failure
 - ⬜ Create per-service update playbooks
 
-### Phase 4: Automated Snapshots (Product Release)
+### Phase 4: automated snapshots (Product Release)
 - ⬜ Implement daily snapshot timer
 - ⬜ Implement weekly snapshot timer
 - ⬜ Implement snapshot cleanup script
 - ⬜ Add snapshot monitoring/alerting
 - ⬜ Golden snapshot creation during first boot
 
-## Testing Strategy
+## Testing strategy
 
-### Unit Tests
+### Unit tests
 - ZFS detection script with various storage configurations
 - Snapshot naming convention validation
 - Retention policy cleanup logic
 
-### Integration Tests
+### Integration tests
 1. Fresh Proxmox install with ZFS
 2. Run bootstrap (should succeed)
 3. Create manual snapshot
@@ -488,19 +488,19 @@ WantedBy=timers.target
 5. Rollback snapshot
 6. Verify change reverted
 
-### Failure Tests
+### Failure tests
 1. Simulated update failure (health check fails)
 2. Verify automatic rollback
 3. Verify system restored to working state
 4. Check logs for proper error reporting
 
-### Performance Tests
+### Performance tests
 - Snapshot creation time (should be <1 second)
 - Snapshot disk usage after 7 days of changes
 - Rollback time for various VM sizes
 - Impact on VM performance with many snapshots
 
-## Technical Notes
+## Technical notes
 
 ### ZFS ARC Tuning (Optional)
 
@@ -513,7 +513,7 @@ options zfs zfs_arc_min=1073741824  # 1GB min ARC
 
 Leaves 12GB for VMs and host, 4GB for ZFS caching.
 
-### Snapshot Space Estimation
+### Snapshot space estimation
 
 **Conservative estimate:**
 - OPNsense VM: 8GB disk, ~1GB changes per month = 1GB snapshot overhead
@@ -527,7 +527,7 @@ Leaves 12GB for VMs and host, 4GB for ZFS caching.
 - Snapshot overhead: ~5GB (1 month retention)
 - **Remaining: ~191GB free** (plenty of headroom)
 
-### ZFS Pool Health
+### ZFS pool health
 
 **Recommended monitoring:**
 ```bash
@@ -543,17 +543,17 @@ zfs list -t snapshot -o name,used,refer
 
 Can be automated via Semaphore playbook or systemd timer.
 
-## Production Considerations
+## Production considerations
 
 These are critical requirements that separate a proof-of-concept from a production-ready appliance. All three must be addressed before Product Release.
 
-### 1. Reliability: Power Loss and Space Constraints
+### 1. reliability: power loss and space constraints
 
 **Problem:** Updates can be interrupted by power loss, disk full errors, or system crashes. A half-completed update or snapshot can leave the system in an inconsistent state.
 
 **Requirements:**
 
-#### Idempotent Operations
+#### Idempotent operations
 All update and rollback operations must be safely re-runnable:
 
 ```bash
@@ -576,7 +576,7 @@ zfs rollback "$SNAPSHOT_NAME"
 qm start 100
 ```
 
-#### Space Guardrails
+#### Space guardrails
 Fail early if insufficient space for snapshots:
 
 ```bash
@@ -596,7 +596,7 @@ check_disk_space() {
 }
 ```
 
-#### Interrupted Snapshot Detection
+#### Interrupted snapshot detection
 Detect and clean up snapshots from interrupted operations:
 
 ```bash
@@ -623,7 +623,7 @@ cleanup_orphaned_snapshots() {
 - Simulate disk full during update
 - Verify system can recover from all interrupted states
 
-### 2. Deep Health Checks: Beyond HTTP 200
+### 2. deep health checks: beyond HTTP 200
 
 **Problem:** A web UI responding with HTTP 200 doesn't mean the service is actually working. Updates can break functionality while leaving the service "running."
 
@@ -732,13 +732,13 @@ management_vm_health_check() {
 - Retry failed checks once before declaring failure
 - Log all health check results for debugging
 
-### 3. Management Plane Failure: Out-of-Band Recovery
+### 3. management plane failure: Out-of-Band recovery
 
 **Problem:** If the Management VM is broken, Semaphore is inaccessible. Users cannot trigger updates or rollbacks via the web UI.
 
 **Requirement:** Emergency CLI tools on Proxmox host for out-of-band management.
 
-#### Emergency Rollback Script
+#### Emergency rollback script
 
 Create `/usr/local/bin/privatebox-emergency-rollback` on Proxmox host:
 
@@ -805,7 +805,7 @@ echo ""
 echo "Verify with: qm status $VMID"
 ```
 
-#### Emergency Snapshot Script
+#### Emergency snapshot script
 
 Create `/usr/local/bin/privatebox-emergency-snapshot` on Proxmox host:
 
@@ -839,7 +839,7 @@ echo "Snapshot created successfully."
 echo "To rollback: privatebox-emergency-rollback $VMID ${DESCRIPTION}-${TIMESTAMP}"
 ```
 
-#### Installation During Bootstrap
+#### Installation during bootstrap
 
 These scripts should be installed during the initial Proxmox setup:
 
@@ -861,7 +861,7 @@ install_emergency_tools() {
 }
 ```
 
-#### Documentation for Users
+#### Documentation for users
 
 Create `/root/EMERGENCY-RECOVERY.txt` on Proxmox host:
 
@@ -902,7 +902,7 @@ If everything is broken:
 - Test with no network connectivity to Management VM
 - Test with completely corrupted Management VM disk
 
-### Summary: Production Readiness Checklist
+### Summary: production readiness checklist
 
 Before Product Release, verify:
 
@@ -917,7 +917,7 @@ Before Product Release, verify:
 
 **Without these safeguards, the update system is not production-ready.**
 
-## Future Enhancements
+## Future enhancements
 
 Potential improvements not in initial implementation:
 

@@ -1,8 +1,8 @@
-# PrivateBox — CLAUDE.md (Trimmed LLM Guide)
+# PrivateBox - CLAUDE.md (Trimmed LLM Guide)
 
 Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned with flow, security, and end state.
 
-## Product Context — CRITICAL
+## Product context - CRITICAL
 **PrivateBox is a commercial consumer appliance, NOT a homelab project.**
 
 - **Business**: SubRosa ApS (Denmark) selling pre-configured firewall appliances to consumers
@@ -11,7 +11,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - **Key selling points**: No subscriptions, fully open source, physical ownership, no cloud dependencies
 - **Market**: Direct-to-consumer, EU/Denmark focus, launching late 2025
 
-### Why This Matters for Design Decisions
+### Why this matters for design decisions
 - **Recovery system is mandatory**: Customers need appliance-like factory reset without vendor support
 - **Offline operation required**: Customer's network may be broken when they need recovery
 - **Support must scale**: Documentation-first, no phone support, community-driven
@@ -19,14 +19,14 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - **Regulatory compliance**: CE marking, WEEE registration, 2-year EU warranty, GDPR by design
 - **Physical console access**: Intel N150 hardware has VGA/HDMI, USB keyboard support guaranteed
 
-### Design Implications
+### Design implications
 1. Recovery infrastructure (7 partitions, encrypted vault, immutable OS) is **appropriately thorough**, not over-engineered
 2. "Golden image timing" matters - customers expect consistent experience
 3. Offline asset storage prevents dependency on GitHub/internet during recovery
 4. Physical-only recovery prevents remote attacks on consumer devices
 5. Every technical decision impacts support burden and customer satisfaction
 
-## Golden Rules
+## Golden rules
 - Be concise and surgical; prefer small, verifiable diffs.
 - Ansible-first; Bash only when modules fall short.
 - Idempotent and deterministic; add retries/timeouts; write logs and markers.
@@ -35,7 +35,7 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - **On errors: investigate only** - Present problem clearly, ask for guidance. Don't attempt fixes without direction.
 - **NO Claude attribution in commits** - Do not add "Generated with Claude Code" or "Co-Authored-By: Claude" to commit messages.
 
-## Target End State
+## Target end state
 - One command on Proxmox boots a Debian 13 management VM.
 - Inside VM: Portainer (:9000) and Semaphore (:3000) running.
 - Semaphore: project, repo, SSH keys, environments, and a "Generate Templates" task present.
@@ -44,21 +44,21 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - TLS: external domain, Caddy DNS‑01 wildcard, split‑horizon DNS (no public A records).
 - All services exposed only on management VM IP (via Podman port mapping).
 
-## Platform & Constraints
+## Platform & constraints
 - Proxmox: latest only. Hardware: Intel N150 with 16GB RAM.
 - VM OS: Debian 13 cloud image.
 - Bridges: `vmbr0` = WAN, `vmbr1` = LAN (VLAN-aware).
 - Network design: See `/docs/architecture/network-architecture/overview.md` for complete architecture.
 - OPNsense: use VM template approach (manual config → convert to template → store on GitHub).
 
-## Infrastructure Map
+## Infrastructure map
 ### VMs
 - **VM 9000** - Management VM (Debian 13) at 10.10.20.10 - hosts all containerized services
 - **VM 100** - OPNsense (firewall/router) at 10.10.20.1 (Services), 10.10.10.1 (Trusted LAN)
 - **VM 101** - Subnet Router (Debian 13) at 10.10.20.11 (Services), 10.10.10.10 (Trusted LAN) - Tailscale subnet router
 - **Proxmox Host** - at 10.10.20.20:8006 (not a VM, hypervisor itself)
 
-### Services (all on Management VM)
+### Services (all on management VM)
 **Web services:** All accessible via `https://*.lan` domains (privatebox, portainer, semaphore, adguard, headplane)
 - See `ansible/files/caddy/Caddyfile.j2` for complete proxy configuration
 - Caddy reverse proxy terminates TLS with self-signed certs
@@ -68,20 +68,20 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - **Headscale API** - `https://10.10.20.10:4443` - VPN control server (no web UI, accessed via Headplane)
 - **AdGuard DNS** - `10.10.20.10:53` - DNS filtering (web UI at adguard.lan)
 
-### Domain Access
+### Domain access
 - Current: all services use `.lan` domains (e.g., portainer.lan, semaphore.lan)
 - DNS rewrites in AdGuard map `.lan` → 10.10.20.10 (Management VM)
 - Caddy provides self-signed TLS certs for `.lan` domains
 - Future: add customer deSEC.io domains (e.g., portainer.customer.dedyn.io) with Let's Encrypt certs via DNS-01
 
-## Flow Summary
+## Flow summary
 1. Quickstart → `bootstrap/bootstrap.sh`.
 2. Phase 1: detect network, generate config, Proxmox token, verify storage.
 3. Phase 2: download image, write cloud‑init, create VM, set static IP, start.
 4. Phase 3: install Podman; configure Portainer/Semaphore (Quadlet); seed admin; Semaphore API setup; template‑sync task.
 5. Phase 4: health checks; output access; write logs/markers.
 
-## Quickstart Command
+## Quickstart command
 - Run from your workstation to bootstrap on a Proxmox host at `.10`:
   - `ssh root@192.168.1.10 "curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.sh | bash"`
   - Script auto-detects network and configures everything. Check `/tmp/privatebox-config.conf` if you need different settings.
@@ -103,17 +103,17 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Generate runtime creds once; store in `/etc/privatebox/config.env`.
 - Remove transient keys after upload.
 
-## Semaphore Integration
+## Semaphore integration
 - Bootstrap creates project, repo, SSH keys, environments, and the “Generate Templates” task.
 - `tools/generate-templates.py` reads `vars_prompt` with `semaphore_*` and builds typed templates.
 
-## Semaphore API (Cookie Auth) — IMPORTANT
+## Semaphore API (cookie auth) - IMPORTANT
 - Semaphore ONLY accessible via Services VLAN at https://10.10.20.10:2443 (not from workstation).
 - Access requires double-hop: workstation → Proxmox (.10) → Semaphore (10.10.20.10).
 - Use session cookies (not hardcoded tokens) when scripting against Semaphore.
 - All API calls use HTTPS with `-k` flag (self-signed cert).
 
-### Cookie Management
+### Cookie management
 - Check for existing cookie first: `ssh root@192.168.1.10 "test -f /tmp/sem.cookies && echo EXISTS"`
 - If no cookie or expired, check for password:
   - From Proxmox: look in `/tmp/privatebox-config.conf` for SERVICES_PASSWORD
@@ -124,11 +124,11 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - Test cookie validity:
   - `curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/user | grep -q '"admin":true' && echo VALID`
 
-### API Access from Workstation (Double-Hop)
+### API access from workstation (Double-Hop)
 - All commands via SSH to Proxmox: `ssh root@192.168.1.10 "curl ..."`
 - Example: `ssh root@192.168.1.10 "curl -sSk --cookie /tmp/sem.cookies https://10.10.20.10:2443/api/projects"`
 
-### Curl Examples (Run from Proxmox)
+### Curl examples (run from Proxmox)
 - Login and store cookie:
   - `curl -sSk --cookie-jar /tmp/sem.cookies -X POST -H 'Content-Type: application/json' -d '{"auth":"admin","password":"<SERVICES_PASSWORD>"}' https://10.10.20.10:2443/api/auth/login`
 - Get project id (PID):
@@ -150,7 +150,7 @@ Notes
 - In Management VM: use `privatebox-local:3000` and `source /etc/privatebox/config.env`.
 - In Ansible playbooks on Proxmox: delegate to privatebox-local or use shell commands with stored cookies.
 
-## Coding Checklist
+## Coding checklist
 - Idempotent? Retries/timeouts? Clear errors?
 - Exposed only on VM IP (via Podman PublishAddress)?
 - Secrets via Vault/Semaphore? No plaintext?
@@ -163,6 +163,6 @@ Notes
 - Contributing: `/docs/contributing/`
 - Style guide: `/docs/style-guide.md`
 
-## See Also
+## See also
 - Code: `bootstrap/*`, `ansible/playbooks/services/*`, `tools/*`
 - Architecture docs: `/docs/architecture/` for design decisions and system details

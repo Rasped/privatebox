@@ -7,7 +7,7 @@
 
 Document the complete PrivateBox deployment sequence by tracing through actual code execution from clean Proxmox to fully operational system.
 
-## Current State
+## Current state
 
 **File:** `documentation/DEPLOYMENT-SEQUENCE.md`
 
@@ -41,7 +41,7 @@ Document the complete PrivateBox deployment sequence by tracing through actual c
 
 **Next:** Continue Phase 4 - Semaphore API Bootstrap (Steps 28+)
 
-## What Remains (Phase 4 continuation)
+## What remains (Phase 4 continuation)
 
 The documentation stops at Step 27 where Semaphore is running with admin user created. Next steps trace through `bootstrap/lib/semaphore-api.sh` execution:
 
@@ -79,7 +79,7 @@ The documentation stops at Step 27 where Semaphore is running with admin user cr
    - Write `SUCCESS` to `/etc/privatebox-install-complete`
    - Display summary with service URLs
 
-## Instructions for Next Context
+## Instructions for next context
 
 1. **Read current documentation:**
    ```
@@ -118,7 +118,7 @@ The documentation stops at Step 27 where Semaphore is running with admin user cr
    - Document Phase 5: Installation Verification (`bootstrap/verify-install.sh`)
    - Document final bootstrap summary and cleanup
 
-## Why This Matters
+## Why this matters
 
 This document is the authoritative source for understanding deployment. It enables:
 - Debugging deployment failures by identifying exact failure point

@@ -12,20 +12,17 @@ Before diving into advanced topics:
 ## Network configuration
 
 - [How to Use VLANs](./how-to-use-vlans.md) - Network segmentation for security
-- [Add a Port Forward](./add-a-port-forward.md) - Expose services to the internet
+- [Network Access Rules](./network-access-rules.md) - What can access what from each VLAN
 - [Enable Dynamic DNS](./enable-dynamic-dns.md) - Access your network with a domain name
-- [Add a Subdomain](./add-a-subdomain.md) - Custom domains for services
 
-## Service management
+## System diagnostics
 
-- [Setup Portainer](./setup-portainer.md) - Container management interface
-- [Add Applications](./add-apps.md) - Installing custom self-hosted apps
-- [Health Check System](./health-check.md) - Diagnose and troubleshoot issues
+- [Health Check System](./health-check.md) - Diagnose and troubleshoot issues (draft - not yet implemented)
 
 ## System administration
 
-- [Backup and Restore](./backup-restore.md) - Protect your configuration
-- [Update System](./update-system.md) - Safe system updates with rollback
+- [Update System](./update-system.md) - Safe system updates with rollback (draft - not yet implemented)
+- [Backup and Restore](./backup-restore.md) - Protect your configuration (draft - not yet implemented)
 
 ## Need more help?
 

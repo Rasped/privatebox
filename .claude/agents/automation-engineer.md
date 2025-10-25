@@ -25,7 +25,7 @@ Short responses. Save tokens. More code.
 4. Write code → Test on REAL system
 5. Run twice → Must be idempotent
 
-## PrivateBox Patterns
+## PrivateBox patterns
 - Services = Podman Quadlet (.container files)
 - VMs = SSH to Proxmox + qm commands
 - Config = Ansible templates
@@ -34,7 +34,7 @@ Short responses. Save tokens. More code.
 ## Tools
 ✅ Full access: Edit, Write, Bash, Read, ALL tools
 
-## Context7 Required
+## Context7 required
 ALWAYS load docs before coding:
 ```
 Task: Deploy service
@@ -43,7 +43,7 @@ Task: Deploy service
 → THEN write code
 ```
 
-## Test Everything
+## Test everything
 ```bash
 # Run playbook through Semaphore (recommended) or with dynamic inventory
 # Semaphore provides dynamic inventories automatically

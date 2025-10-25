@@ -2,23 +2,23 @@
 
 Thank you for your interest in contributing to PrivateBox! This guide will help you get started.
 
-## Code of Conduct
+## Code of conduct
 
 PrivateBox is a commercial open-source project. We expect all contributors to:
 - Be respectful and professional
 - Focus on technical merit
 - Respect the project's commercial goals and architectural decisions
 
-## Getting Started
+## Getting started
 
-### Development Environment
+### Development environment
 
-1. **Hardware Requirements**
+1. **Hardware requirements**
    - Proxmox VE server (or development VM)
    - Minimum: 16GB RAM, 4 cores, 100GB storage
    - Recommended: Intel N150 or equivalent for testing
 
-2. **Software Requirements**
+2. **Software requirements**
    - Git
    - Ansible 2.15+
    - Python 3.11+
@@ -31,7 +31,7 @@ PrivateBox is a commercial open-source project. We expect all contributors to:
    # Follow quickstart guide for bootstrap
    ```
 
-### Repository Structure
+### Repository structure
 
 ```
 privatebox/
@@ -48,9 +48,9 @@ privatebox/
 └── CLAUDE.md           # AI assistant guidelines
 ```
 
-## How to Contribute
+## How to contribute
 
-### 1. Reporting Issues
+### 1. Reporting issues
 
 Before creating an issue:
 - Check existing issues for duplicates
@@ -64,7 +64,7 @@ Include:
 - Expected vs actual behavior
 - Relevant logs
 
-### 2. Suggesting Features
+### 2. Suggesting features
 
 Feature requests should:
 - Align with product vision (privacy-focused consumer appliance)
@@ -72,28 +72,28 @@ Feature requests should:
 - Include use cases and user stories
 - Propose implementation approach (optional)
 
-### 3. Contributing Code
+### 3. Contributing code
 
 #### Workflow
 
-1. **Fork and Clone**
+1. **Fork and clone**
    ```bash
    git clone https://github.com/YOUR-USERNAME/privatebox.git
    cd privatebox
    git remote add upstream https://github.com/Rasped/privatebox.git
    ```
 
-2. **Create Feature Branch**
+2. **Create feature branch**
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
-3. **Make Changes**
+3. **Make changes**
    - Follow coding standards (see below)
    - Write/update tests
    - Update documentation
 
-4. **Test Thoroughly**
+4. **Test thoroughly**
    - Test on clean Proxmox install
    - Verify idempotency (run playbook twice)
    - Check for errors in logs
@@ -104,15 +104,15 @@ Feature requests should:
    git commit -m "Add feature: brief description"
    ```
 
-6. **Push and Create PR**
+6. **Push and create PR**
    ```bash
    git push origin feature/your-feature-name
    # Open PR on GitHub
    ```
 
-#### Code Standards
+#### Code standards
 
-**Ansible Playbooks:**
+**Ansible playbooks:**
 - Idempotent - safe to run multiple times
 - Use handlers for service restarts
 - Include error handling and retries
@@ -120,7 +120,7 @@ Feature requests should:
 - Use variables for configurability
 - Document non-obvious logic
 
-**Bash Scripts:**
+**Bash scripts:**
 - Use `set -euo pipefail`
 - Quote all variables
 - Validate inputs
@@ -128,7 +128,7 @@ Feature requests should:
 - Use functions for clarity
 - Include usage/help message
 
-**Python Scripts:**
+**Python scripts:**
 - Follow PEP 8
 - Type hints for function signatures
 - Docstrings for modules and functions
@@ -141,11 +141,11 @@ Feature requests should:
 - Include comments for complex logic
 - Write self-documenting code
 
-### 4. Contributing Documentation
+### 4. Contributing documentation
 
 Documentation contributions are highly valued!
 
-#### User Guides
+#### User guides
 
 Located in `/docs/guides/`:
 - Write for non-technical users
@@ -153,7 +153,7 @@ Located in `/docs/guides/`:
 - Provide step-by-step instructions
 - Test instructions on fresh install
 
-#### Architecture Documentation
+#### Architecture documentation
 
 Located in `/docs/architecture/`:
 - Use feature overview template
@@ -165,23 +165,23 @@ Located in `/docs/architecture/`:
 
 When making architectural decisions:
 
-1. **Copy Template**
+1. **Copy template**
    ```bash
    cp docs/architecture/adr-template.md \
       docs/architecture/[feature]/adr-NNNN-title.md
    ```
 
-2. **Fill In Sections**
+2. **Fill in sections**
    - Context: Why is this decision needed?
    - Decision: What are we doing?
    - Consequences: Positive, negative, neutral
    - Alternatives: What else did we consider?
 
-3. **Update Index**
+3. **Update index**
    - Add to `docs/architecture/README.md`
    - Link from feature overview
 
-## Development Guidelines
+## Development guidelines
 
 ### Testing
 
@@ -193,7 +193,7 @@ When making architectural decisions:
 - [ ] Tested recovery/rollback (if applicable)
 - [ ] Updated documentation
 
-### Commit Messages
+### Commit messages
 
 Format:
 ```
@@ -231,7 +231,7 @@ Changed AdGuard web UI port from 3000 to 3080 to avoid conflict
 with Semaphore. Updated Caddyfile accordingly.
 ```
 
-### Pull Request Process
+### Pull request process
 
 1. **PR Title:** Same format as commit messages
 2. **Description:**
@@ -246,14 +246,14 @@ with Semaphore. Updated Caddyfile accordingly.
    - [ ] No merge conflicts
    - [ ] Commits are clean and descriptive
 
-### Review Process
+### Review process
 
 - PRs require approval from maintainer
 - Address feedback promptly
 - Be open to suggestions
 - Keep discussions technical and respectful
 
-## Architecture Decisions
+## Architecture decisions
 
 Major architectural decisions require:
 1. Discussion in GitHub issue or PR
@@ -267,7 +267,7 @@ Areas requiring extra scrutiny:
 - Network architecture changes (backward compatibility)
 - Service dependencies (offline operation requirement)
 
-## Commercial Considerations
+## Commercial considerations
 
 PrivateBox is open-source but commercially sold. Consider:
 
@@ -286,7 +286,7 @@ PrivateBox is open-source but commercially sold. Consider:
 - Does this affect data privacy?
 - Any export control concerns?
 
-## Getting Help
+## Getting help
 
 - **Questions:** Open a GitHub Discussion
 - **Bugs:** Open a GitHub Issue

@@ -18,7 +18,7 @@ You have two options for any router:
 
 ## ISP-provided routers
 
-Many ISPs provide a combined modem/router unit. To use PrivateBox correctly, you generally cannot use the Wi-Fi from your ISP-provided router. You have one primary option:
+Many ISPs provide a combined modem/router unit. To use PrivateBox correctly, you generally can't use the Wi-Fi from your ISP-provided router. You have one primary option:
 
 **Enable "Bridge Mode" on your ISP router**
 
@@ -30,11 +30,10 @@ This turns your ISP device into a simple modem and disables its routing and Wi-F
 
 **Search online:** "[ISP name] [router model] bridge mode" for specific instructions.
 
-**Warning: You will need a separate Wi-Fi solution.**
-Enabling bridge mode will disable the Wi-Fi on your ISP's router. You must have a separate device to provide Wi-Fi for your network, such as a dedicated Wi-Fi access point or another router set to "AP Mode", connected to your PrivateBox.
+**Warning: Enabling bridge mode will disable your ISP router's WiFi.** You'll need a separate device to provide WiFi for your network, such as a dedicated WiFi access point or another router set to "AP Mode", connected to your PrivateBox.
 
-**What if my ISP router has no bridge mode?**
-If your router does not offer a bridge mode, your options are limited and can be problematic. Disabling DHCP while trying to use the router's Wi-Fi can lead to an unstable network. The most reliable solution is to acquire a simple modem that works with your ISP and use that in place of the ISP-provided router.
+**What if my ISP router doesn't have bridge mode?**
+If your router doesn't offer a bridge mode, your options are limited and can be problematic. Disabling DHCP while trying to use the router's Wi-Fi can lead to an unstable network. The most reliable solution is to acquire a simple modem that works with your ISP and use that in place of the ISP-provided router.
 
 ## Common router brands
 
@@ -112,7 +111,7 @@ Consult Ubiquiti documentation or contact support for specific configuration.
 
 Google WiFi, eero, Nest WiFi, and similar mesh systems need different configuration.
 
-### Option 1: Replace mesh system (recommended)
+### Option 1: replace mesh system (recommended)
 
 Use PrivateBox as your router and connect a Wi-Fi access point or your old router in AP mode to PrivateBox.
 
@@ -124,7 +123,7 @@ Cons:
 - Mesh system's advanced features disabled
 - May need to add separate Wi-Fi access points
 
-### Option 2: Keep mesh as router (not recommended)
+### Option 2: keep mesh as router (not recommended)
 
 Place PrivateBox behind your mesh system.
 
@@ -138,8 +137,9 @@ Cons:
 After disabling DHCP or enabling AP mode:
 
 1.  Your router may reboot (1-2 minutes).
-2.  You will need to force your devices to get a new IP address. The easiest way is to turn Wi-Fi off and on again on each device. For wired devices, unplug and replug their network cables.
-3.  Return to the [Getting Started Guide](./getting-started.md) to complete setup.
+2.  You'll need to force your devices to get a new IP address. The easiest way is to turn Wi-Fi off and on again on each device. For wired devices, unplug and replug their network cables.
+3.  If you disabled DHCP, set the router's LAN IP to a static address outside the PrivateBox range (for example `192.168.1.2`) before saving so you can still reach its admin page later.
+4.  Return to the [Getting started guide](./getting-started.md) to complete setup.
 
 ## Still stuck?
 

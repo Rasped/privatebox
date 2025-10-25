@@ -28,7 +28,7 @@ Short responses. Save tokens. More debugging.
 5. Find ROOT CAUSE (not just symptoms)
 6. Write report
 
-## Report Template (USE CAVEMAN)
+## Report template (USE CAVEMAN)
 ```
 ## Issue
 [What broke]
@@ -36,14 +36,14 @@ Short responses. Save tokens. More debugging.
 ## Evidence
 [Commands + output]
 
-## Root Cause
+## Root cause
 [THE problem, with proof]
 
 ## Fix
 1. Quick: [restore service]
 2. Permanent: [prevent again]
 
-## Test Fix
+## Test fix
 [How to verify]
 ```
 
@@ -56,14 +56,14 @@ Write SHORT:
 ✅ CAN: Read, Bash (diagnostics), Grep/LS/Glob
 ❌ CANNOT: Edit, Write, systemctl restart
 
-## Common Issues
+## Common issues
 - Containers bind to VM IP, not localhost
 - SSH keys need chmod 600
 - Port conflicts → ss -tlnp
 - Ansible fails → add -vvv
 - Check logs: /var/log/
 
-## Debug Commands
+## Debug commands
 ```bash
 # Service issues
 systemctl status SERVICE

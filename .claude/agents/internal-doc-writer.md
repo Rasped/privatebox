@@ -11,7 +11,7 @@ ALL writing = short. Save tokens for work.
 - "Load Context7 first" NOT "Always remember to load Context7 documentation"
 - "SSH fails = check perms" NOT "SSH failures are often caused by permissions"
 
-## Your Job
+## Your job
 1. **CLAUDE.md** = Keep updated with patterns
 2. **Agent docs** = Clear instructions  
 3. **Internal notes** = Context for future
@@ -21,28 +21,28 @@ ALL writing = short. Save tokens for work.
 ✅ CAN: Read, Write/Edit (.md only), Grep/Glob
 ❌ CANNOT: Bash, Edit code, Execute anything
 
-## Doc Locations
+## Doc locations
 - `CLAUDE.md` = Main AI instructions
 - `.claude/agents/*.md` = Agent behaviors
 - `CLAUDE-HISTORICAL.md` = Old lessons
 - `documentation/internal/` = Dev context
 
-## Writing Rules
+## Writing rules
 - ALWAYS CAVEMAN (no exceptions)
 - Facts only, no fluff
 - Direct commands
 - Tables > paragraphs
 - Examples = minimal
 
-## Update Triggers
+## Update triggers
 - New pattern found → CLAUDE.md
 - Agent confusion → Update agent file
 - Lesson learned → Historical doc
 - Design decision → Internal doc
 
-## Example Updates
+## Example updates
 ```markdown
-## New Pattern
+## New pattern
 Container ports: Use VM IP not localhost
 Why: Podman Quadlet binds to host IP
 Fix: {{ ansible_default_ipv4.address }}

@@ -1,5 +1,11 @@
 # How-to: Backup and restore your configuration
 
+**Status: Draft - Not yet implemented**
+
+This feature is planned but not yet available in the current version of PrivateBox.
+
+---
+
 This guide explains how to create and restore a backup of your PrivateBox's critical service configurations.
 
 ## 1. Understanding backups
@@ -17,7 +23,7 @@ Regular backups are essential for peace of mind. The PrivateBox backup process s
 
 ## 2. Creating a backup
 
-### Step 1: Run the backup task
+### Step 1: run the backup task
 
 1.  Access your Semaphore dashboard at `https://semaphore.lan`.
 2.  Navigate to **Task Templates** in the left-hand menu.
@@ -25,7 +31,7 @@ Regular backups are essential for peace of mind. The PrivateBox backup process s
 
 This will create a single, compressed backup file containing all your service configurations.
 
-### Step 2: Download your backup file
+### Step 2: download your backup file
 
 Backups are stored on the PrivateBox itself. For a backup to be useful in a hardware failure scenario, you must download it and store it somewhere safe, like your personal computer or a secure cloud storage provider.
 
@@ -43,13 +49,13 @@ This process is used to recover your settings on a new or freshly reset PrivateB
 
 To restore from a backup, you must be starting from a **freshly installed PrivateBox**. The restore task is designed to apply a saved configuration to a clean system; it is not designed to "roll back" an existing system.
 
-### Step 1: Upload your backup file
+### Step 1: upload your backup file
 
 Before you can restore, you must upload a previously saved backup file to your new PrivateBox.
 
 1.  *(Instructions on how to upload the backup file to the correct directory will be added here.)*
 
-### Step 2: Run the restore task
+### Step 2: run the restore task
 
 1.  Access your Semaphore dashboard at `https://semaphore.lan`.
 2.  Navigate to **Task Templates**.

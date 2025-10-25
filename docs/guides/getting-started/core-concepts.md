@@ -1,6 +1,6 @@
-# Core Concepts
+# Core concepts
 
-Your PrivateBox is designed around a single, core principle: *your data is not a product.* These features are not just technical add-ons; they are the tools that deliver on that promise. This guide explains the purpose of each one in simple terms.
+Your PrivateBox is designed around a single, core principle: *your data isn't a product.* These features aren't just technical add-ons; they're the tools that deliver on that promise. This guide explains the purpose of each one in simple terms.
 
 ---
 
@@ -27,9 +27,9 @@ For complete details on all seven network segments, see the [VLAN configuration 
 
 **What it does:** By default, it operates on a "deny all" policy. It blocks any unsolicited connection attempt, ensuring that only legitimate traffic that you have requested is allowed onto your network.
 
-**What it does not do:**
-*   It is not an antivirus. It does not scan your files for malware. You still need good antivirus software on your computers.
-*   It does not prevent you from visiting a malicious website. It protects you from outside attacks, but you can still walk out the door into a dangerous neighborhood.
+**What it doesn't do:**
+*   It's not an antivirus. It doesn't scan your files for malware. You still need good antivirus software on your computers.
+*   It doesn't prevent you from visiting a malicious website. It protects you from outside attacks, but you can still walk out the door into a dangerous neighborhood.
 
 ---
 
@@ -37,9 +37,9 @@ For complete details on all seven network segments, see the [VLAN configuration 
 
 **The concept:** Think of the internet's address book as a giant phone book (called DNS). When your computer wants to visit `google.com`, it asks DNS for the number. The Ad & Tracker blocker on your PrivateBox uses a modified phone book that simply refuses to look up the numbers for domains known to serve ads and trackers.
 
-**What it does:** Because this happens at the network level, many ads and trackers are blocked for *every device* in your home—computers, phones, and even smart TVs—without installing any software on them. This protects your privacy and can even make websites load faster.
+**What it does:** Because this happens at the network level, many ads and trackers are blocked for *every device* in your home (computers, phones, and even smart TVs) without installing any software on them. This protects your privacy and can even make websites load faster.
 
-**What it does not do:** It cannot block 100% of ads. Some ads (like on YouTube or sponsored posts on social media) are served from the same "phone number" as the content you want to see. Blocking them would block the content itself.
+**What it doesn't do:** It can't block 100% of ads. Some ads (like on YouTube or sponsored posts on social media) are served from the same "phone number" as the content you want to see. Blocking them would block the content itself.
 
 ---
 
@@ -49,4 +49,4 @@ For complete details on all seven network segments, see the [VLAN configuration 
 
 **What it does:** It lets you access your home network when you're away. It also protects your internet traffic on public Wi-Fi by routing it through your home connection.
 
-**What it is not:** This is not a commercial VPN service designed to make you anonymous or change your geographic location to bypass content restrictions. Its purpose is to give you secure access to *your own network*, not to hide your identity from third-party websites.
+**What it's not:** This isn't a commercial VPN service designed to make you anonymous or change your geographic location to bypass content restrictions. Its purpose is to give you secure access to *your own network*, not to hide your identity from third-party websites.

@@ -19,7 +19,7 @@ PrivateBox includes a built-in recovery system that provides factory reset capab
 
 This (v3) plan replaces LVM and LUKS with a ZFS-native layout. This provides the high-performance snapshots and data integrity features Proxmox is known for, while retaining the flexible, asset-preserving recovery model from the v2 plan.
 
-## Design Goals
+## Design goals
 
 - **Simple**: One-button factory reset experience via boot menu
 - **Secure**: Passwords encrypted and inaccessible from main OS
@@ -29,11 +29,11 @@ This (v3) plan replaces LVM and LUKS with a ZFS-native layout. This provides the
 - **Fast Snapshots**: Leverages ZFS for instantaneous, low-impact system snapshots
 - **Flexible**: ZFS datasets replace LVs for a more dynamic data structure
 
-## Partition Layout
+## Partition layout
 
 This design uses a ZFS-native layout. A single ZFS pool (rpool) manages all data, using datasets as "logical partitions."
 
-### Physical Partition Layout
+### Physical partition layout
 
 ```
 /dev/sda1 - [EFI]           - 512MB  - FAT32    - GRUB Bootloader
@@ -42,7 +42,7 @@ This design uses a ZFS-native layout. A single ZFS pool (rpool) manages all data
 /dev/sda4 - [ZFS_RPOOL]     - Rest   - ZFS      - Main ZFS pool for all system data
 ```
 
-### ZFS Dataset Layout
+### ZFS dataset layout
 
 (Inside the /dev/sda4 ZFS Pool rpool)
 
@@ -65,9 +65,9 @@ rpool/
 
 (Note: ZFS datasets are dynamic and don't have fixed sizes, which is a major advantage.)
 
-## Implementation Strategy
+## Implementation strategy
 
-### ZFS-Native, Installer-Based Approach
+### ZFS-Native, Installer-Based approach
 
 The implementation leverages ZFS as the core storage technology, managed by a Debian Preseed installer.
 
@@ -82,7 +82,7 @@ The implementation leverages ZFS as the core storage technology, managed by a De
   - Creating the ROOT, ASSETS, and VAULT datasets
 - The Preseed process installs a minimal Debian, the Proxmox packages, and cloud-init directly into the rpool/ROOT dataset
 
-### Key Technology Shift: "ZFS Datasets as Volumes"
+### Key technology shift: "ZFS datasets as volumes"
 
 This plan replaces LVM entirely. Instead of lv_proxmox, lv_assets, and lv_vault, we use ZFS datasets.
 
@@ -92,13 +92,13 @@ This plan replaces LVM entirely. Instead of lv_proxmox, lv_assets, and lv_vault,
 
 This is dramatically faster and cleaner. The recovery script simply destroys the main OS dataset and creates a new empty one, leaving rpool/ASSETS and rpool/VAULT completely untouched.
 
-### Configuration Management: cloud-init
+### Configuration management: cloud-init
 
 This remains identical to the v2 plan. cloud-init runs on first boot, reads its configuration from rpool/ASSETS, and provisions the appliance.
 
-## Security Implementation
+## Security implementation
 
-### ZFS Native Encryption
+### ZFS native encryption
 
 This plan replaces LUKS with ZFS native encryption, which is simpler and more flexible. We only encrypt the VAULT dataset.
 
@@ -124,11 +124,11 @@ This plan replaces LUKS with ZFS native encryption, which is simpler and more fl
 - **Password injection happens during reset only**: The recovery script mounts the vault, reads passwords, and injects them into the cloud-init config on rpool/ASSETS just before triggering the reinstall
 - **Protects against root compromise**: Even if an attacker gains root on Proxmox, they cannot access the vault or steal the permanent passwords
 
-## Factory Provisioning Setup
+## Factory provisioning setup
 
 **Production Method:** All appliances are provisioned via PXE boot from a factory provisioning server. USB installation is only used for development and testing.
 
-### Provisioning Server Requirements
+### Provisioning server requirements
 
 The factory provisioning server must provide:
 
@@ -137,7 +137,7 @@ The factory provisioning server must provide:
 3. **HTTP Server**: Hosts preseed configuration and offline assets
 4. **Asset Repository**: Stores all required assets (container images, VM templates, installer files)
 
-### Provisioning Server Directory Structure
+### Provisioning server directory structure
 
 ```
 /srv/privatebox-provisioning/
@@ -173,7 +173,7 @@ The factory provisioning server must provide:
 │           └── recovery.squashfs  # Pre-built recovery OS
 ```
 
-### PXE Boot Configuration
+### PXE boot configuration
 
 ```
 # /srv/privatebox-provisioning/tftp/pxelinux.cfg/default
@@ -183,7 +183,7 @@ LABEL install
   APPEND initrd=debian-installer/amd64/initrd.gz auto=true priority=critical url=http://provisioning-server/preseed.cfg
 ```
 
-### Preseed Configuration (Key Sections)
+### Preseed configuration (Key Sections)
 
 The preseed.cfg on the provisioning server includes special commands to download assets:
 
@@ -195,9 +195,9 @@ d-i preseed/late_command string \
     -P /rpool/ASSETS/
 ```
 
-## Recovery Flow
+## Recovery flow
 
-### During Initial Install (PXE Boot from Factory)
+### During initial install (PXE boot from Factory)
 
 1. **Appliance powers on**, network boots via PXE
 2. **DHCP assigns IP** and directs to TFTP server
@@ -236,7 +236,7 @@ d-i preseed/late_command string \
 
 **Development/Testing Alternative:** For development, a bootable USB can be created with preseed.cfg and assets bundled. The flow is identical except assets are copied from USB instead of downloaded via HTTP.
 
-### During a Factory Reset (User-initiated)
+### During a factory reset (User-initiated)
 
 1. **User selects recovery option from the GRUB menu**
 
@@ -316,26 +316,26 @@ d-i preseed/late_command string \
    - It finds its user-data config at the selected asset slot (with passwords already injected by recovery script)
    - It provisions the entire appliance from the offline assets using the preserved passwords
 
-## What Gets Preserved
+## What gets preserved
 
-### Preserved Across Recovery
+### Preserved across recovery
 - **ZFS Datasets**: rpool/ASSETS and rpool/VAULT are never touched by the reset
 - **Physical Partitions**: sda1, sda2, sda3, and sda4 (the pool) are untouched
 
-### Reset to Defaults
+### Reset to defaults
 - **ZFS Dataset**: rpool/ROOT is completely destroyed and recreated (recursive)
 - All VMs and containers (which live on datasets under rpool/ROOT)
 - All service configurations and user data
 
-## Implementation Notes
+## Implementation notes
 
-### ZFS on Debian Preseed
+### ZFS on debian preseed
 
 The most complex part of this plan is the preseed/late_command script for the initial install. It must reliably install ZFS into the installer environment and bootstrap the pool before the OS is installed. This is a common procedure for "ZFS on Root" Debian installations and is well-documented.
 
 The recovery script (sda3) is now dramatically simpler, as it only needs to run `zfs destroy`.
 
-### Dataset Hierarchy
+### Dataset hierarchy
 
 Understanding the dataset hierarchy is critical:
 
@@ -352,7 +352,7 @@ rpool/
 
 The `-r` flag on `zfs destroy -r rpool/ROOT` destroys ROOT and all nested datasets. ASSETS and VAULT survive because they are siblings, not children.
 
-### Building the Recovery OS
+### Building the recovery OS
 
 The recovery OS on sda3 must be a custom minimal Debian environment, not Alpine Linux or a full-featured rescue distribution.
 
@@ -507,11 +507,11 @@ zfs --version  # Should match Proxmox version
 /usr/local/bin/privatebox-recovery --help  # (or dry-run mode)
 ```
 
-## Asset Management for Offline Operation
+## Asset management for offline operation
 
 The rpool/ASSETS dataset uses a two-slot architecture: `factory/` and `updated/`. This prevents version creep and provides a permanent failsafe.
 
-### Assets Dataset Structure (Two-Slot Architecture)
+### Assets dataset structure (Two-Slot Architecture)
 
 ```
 /rpool/ASSETS/
@@ -549,7 +549,7 @@ The rpool/ASSETS dataset uses a two-slot architecture: `factory/` and `updated/`
 
 **Note:** The vault.key does NOT exist in rpool/ASSETS. It exists only in the recovery OS initramfs on sda3.
 
-### Atomic Asset Update Process
+### Atomic asset update process
 
 When new assets are released (e.g., "v3" with updated container images), the update script performs an atomic replacement:
 
@@ -609,7 +609,7 @@ echo "Next factory reset will use these assets (or fallback to factory if corrup
 - **Automatic fallback**: Recovery script validates `updated/` and falls back to `factory/` if corrupt
 - **No manual cleanup**: Destroying the dataset removes all old files
 
-### Script Modifications
+### Script modifications
 
 All provisioning scripts (now part of the cloud-init user-data) must check the appropriate asset slot:
 
@@ -629,7 +629,7 @@ podman load -i "$ASSET_BASE/containers/adguard-home-latest.tar"
 cp "$ASSET_BASE/templates/opnsense-template.tar.gz" /tmp/
 ```
 
-## User Experience
+## User experience
 
 From the user's perspective:
 1. System problem occurs
@@ -641,7 +641,7 @@ From the user's perspective:
 
 This matches the experience of commercial home routers and NAS appliances - simple, predictable, and reliable.
 
-## Integration with Update Architecture
+## Integration with update architecture
 
 This recovery system complements the update architecture (see `documentation/update-architecture.md`):
 
@@ -661,7 +661,7 @@ zfs create rpool/ROOT
 
 Both strategies use the same ZFS foundation and preserve rpool/ASSETS and rpool/VAULT.
 
-## Future Enhancements
+## Future enhancements
 
 Potential improvements (not in initial implementation):
 - Hardware button trigger via GPIO
@@ -670,7 +670,7 @@ Potential improvements (not in initial implementation):
 - Multiple recovery points (versioned golden images)
 - ZFS send/receive for external backups
 
-## Testing Recovery
+## Testing recovery
 
 To test the recovery system:
 1. Make changes to the main system

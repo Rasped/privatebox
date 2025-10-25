@@ -20,7 +20,7 @@ Brief description of what this feature does and why it exists.
 - Capability 2
 - Capability 3
 
-## Business Context
+## Business context
 
 Why does PrivateBox need this feature?
 - Customer value proposition
@@ -35,7 +35,7 @@ Describe the main components:
 - **Component 1:** Purpose and responsibility
 - **Component 2:** Purpose and responsibility
 
-### Data Flow
+### Data flow
 
 How does data/requests flow through this feature?
 
@@ -43,14 +43,14 @@ How does data/requests flow through this feature?
 User → Component A → Component B → Result
 ```
 
-### Integration Points
+### Integration points
 
 What does this feature integrate with?
 - External services
 - Other PrivateBox features
 - Hardware dependencies
 
-## Technical Details
+## Technical details
 
 ### Configuration
 
@@ -72,22 +72,22 @@ How do we know it's working?
 - Log locations
 - Key metrics
 
-## Security Considerations
+## Security considerations
 
 - Authentication/authorization model
 - Data encryption (at rest, in transit)
 - Attack surface
 - Threat mitigations
 
-## User Impact
+## User impact
 
-### End Users
+### End users
 What do customers see/experience?
 
-### Advanced Users
+### Advanced users
 What advanced configuration options exist?
 
-## Operational Notes
+## Operational notes
 
 ### Troubleshooting
 Common issues and solutions
@@ -98,11 +98,11 @@ Regular maintenance tasks
 ### Backup/Recovery
 What needs to be backed up? How to restore?
 
-## Future Enhancements
+## Future enhancements
 
 (Optional) Known limitations or planned improvements
 
-## Related Documentation
+## Related documentation
 
 - ADRs: [ADR-NNNN](./adr-nnnn-title.md)
 - User guides: [Guide Name](/docs/guides/path/to/guide.md)

@@ -14,9 +14,11 @@ PrivateBox is a project that uses shell scripts, Python, and Ansible to turn a b
 
 ---
 
-## Why PrivateBox?
+## Why privatebox?
 
-Manually setting up a secure network stack with a firewall, DNS filtering, and a VPN is a repetitive and time-consuming task. PrivateBox automates the entire process, providing a consistent, secure, and repeatable deployment with a single command. It is designed for developers and tech enthusiasts who value their time but refuse to compromise on control or transparency.
+I built PrivateBox after setting up the same secure network four times: at home, for my dad, my brother, and our cottage. Each time took days. Each time I thought: there should be a better way.
+
+PrivateBox automates the entire process. One command gives you a consistent, secure, repeatable deployment. It's for developers and tech enthusiasts who value their time but won't compromise on control or transparency.
 
 ### Architecture overview
 
@@ -82,7 +84,7 @@ Watch the 2-minute video to see the entire deployment process, from the `curl` c
 
 ---
 
-## What now? Your first login
+## What now? your first login
 
 After the script completes, your PrivateBox is running. 
 
@@ -143,6 +145,23 @@ bash quickstart.sh --help         # Display all available arguments.
 This project is and always will be free and open source. If you find it useful and would like to support its continued development, we also offer a pre-configured hardware appliance running the exact same software.
 
 [**➡️ Learn More About the Hardware**](https://privatebox.com/preorder)
+
+## A note on development
+
+I'm not a professional sysadmin or network engineer. I built this because I needed it - four times: at home, for my dad, my brother, and our cottage. Each time I had to learn OPNsense, VLANs, and Proxmox from scratch. Each time I thought: this shouldn't be this hard.
+
+So I automated it. Heavily using AI (Claude) to move faster.
+
+Here's what that means:
+- AI wrote most of the code and documentation
+- I made the technical decisions and architecture choices
+- I tested everything on real hardware, repeatedly
+- I fixed what broke (a lot broke)
+- I learned networking by building this
+
+The result is automation that works for people like me - technically capable but not infrastructure experts. I've deployed it successfully multiple times. But it's AI-assisted code built by someone who learned by doing.
+
+If that's a dealbreaker, I understand. The entire codebase is open source - audit it, improve it, or don't use it. I chose transparency over pretending to be something I'm not.
 
 ## Contributing
 
