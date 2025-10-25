@@ -1,10 +1,10 @@
-# Frequently Asked Questions
+# Frequently asked questions
 
 ## General
 
-### What is PrivateBox?
+### What is privatebox?
 
-PrivateBox is a pre-configured network security appliance running open-source software (OPNsense, AdGuard Home, Headscale, and more) on Proxmox VE. It provides firewall, DNS filtering, VPN, and network management capabilities in a single, energy-efficient device.
+PrivateBox is a pre-configured network security appliance running open-source software (OPNsense, AdGuard Home, Headscale, and more) on Proxmox VE. It provides firewall, DNS filtering, VPN, and network management in a single, energy-efficient device.
 
 ### Is this really open source?
 
@@ -16,9 +16,9 @@ The open-source project provides scripts to deploy the PrivateBox stack on any c
 
 ### Are there any subscriptions or ongoing fees?
 
-No subscriptions or fees. All features are included with your purchase. Software updates are provided for free, forever. You own the hardware, you own the software, you own your data.
+No. All features are included with your purchase. Software updates are free, forever. You own the hardware, you own the software, you own your data.
 
-### What happens if Sub Rosa goes out of business?
+### What happens if sub rosa goes out of business?
 
 Nothing changes. You have complete control over the system. All software is open source, and you can maintain, update, and modify it independently. There's no cloud dependency or licensing server.
 
@@ -30,7 +30,7 @@ Nothing changes. You have complete control over the system. All software is open
 - **RAM:** 16GB DDR5
 - **Storage:** 256GB Enterprise-grade SSD
 - **Network:** Dual 2.5GbE Intel i226-V ports
-- **Power:** ~7W idle, ~14W under load
+- **Power:** ~10W idle, ~20W under load
 - **Cooling:** Active (quiet fan)
 
 ### Can I upgrade the hardware?
@@ -39,15 +39,15 @@ The RAM and storage are user-accessible and can be upgraded. The system supports
 
 ### How much power does it use?
 
-Approximately 7W at idle and 14W under full load. Annual power consumption is roughly €15-20 at typical European electricity rates.
+About 10W at idle and 20W under full load. That's around €15-20 per year at typical EU electricity rates.
 
 ### Is it loud?
 
-No. The active cooling system is designed to be quiet enough for home office or living room placement. Under normal operation, it's barely audible.
+No. I can barely hear it from a meter away.
 
 ### Can I rack mount it?
 
-The standard chassis is a small form factor desktop. Third-party rack mounting brackets for this form factor are available separately. Future versions may offer official rack mount options.
+The standard chassis is a small form factor desktop. Third-party rack mounting brackets for this form factor are available separately.
 
 ## Network and performance
 
@@ -57,7 +57,7 @@ PrivateBox can handle multi-gigabit routing. With IDS/IPS enabled, it comfortabl
 
 ### Can it replace my existing router?
 
-Yes. PrivateBox is designed to be your primary router and firewall. You'll configure your ISP modem in bridge mode and connect it to PrivateBox's WAN port.
+Yes. PrivateBox is your primary router and firewall. You'll configure your ISP modem in bridge mode and connect it to PrivateBox's WAN port. You'll need a separate WiFi solution.
 
 ### Does it work with my ISP?
 
@@ -65,9 +65,9 @@ PrivateBox supports all standard ISP connection types (DHCP, PPPoE, static IP, e
 
 ### How many devices can it handle?
 
-Hundreds. The exact number depends on your network activity, but the hardware is more than capable of handling a typical home or small office network with dozens of devices.
+Hundreds. The hardware can handle a typical home or small office network with dozens of devices without breaking a sweat.
 
-### Can I use it with VLANs?
+### Can I use it with vlans?
 
 Yes. OPNsense has full VLAN support. You can create isolated network segments for IoT devices, guests, servers, etc.
 
@@ -79,14 +79,15 @@ PrivateBox runs Proxmox VE as the hypervisor. On top of Proxmox, it runs three V
 - OPNsense VM (firewall/router)
 - Management VM (running containers for all services)
 - Subnet Router VM (for VPN routing)
+- Applications VM (Optional)
 
 ### Can I add additional services?
 
-Yes. You have full access to Proxmox and can create additional VMs or containers. The Portainer interface makes it easy to add new containerized services.
+Yes. You have full access to Proxmox and can create additional VMs or containers. The Portainer interface makes it easy to add new containerized services. Use the applications VM for this purpose.
 
 ### How do updates work?
 
-The system includes a curated update channel. We test all updates before making them available. You can configure automatic weekly updates or manually approve each update. You control when updates are applied.
+Right now, it's up to you to curate the updates you wish to run. We're working on a solution to offer curated updates. This will come at a later date.
 
 ### Can I customize the firewall rules?
 
@@ -94,7 +95,7 @@ Yes. You have full access to OPNsense and can configure any firewall rules, NAT,
 
 ### Does it include antivirus or malware protection?
 
-OPNsense includes IDS/IPS (Intrusion Detection/Prevention) capabilities via Suricata. AdGuard Home blocks malicious domains at the DNS level. Together, these provide network-wide threat protection.
+OPNsense includes IDS/IPS (Intrusion Detection/Prevention) capabilities via Suricata. AdGuard Home blocks malicious domains at the DNS level. Together, these provide network-wide threat protection. This is not enabled as standard. Setup is DIY.
 
 ## Setup and configuration
 
@@ -104,13 +105,13 @@ Physical setup takes about 5 minutes (plug in cables, power on). First login and
 
 ### Do I need technical knowledge to use it?
 
-Basic network knowledge is helpful but not required. The Getting Started Guide and online documentation walk you through initial setup step-by-step. For advanced features (VLANs, VPN, custom firewall rules), some networking knowledge is beneficial.
+Basic network knowledge is helpful but not required. The getting started guide and online documentation walk you through initial setup step-by-step. For advanced features (VLANs, VPN, custom firewall rules), some networking knowledge is beneficial.
 
-### Where can I get help if I'm stuck?
+### Where can I get help if i'm stuck?
 
 - **Documentation:** See the [documentation](../../) for comprehensive guides and how-tos
 - **Community:** r/homelab and r/selfhosted communities are excellent resources
-- **Direct Support:** support@subrosa.dev for hardware or warranty issues
+- **Direct support:** support@subrosa.dev for hardware or warranty issues
 
 ## Privacy and security
 
@@ -124,9 +125,9 @@ Yes. Remote access is provided via Headscale (self-hosted Tailscale alternative)
 
 ### How often are security updates provided?
 
-OPNsense releases security updates regularly (often weekly). We test these updates and make them available through the curated update channel. You control when to apply them.
+OPNsense releases security updates regularly (often weekly). You control when to apply them.
 
-### Can it protect my IoT devices?
+### Can it protect my iot devices?
 
 Yes. By placing IoT devices on an isolated VLAN, you can allow them internet access while blocking them from accessing your main network or sending telemetry to manufacturers.
 
@@ -138,15 +139,15 @@ PrivateBox includes a 2-year legal guarantee as required by EU law. This covers 
 
 ### What if something breaks?
 
-Contact support@subrosa.dev with your order number and a description of the issue. We'll troubleshoot remotely first. If hardware replacement is needed, we'll provide RMA instructions.
+Contact support@subrosa.dev with your order number and a description of the issue. I'll troubleshoot remotely first. If hardware replacement is needed, I'll provide RMA instructions.
 
 ### Can I return it if I change my mind?
 
-EU customers have a 14-day right of withdrawal. You can return the product for any reason within 14 days of receipt for a full refund (you pay return shipping).
+EU customers have a 14-day right of withdrawal. You can return the product for any reason within 30 days of receipt for a full refund (you pay return shipping).
 
 ### Is there paid support available?
 
-Currently, support is provided on a best-effort basis via email and community resources. Paid support tiers may be introduced in the future based on demand.
+Not yet. Right now, support is best-effort via email and community resources. 
 
 ## Shipping and availability
 
@@ -164,21 +165,21 @@ For EU customers, there are no customs fees. VAT is included in the displayed pr
 
 ## Comparison questions
 
-### How is this different from Ubiquiti Dream Machine?
+### How is this different from ubiquiti dream machine?
 
 - **Privacy:** No forced cloud connection or accounts
 - **Subscriptions:** All features included, no paywalls
 - **Openness:** Fully open source, not locked to proprietary ecosystem
 - **Control:** Complete access to underlying system
 
-### How is this different from Firewalla?
+### How is this different from firewalla?
 
 - **Price:** Better price-to-performance ratio
-- **Hardware:** Newer CPU (2023 vs older generation), active cooling for sustained performance
+- **Hardware:** Newer CPU, more RAM, more storage, active cooling for sustained performance
 - **EU Focus:** Warehoused and shipped from EU, no import delays or fees
 - **Management:** Web UI + mobile options (not mobile-only)
 
-### How is this different from Protectli?
+### How is this different from protectli?
 
 - **Setup:** Pre-configured and ready to use (Protectli requires full DIY setup)
 - **Support:** Includes tested update channel and setup assistance
@@ -200,7 +201,7 @@ You can! The scripts are open source. Building yourself saves money but costs ti
 - Troubleshooting and debugging
 - Ongoing maintenance planning
 
-PrivateBox is for those who value their time or want a tested, warranty-backed solution.
+PrivateBox is for people who value their time or want a tested, warranty-backed solution.
 
 ## Technical questions
 
@@ -208,7 +209,7 @@ PrivateBox is for those who value their time or want a tested, warranty-backed s
 
 Yes. You have full root access to Proxmox and all VMs. SSH is available for advanced users.
 
-### Does it support IPv6?
+### Does it support ipv6?
 
 Yes. OPNsense has full IPv6 support.
 
@@ -218,7 +219,7 @@ The base configuration focuses on networking/security. However, since it runs Pr
 
 ### What happens if the power goes out?
 
-The system will gracefully shut down if power is lost. When power returns, it will automatically boot up. For critical deployments, adding a UPS (Uninterruptible Power Supply) is recommended.
+It'll gracefully shut down. When power returns, it'll boot back up. For critical deployments, add a UPS.
 
 ### Can I cluster multiple units?
 

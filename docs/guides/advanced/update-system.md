@@ -1,5 +1,11 @@
 # How-to: Update your system
 
+**Status: Draft - Not yet implemented**
+
+This feature is planned but not yet available in the current version of PrivateBox.
+
+---
+
 This guide explains how to update your PrivateBox to the latest version.
 
 ## The update philosophy

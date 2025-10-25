@@ -1,5 +1,11 @@
 # Advanced: Using the health check system
 
+**Status: Draft - Not yet implemented**
+
+This feature is planned but not yet available in the current version of PrivateBox.
+
+---
+
 This guide explains how to use the PrivateBox's built-in health check system to diagnose and troubleshoot issues.
 
 ## 1. Introduction

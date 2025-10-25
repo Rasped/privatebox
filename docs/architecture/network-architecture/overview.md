@@ -16,7 +16,7 @@ last_updated: 2025-10-24
 
 This document defines the VLAN segmentation strategy for PrivateBox, designed to provide network isolation for privacy and security while maintaining ease of use for consumers. The same configuration works for both basic and advanced users - the only difference is which VLANs are actively used.
 
-## Design Principles
+## Design principles
 
 1. **Consumer-Friendly**: No complex authentication or jump boxes required
 2. **Privacy-Focused**: Separate untrusted devices from trusted ones
@@ -24,12 +24,12 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 4. **Simple Management**: Trusted devices can access management interfaces
 5. **Flexible Deployment**: Same configuration works with any router setup
 
-## Network Architecture
+## Network architecture
 
 **Default LAN**: Trusted network (untagged) for maximum compatibility
 **VLANs**: 6 additional networks for segmentation (Services, Guest, IoT Cloud, IoT Local, Cameras Cloud, Cameras Local)
 
-### Network Mapping
+### Network mapping
 
 | Interface | Network | Purpose | SSID (if wireless) | Type |
 |-----------|---------|---------|-------------------|------|
@@ -43,7 +43,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 
 **Note**: The default LAN uses 10.10.10.0/24 untagged for maximum compatibility with consumer routers. All VLANs use tags that match their third octet for perfect alignment and easy memorization (VLAN 20 = 10.10.20.x, VLAN 30 = 10.10.30.x, etc.).
 
-### Default LAN - Trusted Network (10.10.10.0/24)
+### Default LAN - trusted network (10.10.10.0/24)
 
 **Purpose**: Family devices and trusted computers
 
@@ -69,7 +69,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Full access to services enables easy administration
 - This is YOUR network - convenience over strict security
 
-### VLAN 20 - Services Network (10.10.20.0/24)
+### VLAN 20 - services network (10.10.20.0/24)
 
 **Purpose**: All PrivateBox services and infrastructure
 
@@ -98,7 +98,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - OPNsense management accessible at .1 on this VLAN
 - Proxmox at .20 for management access via Services VLAN
 
-### VLAN 30 - Guest Network (10.10.30.0/24)
+### VLAN 30 - guest network (10.10.30.0/24)
 
 **Purpose**: Visitor devices with internet-only access
 
@@ -122,7 +122,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Complete isolation protects home network
 - Guests still benefit from ad blocking via DNS
 
-### VLAN 40 - IoT Cloud (10.10.40.0/24)
+### VLAN 40 - iot cloud (10.10.40.0/24)
 
 **Purpose**: IoT devices requiring internet connectivity
 
@@ -155,7 +155,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Isolation prevents compromised devices from attacking home network
 - Separate from local IoT improves privacy
 
-### VLAN 50 - IoT Local (10.10.50.0/24)
+### VLAN 50 - iot local (10.10.50.0/24)
 
 **Purpose**: IoT devices that work locally without cloud
 
@@ -189,7 +189,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Local control is more reliable
 - 100 addresses support extensive home automation
 
-### VLAN 60 - Cameras Cloud (10.10.60.0/24)
+### VLAN 60 - cameras cloud (10.10.60.0/24)
 
 **Purpose**: Security cameras requiring cloud connectivity
 
@@ -224,7 +224,7 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Isolation prevents compromised camera from network scanning
 - 50 addresses sufficient for typical home camera deployments
 
-### VLAN 70 - Cameras Local (10.10.70.0/24)
+### VLAN 70 - cameras local (10.10.70.0/24)
 
 **Purpose**: Security cameras with local-only recording
 
@@ -264,47 +264,47 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
 - Prevents any telemetry or firmware auto-updates
 - 50 addresses sufficient for home deployments
 
-## Firewall Rules Summary
+## Firewall rules summary
 
-### Trusted LAN (Default) → Other VLANs
+### Trusted LAN (Default) → other vlans
 - ✅ Services: Allow all ports (SSH, Proxmox 8006, DNS 53, HTTP 80/443, Semaphore 3000, AdGuard 3080, Portainer 9000)
 - ✅ IoT Cloud/Local: Allow all (to control devices)
 - ✅ Cameras Cloud/Local: Allow all (to view streams and configure)
 - ❌ Guest: Deny all
 
-### Guest → Other VLANs
+### Guest → other vlans
 - ✅ Internet: Allow all
 - ✅ Services: Allow DNS (53) only
 - ❌ All others: Deny all
 
-### IoT Cloud → Other VLANs
+### IoT cloud → other vlans
 - ✅ Internet: Allow all
 - ✅ Services: Allow DNS (53) only
 - ❌ All others: Deny all (stateful responses to Trusted allowed)
 
-### IoT Local → Other VLANs
+### IoT local → other vlans
 - ❌ Internet: Deny all
 - ✅ Services: Allow DNS (53) and NTP (123) only
 - ❌ All others: Deny all (stateful responses to Trusted allowed)
 
-### Cameras Cloud → Other VLANs
+### Cameras cloud → other vlans
 - ✅ Internet: Allow all
 - ✅ Services: Allow DNS (53) and NTP (123) only
 - ❌ All others: Deny all (stateful responses to Trusted allowed)
 - ❌ Other cameras: Deny all (prevent lateral movement)
 
-### Cameras Local → Other VLANs
+### Cameras local → other vlans
 - ❌ Internet: Deny all
 - ✅ Services: Allow DNS (53) and NTP (123) only
 - ❌ All others: Deny all (stateful responses to Trusted allowed)
 - ❌ Other cameras: Deny all (prevent lateral movement)
 
-### Services → Other VLANs
+### Services → other vlans
 - ✅ Internet: Allow (for updates)
 - ❌ All others: Deny all (Services VLAN is infrastructure only, not for user services)
 
 
-## Implementation Notes
+## Implementation notes
 
 1. **OPNsense Configuration**:
    - Deployed from template: [v1.0.0-opnsense](https://github.com/Rasped/privatebox/releases/tag/v1.0.0-opnsense)
@@ -334,9 +334,9 @@ This document defines the VLAN segmentation strategy for PrivateBox, designed to
    - Additional services deploy as containers
    - Room for growth in all networks
 
-## Deployment Options
+## Deployment options
 
-### Option 1: Standard Consumer Router Setup
+### Option 1: standard consumer router setup
 For users with typical home WiFi routers:
 
 **What to use**:
@@ -362,7 +362,7 @@ For users with typical home WiFi routers:
 
 **Upgrade Path**: For true network segmentation, consider PrivateBox-compatible access points (see recommended hardware)
 
-### Option 2: VLAN-Capable Access Points
+### Option 2: VLAN-Capable access points
 For users with UniFi, Omada, or similar APs:
 
 **What to use**:
@@ -380,13 +380,13 @@ For users with UniFi, Omada, or similar APs:
 
 **Result**: Full network segmentation with maximum privacy
 
-### Key Point: One Configuration
+### Key point: one configuration
 The same OPNsense/PrivateBox configuration handles both setups. Users can start with Option 1 and naturally upgrade to Option 2 by simply:
 1. Replacing their router with VLAN-capable APs
 2. Moving devices to appropriate VLANs
 3. No reconfiguration of PrivateBox needed
 
-## Security Benefits
+## Security benefits
 
 1. **Isolation**: Compromised IoT devices cannot access trusted devices
 2. **Privacy**: Local IoT devices cannot phone home
@@ -394,7 +394,7 @@ The same OPNsense/PrivateBox configuration handles both setups. Users can start 
 4. **Service Protection**: Critical services isolated from user devices
 5. **Management Security**: Infrastructure accessible only from trusted devices
 
-## User Experience Benefits
+## User experience benefits
 
 1. **Simple Access**: No VPNs or jump boxes needed from trusted devices
 2. **Transparent**: Services "just work" from home network
@@ -403,9 +403,9 @@ The same OPNsense/PrivateBox configuration handles both setups. Users can start 
 5. **Growth Ready**: Plenty of IP space in each segment
 6. **Easy Upgrade Path**: Start simple, add segmentation when ready
 
-## Recommended Hardware
+## Recommended hardware
 
-### Access Point VLAN Configuration
+### Access point VLAN configuration
 
 When configuring VLAN-capable access points, use these settings:
 
@@ -443,7 +443,7 @@ interface GigabitEthernet0/1
 - Wireless: Create SSIDs and set VLAN ID for each
 - Port Config: Set AP port to "Trunk" with all VLANs
 
-### For Full Network Segmentation
+### For full network segmentation
 To utilize all security features of PrivateBox, we recommend:
 
 **Budget Option**: TP-Link Omada
@@ -462,7 +462,7 @@ To utilize all security features of PrivateBox, we recommend:
 - Automatic VLAN configuration
 - Premium support included
 
-### Why Upgrade?
+### Why upgrade?
 With VLAN-capable access points, you get:
 - True guest isolation (complete network separation)
 - IoT device segregation (compromised devices can't access your data)

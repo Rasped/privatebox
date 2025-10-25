@@ -41,7 +41,7 @@ Be specific and actionable. If this involves technical choices, name them explic
 - What dependencies does this create?
 - What future decisions does this constrain?
 
-## Alternatives Considered
+## Alternatives considered
 
 What other options did we explore and why were they rejected?
 
@@ -50,7 +50,7 @@ For each alternative:
 - **Pros:** Benefits
 - **Cons:** Why we didn't choose it
 
-## Implementation Notes
+## Implementation notes
 
 (Optional)
 - Key files/components affected

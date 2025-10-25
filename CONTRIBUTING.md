@@ -2,9 +2,9 @@
 
 Thank you for your interest in contributing to PrivateBox! This document provides guidelines for contributing to the project.
 
-## Git Workflow Best Practices
+## Git workflow best practices
 
-### Commit Messages
+### Commit messages
 
 Follow the conventional commits format:
 - `feat:` New feature
@@ -17,14 +17,14 @@ Follow the conventional commits format:
 
 Example: `feat: Add OPNsense VM provisioning support`
 
-### Before Committing
+### Before committing
 
 1. **Test locally** - Ensure your changes work
 2. **Review changes** - Use `git diff` to review what you're committing
 3. **Stage intentionally** - Use `git add -p` for partial staging
 4. **Keep commits focused** - One logical change per commit
 
-### Working with Branches
+### Working with branches
 
 1. Create feature branches for new work:
    ```bash
@@ -42,14 +42,14 @@ Example: `feat: Add OPNsense VM provisioning support`
    git rebase -i origin/main
    ```
 
-### Pull Requests
+### Pull requests
 
 1. Create clear PR titles and descriptions
 2. Reference any related issues
 3. Ensure all tests pass
 4. Keep PRs focused and reasonably sized
 
-## Development Setup
+## Development setup
 
 1. Clone the repository:
    ```bash
@@ -66,7 +66,7 @@ Example: `feat: Add OPNsense VM provisioning support`
 - Verify network auto-discovery works in your environment
 - Check that Portainer and Semaphore install correctly
 
-## Code Style
+## Code style
 
 - Use clear, descriptive variable names
 - Add comments for complex logic

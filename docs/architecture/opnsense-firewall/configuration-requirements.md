@@ -17,7 +17,7 @@ last_updated: 2025-10-24
 
 This document defines the comprehensive OPNsense configuration requirements for PrivateBox. The configuration prioritizes "good enough" security and privacy that significantly improves protection without disrupting normal home network operations.
 
-## Design Philosophy
+## Design philosophy
 
 - **Good Enough Security**: 80% protection with 20% complexity
 - **Privacy First**: Full tunnel VPN, recursive DNS, ad blocking
@@ -25,13 +25,13 @@ This document defines the comprehensive OPNsense configuration requirements for 
 - **Performance Conscious**: Optimized for Intel N100 hardware
 - **Maintainable**: Avoid complex rule sets that require constant updates
 
-## Network Architecture
+## Network architecture
 
-### Physical Interfaces
+### Physical interfaces
 - **WAN**: vmbr0 - External internet connection
 - **LAN**: vmbr1 - Internal VLAN-aware bridge
 
-### Network Configuration
+### Network configuration
 OPNsense uses the default LAN interface for Trusted devices and VLANs for network segmentation:
 
 | Interface | IP Address | Purpose | Type |
@@ -44,12 +44,12 @@ OPNsense uses the default LAN interface for Trusted devices and VLANs for networ
 | VLAN 60 | 10.10.60.1/24 | Cameras Cloud | Tagged |
 | VLAN 70 | 10.10.70.1/24 | Cameras Local | Tagged |
 
-## DHCP Server Configuration
+## DHCP server configuration
 
-### DHCP Disabled (Static Only)
+### DHCP disabled (Static Only)
 - VLAN 20 (Services) - Static IPs only for infrastructure
 
-### DHCP Enabled VLANs
+### DHCP enabled vlans
 
 All DHCP-enabled VLANs use:
 - **DNS Server**: 10.10.20.10 (AdGuard Home)
@@ -72,7 +72,7 @@ Specific IP pools:
 - **Mode**: Recursive resolver (not forwarder)
 - **Local Domain**: privatebox.local
 
-### Unbound Settings
+### Unbound settings
 - **Enable**: DNSSEC validation
 - **Query Name Minimization**: Yes (privacy enhancement)
 - **Prefetch Support**: Yes (performance)
@@ -104,14 +104,14 @@ Specific IP pools:
 - **TLS Version**: 1.2 minimum
 - **MTU**: 1500, Fragment at 1300
 
-### VPN User Management
+### VPN user management
 - Create individual certificates per user
 - No shared credentials
 - Reasonable key sizes (2048-bit RSA or Ed25519)
 
-## Firewall Rules
+## Firewall rules
 
-### Floating Rules (Applied First)
+### Floating rules (Applied First)
 - Allow DNS (port 53) from all VLANs to 10.10.20.10
 - Allow NTP (port 123) from VLANs 50, 60, 70 to their gateways
 - Block bogon networks on WAN
@@ -147,14 +147,14 @@ Specific IP pools:
 - Block all inter-VLAN traffic
 - Enable isolation (clients can't see each other)
 
-### IoT Cloud VLAN (40)
+### IoT cloud VLAN (40)
 - Allow internet (WAN)
 - Allow DNS to Services VLAN
 - Allow established connections from Trusted LAN
 - Block initiated connections to other VLANs
 - Block inter-device communication
 
-### IoT Local VLAN (50)
+### IoT local VLAN (50)
 - Block internet (WAN)
 - Allow DNS to Services VLAN
 - Allow NTP to gateway
@@ -162,14 +162,14 @@ Specific IP pools:
 - Block initiated connections to other VLANs
 - Block inter-device communication
 
-### Cameras Cloud VLAN (60)
+### Cameras cloud VLAN (60)
 - Allow internet (WAN)
 - Allow DNS and NTP to Services VLAN
 - Allow established connections from Trusted LAN
 - Block initiated connections to other VLANs
 - Block camera-to-camera communication
 
-### Cameras Local VLAN (70)
+### Cameras local VLAN (70)
 - Block internet (WAN)
 - Allow DNS and NTP to Services VLAN
 - Allow connections from Services VLAN (for NVR)
@@ -184,7 +184,7 @@ Specific IP pools:
 - **Applies to**: All internal VLANs
 - **Translation**: Interface address
 
-### Port Forwarding
+### Port forwarding
 - **None by default** (all access via VPN)
 - Document process for game consoles if needed
 
@@ -192,16 +192,16 @@ Specific IP pools:
 - **Enable**: For split-brain DNS scenarios
 - **Mode**: Pure NAT
 
-## System Configuration
+## System configuration
 
-### General Settings
+### General settings
 - **Hostname**: opnsense
 - **Domain**: privatebox.local
 - **DNS Servers**: 127.0.0.1 (use local Unbound)
 - **Time Zone**: UTC (adjust per deployment)
 - **NTP Service**: Enabled for all VLANs
 
-### Performance Tuning (N100 Optimized)
+### Performance tuning (N100 Optimized)
 - **Firewall Optimization**: Normal
 - **State Table Size**: 400,000
 - **Firewall Adaptive Timeouts**: Enabled
@@ -209,16 +209,16 @@ Specific IP pools:
 - **Power Profile**: Balanced
 - **Network Interfaces**: Disable LRO, enable VLAN hardware filtering
 
-### IPv6 Configuration
+### IPv6 configuration
 - **WAN**: Track interface (get prefix from ISP)
 - **LAN VLANs**: DHCPv6 with prefix delegation
 - **Privacy Extensions**: Enabled
 - **Temporary Address**: Rotate daily
 - **Firewall**: Default deny inbound, allow outbound
 
-## Security Features
+## Security features
 
-### Intrusion Detection (Suricata)
+### Intrusion detection (Suricata)
 - **Status**: Installed but DISABLED by default
 - **Rationale**: Avoid performance impact and false positives
 - **Documentation**: Include enablement guide for power users
@@ -231,7 +231,7 @@ If enabled by user:
 - **Max Memory**: 2GB
 - **Stream Bypass**: Over 100Mbps
 
-### Access Control
+### Access control
 - **Web GUI**: HTTPS only from Trusted LAN and Services VLAN
 - **SSH**: Disabled on WAN, key-only from Trusted LAN
 - **Anti-lockout**: Enabled on LAN interface
@@ -243,36 +243,36 @@ If enabled by user:
 - **Remote Logging**: Optional syslog to Management VM
 - **Privacy**: No DNS query logging
 
-## Service Integration
+## Service integration
 
-### AdGuard Integration
+### AdGuard integration
 - All DHCP servers point to 10.10.20.10
 - Unbound listens on localhost only
 - AdGuard forwards to 127.0.0.1:5353 (Unbound)
 - Allow DNS override by clients (user choice)
 
-### Time Service
+### Time service
 - OPNsense provides NTP to all VLANs
 - Critical for camera timestamps
 - Critical for certificate validation
 
-## Backup and Recovery
+## Backup and recovery
 
-### Configuration Management
+### Configuration management
 - **Auto-backup**: Daily to Services VLAN
 - **History**: Keep 30 versions
 - **Before Changes**: Manual backup reminder
 - **Export Format**: Encrypted XML
 
-### Restoration Process
+### Restoration process
 1. Install base OPNsense
 2. Restore config.xml
 3. Regenerate VPN certificates
 4. Verify interface assignments
 
-## Package Requirements
+## Package requirements
 
-### Built-in (No Installation Required)
+### Built-in (No installation Required)
 - OpenVPN
 - Unbound DNS
 - DHCP Server
@@ -284,11 +284,11 @@ If enabled by user:
 - os-ddclient (dynamic DNS)
 - os-acme-client (Let's Encrypt)
 
-## Implementation Notes
+## Implementation notes
 
-### Configuration Process Flow
+### Configuration process flow
 
-#### Phase 1: Comprehensive Config Creation (One-time)
+#### Phase 1: comprehensive config creation (One-time)
 1. Deploy fresh OPNsense from ISO
 2. Complete initial wizard (WAN/LAN assignment)
 3. Configure all settings per this document manually:
@@ -301,7 +301,7 @@ If enabled by user:
 4. Export comprehensive config.xml (System → Configuration → Backups)
 5. Store this comprehensive config.xml in GitHub repository
 
-#### Phase 2: Automated Deployment (Per-installation)
+#### Phase 2: automated deployment (Per-installation)
 
 1. **Initial Bootstrap**
    - Deploy OPNsense VM (fresh install or from template)
@@ -346,7 +346,7 @@ If enabled by user:
 - ✅ User accounts and permissions
 - ✅ Package configurations (even if package not yet installed)
 
-#### What Requires Post-Configuration
+#### What requires Post-Configuration
 - ⚙️ Optional package installation (Suricata if desired)
 - ⚙️ VPN certificate generation (unique per install)
 - ⚙️ VPN user creation (deployment-specific)
@@ -355,21 +355,21 @@ If enabled by user:
 - ⚙️ Dynamic DNS setup (if needed)
 - ⚙️ Site-specific WAN configuration
 
-### Deployment Method
+### Deployment method
 1. Configure OPNsense manually with these settings
 2. Export configuration
 3. Create VM template
 4. Store template and config.xml in repository
 5. Automate deployment via API/SSH
 
-### Post-Deployment Tasks
+### Post-Deployment tasks
 - Generate unique VPN certificates
 - Create initial VPN user accounts
 - Verify VLAN connectivity
 - Test firewall rules
 - Document any site-specific changes
 
-### Testing Checklist
+### Testing checklist
 - [ ] Each VLAN can reach its assigned DNS
 - [ ] Trusted devices can manage infrastructure
 - [ ] Guest devices isolated from local network
@@ -379,7 +379,7 @@ If enabled by user:
 - [ ] AdGuard receives all DNS queries
 - [ ] NTP available to all devices
 
-## Excluded Features
+## Excluded features
 
 These features were considered but excluded for simplicity:
 
@@ -390,7 +390,7 @@ These features were considered but excluded for simplicity:
 - **Suricata IPS Mode**: Too many false positives
 - **Complex Bypass Rules**: Maintenance burden
 
-## Future Considerations
+## Future considerations
 
 - High Availability (CARP) for dual router setup
 - API automation for rule updates

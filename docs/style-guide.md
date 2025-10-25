@@ -68,6 +68,13 @@ Use bold sparingly and only for:
 
 Do not use bold for emphasis or to make text "stand out".
 
+### Diagram usage
+
+- Do not embed screenshots or photos in Markdown files.
+- Prefer Mermaid diagrams to illustrate hardware layouts, workflows, or sequences.
+- Place diagrams immediately after the paragraph that introduces them.
+- Keep diagrams brief and readable in plain text (avoid more than about eight nodes).
+
 ## Tone and voice
 
 ### Be direct and factual
@@ -126,6 +133,13 @@ Use simple language for user-facing documentation. Technical accuracy is importa
 Match the capitalization shown in the actual UI.
 
 **Example:** If the button says "Deploy stack", write "Click **Deploy stack**" (not "Deploy Stack")
+
+### Preferred component names
+
+- Use "management VM" when referring to the container host.
+- Use "Subnet Router VM" for the VPN routing virtual machine.
+- Refer to the automation interface as "Semaphore" (capitalized).
+- Refer to the service dashboard as "Homer dashboard".
 
 ## Structure
 
@@ -187,7 +201,7 @@ Do not use em dashes (—). Use hyphens (-) or restructure the sentence.
 - The system will restart. This takes about 2 minutes.
 
 **Incorrect:**
-- The system will restart—this takes about 2 minutes
+- The system will restart—this takes about 2 minutes (uses em dash)
 
 ## Lists
 

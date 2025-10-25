@@ -1,4 +1,4 @@
-# Troubleshooting Guide
+# Troubleshooting guide
 
 This guide covers the most common issues you might encounter during the initial setup of your PrivateBox.
 
@@ -25,11 +25,11 @@ This is the most common fix. Your Internet Service Provider's modem often needs 
 4. Wait 2-3 minutes for it to fully boot and establish connection.
 5. Test your internet connection.
 
-**Note:** Some ISP modems are particularly stubborn. If a single reboot doesn't work, try rebooting it a second time. This resolves the issue in 90%+ of initial setup cases.
+**Note:** Some ISP modems are particularly stubborn. If a single reboot doesn't work, try rebooting it a second time. This resolves the issue in most cases.
 
 **Solution 3: Verify DHCP is disabled on your old router**
 
-As noted in the Getting Started Guide, you must disable the DHCP server on your existing Wi-Fi router. If two devices (your old router and your new PrivateBox) are trying to assign IP addresses on the same network, it will cause conflicts and prevent devices from connecting properly.
+As noted in the getting started guide, you'll need to disable the DHCP server on your existing Wi-Fi router. If two devices (your old router and your new PrivateBox) are trying to assign IP addresses on the same network, it'll cause conflicts and prevent devices from connecting properly.
 
 - Please refer back to the [getting-started](getting-started.md) and ensure you have completed this step.
 
@@ -39,12 +39,12 @@ As noted in the Getting Started Guide, you must disable the DHCP server on your 
 
 **Solution 1: Check your network connection**
 
-Ensure the device you are using is connected to your local network (either via Ethernet cable or to your Wi-Fi). You cannot access the local dashboard from a mobile data connection (4G/5G).
+Ensure the device you're using is connected to your local network (either via Ethernet cable or to your Wi-Fi). You can't access the local dashboard from a mobile data connection (4G/5G).
 
 **Solution 2: Check the address**
 
-- Make sure you have typed the address correctly: `http://privatebox.lan`
-- Do not add `.com` or other extensions.
+- Make sure you've typed the address correctly: `http://privatebox.lan`
+- Don't add `.com` or other extensions.
 - Remember to accept the security warning, which is normal.
 
 **Solution 3: DHCP conflict**
@@ -55,11 +55,11 @@ This is often a symptom of the same DHCP conflict described in "Problem: I have 
 
 ### Problem: A specific device isn't working as expected.
 
-This is often because the device has been assigned to a network segment (VLAN) that is correctly restricting its access for security reasons.
+This is often because the device has been assigned to a network segment (VLAN) that's correctly restricting its access for security reasons.
 
-For example, a smart TV placed on the "IoT (No Internet)" segment will not be able to stream videos, and a security camera on the "Cameras (No Internet)" segment will not be viewable from an app on your phone when you are away from home.
+For example, a smart TV placed on the "IoT (No Internet)" segment won't be able to stream videos, and a security camera on the "Cameras (No Internet)" segment won't be viewable from an app on your phone when you're away from home.
 
 **Solution: Understand network segments**
 
-- Read our [core-concepts](core-concepts.md) guide to understand the purpose of each of the seven pre-configured network segments.
-- Once you understand the segments, you can learn how to assign your devices to the correct one in our upcoming "How to Use VLANs" guide.
+- Read the [core concepts](core-concepts.md) guide to understand the purpose of each of the seven pre-configured network segments.
+- Once you understand the segments, check out the [How to Use VLANs](../advanced/how-to-use-vlans.md) guide to learn how to assign your devices to the correct one.
