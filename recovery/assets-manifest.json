@@ -94,6 +94,127 @@
     ]
   },
 
+  "proxmox_packages": {
+    "description": "Proxmox VE packages for converting Debian 13 to Proxmox VE (offline installation)",
+
+    "repository_config": {
+      "name": "Proxmox VE No-Subscription Repository",
+      "uri": "http://download.proxmox.com/debian/pve",
+      "suite": "trixie",
+      "components": "pve-no-subscription",
+      "file_format": "deb822",
+      "file_path": "/etc/apt/sources.list.d/pve-install-repo.sources",
+      "content": "Types: deb\nURIs: http://download.proxmox.com/debian/pve\nSuites: trixie\nComponents: pve-no-subscription\nSigned-By: /usr/share/keyrings/proxmox-archive-keyring.gpg"
+    },
+
+    "gpg_key": {
+      "name": "Proxmox Archive Keyring",
+      "url": "https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg",
+      "destination": "/usr/share/keyrings/proxmox-archive-keyring.gpg",
+      "sha256": "136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45",
+      "md5": "77c8b1166d15ce8350102ab1bca2fcbf",
+      "command": "wget -O /usr/share/keyrings/proxmox-archive-keyring.gpg https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg"
+    },
+
+    "required_packages": [
+      {
+        "name": "proxmox-default-kernel",
+        "description": "Proxmox VE kernel (replaces Debian kernel)",
+        "install_order": 1,
+        "requires_reboot": true,
+        "note": "Must be installed first and system rebooted before installing proxmox-ve"
+      },
+      {
+        "name": "proxmox-ve",
+        "description": "Proxmox VE meta-package",
+        "install_order": 2,
+        "requires_reboot": false,
+        "note": "Main Proxmox VE package, installs all core components"
+      },
+      {
+        "name": "postfix",
+        "description": "Mail transfer agent",
+        "install_order": 3,
+        "requires_reboot": false,
+        "note": "Required for system notifications"
+      },
+      {
+        "name": "open-iscsi",
+        "description": "iSCSI support",
+        "install_order": 4,
+        "requires_reboot": false,
+        "note": "Required for network storage"
+      },
+      {
+        "name": "chrony",
+        "description": "NTP time synchronization",
+        "install_order": 5,
+        "requires_reboot": false,
+        "note": "Alternative: systemd-timesyncd or ntpsec"
+      }
+    ],
+
+    "packages_to_remove": [
+      {
+        "name": "linux-image-amd64",
+        "reason": "Debian default kernel meta-package (conflicts with Proxmox kernel)",
+        "remove_after": "proxmox-ve installation complete"
+      },
+      {
+        "name": "linux-image-6.12*",
+        "reason": "Debian kernel (wildcarded)",
+        "remove_after": "proxmox-ve installation complete"
+      },
+      {
+        "name": "os-prober",
+        "reason": "Prevents issues with boot loader updates",
+        "optional": true,
+        "remove_after": "proxmox-ve installation complete"
+      }
+    ],
+
+    "offline_deployment": {
+      "description": "For offline installation, download all packages and dependencies to local repository",
+      "method": "apt-mirror or apt-offline",
+      "commands": [
+        "# On internet-connected machine:",
+        "apt-get update",
+        "apt-get install --download-only proxmox-default-kernel proxmox-ve postfix open-iscsi chrony",
+        "# Packages downloaded to: /var/cache/apt/archives/",
+        "",
+        "# Alternative: Create local Proxmox mirror",
+        "apt-mirror (requires custom apt-mirror configuration for Proxmox repo)"
+      ],
+      "estimated_size": "~2GB (all packages + dependencies)",
+      "note": "Exact package list varies based on Debian installation. Use 'apt-cache depends' to enumerate all dependencies."
+    },
+
+    "installation_sequence": {
+      "description": "Correct order for converting Debian 13 to Proxmox VE",
+      "steps": [
+        "1. Install Debian 13 (standard system utilities + SSH only)",
+        "2. Configure /etc/hosts with proper hostname → IP mapping (not 127.0.1.1)",
+        "3. Add Proxmox GPG key",
+        "4. Add Proxmox repository",
+        "5. apt update && apt full-upgrade",
+        "6. Install proxmox-default-kernel",
+        "7. Reboot to Proxmox kernel",
+        "8. Install proxmox-ve postfix open-iscsi chrony",
+        "9. Remove Debian kernel packages",
+        "10. Update GRUB: update-grub",
+        "11. Reboot (optional but recommended)"
+      ]
+    },
+
+    "prerequisites": {
+      "debian_version": "Debian 13 (Trixie) amd64",
+      "installation_type": "Standard system utilities + SSH server only",
+      "network": "Static IP address configured",
+      "hostname": "Must resolve to actual IP (not 127.0.1.1) in /etc/hosts",
+      "disk_space": "Minimum 8GB for Proxmox VE installation"
+    }
+  },
+
   "source_code": {
     "description": "PrivateBox repository and build files",
 
@@ -226,6 +347,11 @@
         "source/": [
           "privatebox-main.tar.gz"
         ],
+        "proxmox/": [
+          "proxmox-archive-keyring-trixie.gpg",
+          "packages/ (all .deb files from Proxmox repository)",
+          "pve-install-repo.sources (repository configuration)"
+        ],
         "installer/": [
           "vmlinuz (future)",
           "initrd.gz (future)",
@@ -242,11 +368,12 @@
   "size_estimates": {
     "containers_total": "~2.0GB",
     "vm_images_total": "~1.2GB",
+    "proxmox_packages": "~2.0GB",
     "source_code": "~10MB",
     "installer_files": "~100MB (future)",
     "recovery_os": "~120MB (future)",
-    "total_current": "~3.2GB",
-    "total_with_recovery": "~3.5GB"
+    "total_current": "~5.2GB",
+    "total_with_recovery": "~5.5GB"
   },
 
   "notes": [
@@ -255,6 +382,9 @@
     "Custom builds (Semaphore, Caddy) are built on-device from base images",
     "Recovery and installer components marked 'future' are not yet implemented",
     "OPNsense template is stored on GitHub releases due to size (767MB)",
-    "Checksums should be added for all files before production use"
+    "Checksums should be added for all files before production use",
+    "Proxmox packages enable offline conversion of Debian 13 to Proxmox VE",
+    "Proxmox package cache (~2GB) required for recovery system to reinstall hypervisor offline",
+    "Use 'apt-get install --download-only' or apt-mirror to cache Proxmox repository"
   ]
 }
