@@ -1,0 +1,260 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-10-26",
+  "description": "Complete asset manifest for PrivateBox offline recovery and factory provisioning",
+
+  "container_images": {
+    "description": "Container images required for all services. Pull from registry and save as .tar files.",
+
+    "base_images": [
+      {
+        "name": "portainer",
+        "registry": "docker.io",
+        "image": "portainer/portainer-ce",
+        "tag": "latest",
+        "filename": "portainer-ce-latest.tar",
+        "command": "podman pull docker.io/portainer/portainer-ce:latest && podman save -o portainer-ce-latest.tar docker.io/portainer/portainer-ce:latest"
+      },
+      {
+        "name": "adguard",
+        "registry": "docker.io",
+        "image": "adguard/adguardhome",
+        "tag": "latest",
+        "filename": "adguard-home-latest.tar",
+        "command": "podman pull docker.io/adguard/adguardhome:latest && podman save -o adguard-home-latest.tar docker.io/adguard/adguardhome:latest"
+      },
+      {
+        "name": "homer",
+        "registry": "docker.io",
+        "image": "b4bz/homer",
+        "tag": "latest",
+        "filename": "homer-latest.tar",
+        "command": "podman pull docker.io/b4bz/homer:latest && podman save -o homer-latest.tar docker.io/b4bz/homer:latest"
+      },
+      {
+        "name": "headscale",
+        "registry": "docker.io",
+        "image": "headscale/headscale",
+        "tag": "latest",
+        "filename": "headscale-latest.tar",
+        "command": "podman pull docker.io/headscale/headscale:latest && podman save -o headscale-latest.tar docker.io/headscale/headscale:latest"
+      },
+      {
+        "name": "headplane",
+        "registry": "ghcr.io",
+        "image": "tale/headplane",
+        "tag": "latest",
+        "filename": "headplane-latest.tar",
+        "command": "podman pull ghcr.io/tale/headplane:latest && podman save -o headplane-latest.tar ghcr.io/tale/headplane:latest"
+      },
+      {
+        "name": "semaphore-base",
+        "registry": "docker.io",
+        "image": "semaphoreui/semaphore",
+        "tag": "latest",
+        "filename": "semaphore-base-latest.tar",
+        "command": "podman pull docker.io/semaphoreui/semaphore:latest && podman save -o semaphore-base-latest.tar docker.io/semaphoreui/semaphore:latest",
+        "note": "Base image for custom Semaphore build (adds proxmoxer)"
+      },
+      {
+        "name": "caddy-base",
+        "registry": "docker.io",
+        "image": "caddy",
+        "tag": "2-alpine",
+        "filename": "caddy-base-2-alpine.tar",
+        "command": "podman pull docker.io/caddy:2-alpine && podman save -o caddy-base-2-alpine.tar docker.io/caddy:2-alpine",
+        "note": "Base image for custom Caddy build (adds DNS plugins)"
+      }
+    ]
+  },
+
+  "vm_images": {
+    "description": "VM disk images and templates",
+
+    "images": [
+      {
+        "name": "debian-cloud-image",
+        "filename": "debian-13-genericcloud-amd64.qcow2",
+        "url": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
+        "format": "qcow2",
+        "size_estimate": "400MB",
+        "command": "wget -O debian-13-genericcloud-amd64.qcow2 https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
+        "note": "Management VM (9000) base image"
+      },
+      {
+        "name": "opnsense-template",
+        "filename": "vzdump-qemu-105-opnsense.vma.zst",
+        "url": "https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/vzdump-qemu-105-opnsense.vma.zst",
+        "format": "vma.zst",
+        "size_estimate": "767MB",
+        "md5": "c6d251e1c62f065fd28d720572f8f943",
+        "command": "wget -O vzdump-qemu-105-opnsense.vma.zst https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/vzdump-qemu-105-opnsense.vma.zst",
+        "note": "OPNsense firewall VM (100) template"
+      }
+    ]
+  },
+
+  "source_code": {
+    "description": "PrivateBox repository and build files",
+
+    "repository": {
+      "name": "privatebox",
+      "url": "https://github.com/Rasped/privatebox",
+      "branch": "main",
+      "filename": "privatebox-main.tar.gz",
+      "command": "wget -O privatebox-main.tar.gz https://github.com/Rasped/privatebox/archive/refs/heads/main.tar.gz",
+      "contents": [
+        "bootstrap/ - Initial VM setup scripts",
+        "ansible/ - Service deployment playbooks",
+        "tools/ - Semaphore template generator",
+        "docs/ - User documentation"
+      ]
+    }
+  },
+
+  "custom_builds": {
+    "description": "Dockerfiles and build requirements for custom container images",
+
+    "builds": [
+      {
+        "name": "semaphore-custom",
+        "base_image": "docker.io/semaphoreui/semaphore:latest",
+        "base_filename": "semaphore-base-latest.tar",
+        "output_tag": "localhost/semaphore-proxmox:latest",
+        "modifications": [
+          "Adds proxmoxer Python library for Proxmox API integration"
+        ],
+        "dockerfile_location": "Created inline during bootstrap/setup-guest.sh",
+        "build_command": "podman build -t localhost/semaphore-proxmox:latest /opt/semaphore",
+        "note": "Built during VM setup, not pre-built"
+      },
+      {
+        "name": "caddy-custom",
+        "base_image": "docker.io/caddy:2-alpine",
+        "base_filename": "caddy-base-2-alpine.tar",
+        "output_tag": "localhost/caddy-custom:latest",
+        "modifications": [
+          "Adds DNS challenge plugins for Let's Encrypt",
+          "Supports: Cloudflare, DuckDNS, Dynu, deSEC"
+        ],
+        "dockerfile_location": "Created inline during ansible/playbooks/services/caddy-deploy.yml",
+        "build_command": "podman build -t localhost/caddy-custom:latest",
+        "note": "Built during service deployment, not pre-built"
+      }
+    ]
+  },
+
+  "installer_files": {
+    "description": "Files required for unattended Debian installation (future recovery implementation)",
+    "status": "planned",
+
+    "files": [
+      {
+        "name": "debian-installer-kernel",
+        "filename": "vmlinuz",
+        "note": "Extracted from Debian netinst ISO or downloaded from debian.org"
+      },
+      {
+        "name": "debian-installer-initrd",
+        "filename": "initrd.gz",
+        "note": "Extracted from Debian netinst ISO or downloaded from debian.org"
+      },
+      {
+        "name": "preseed-config",
+        "filename": "preseed.cfg",
+        "note": "Automated installation configuration for recovery reinstall"
+      },
+      {
+        "name": "cloud-init-user-data",
+        "filename": "user-data",
+        "location": "cloud-init/user-data",
+        "note": "Generated during initial install, passwords injected during recovery"
+      },
+      {
+        "name": "cloud-init-meta-data",
+        "filename": "meta-data",
+        "location": "cloud-init/meta-data",
+        "note": "Instance metadata for cloud-init"
+      }
+    ]
+  },
+
+  "recovery_system": {
+    "description": "Recovery OS components (future implementation)",
+    "status": "planned",
+
+    "components": [
+      {
+        "name": "recovery-os",
+        "filename": "recovery.squashfs",
+        "size_estimate": "120MB",
+        "note": "Minimal Debian with BusyBox, ZFS tools, and recovery script"
+      },
+      {
+        "name": "recovery-script",
+        "filename": "privatebox-recovery",
+        "location": "Embedded in recovery.squashfs at /usr/local/bin/",
+        "note": "Executes factory reset procedure"
+      }
+    ]
+  },
+
+  "download_script": {
+    "description": "Use this command to download all required assets",
+    "script": "#!/bin/bash\n\n# PrivateBox Asset Download Script\n# Downloads all assets listed in this manifest\n\nset -e\n\nMKDIR_CMD='mkdir -p assets/{containers,images,templates,source,installer}'\n\necho 'Downloading container base images...'\npodman pull docker.io/portainer/portainer-ce:latest\npodman pull docker.io/adguard/adguardhome:latest\npodman pull docker.io/b4bz/homer:latest\npodman pull docker.io/headscale/headscale:latest\npodman pull ghcr.io/tale/headplane:latest\npodman pull docker.io/semaphoreui/semaphore:latest\npodman pull docker.io/caddy:2-alpine\n\necho 'Saving container images as tar files...'\npodman save -o assets/containers/portainer-ce-latest.tar docker.io/portainer/portainer-ce:latest\npodman save -o assets/containers/adguard-home-latest.tar docker.io/adguard/adguardhome:latest\npodman save -o assets/containers/homer-latest.tar docker.io/b4bz/homer:latest\npodman save -o assets/containers/headscale-latest.tar docker.io/headscale/headscale:latest\npodman save -o assets/containers/headplane-latest.tar ghcr.io/tale/headplane:latest\npodman save -o assets/containers/semaphore-base-latest.tar docker.io/semaphoreui/semaphore:latest\npodman save -o assets/containers/caddy-base-2-alpine.tar docker.io/caddy:2-alpine\n\necho 'Downloading VM images...'\nwget -O assets/images/debian-13-genericcloud-amd64.qcow2 https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2\nwget -O assets/templates/vzdump-qemu-105-opnsense.vma.zst https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/vzdump-qemu-105-opnsense.vma.zst\n\necho 'Downloading source code...'\nwget -O assets/source/privatebox-main.tar.gz https://github.com/Rasped/privatebox/archive/refs/heads/main.tar.gz\n\necho 'Complete! All assets downloaded to ./assets/'\necho 'Total size estimate: ~3.5GB'"
+  },
+
+  "asset_structure": {
+    "description": "Recommended directory structure for offline asset storage",
+    "tree": {
+      "assets/": {
+        "containers/": [
+          "portainer-ce-latest.tar",
+          "adguard-home-latest.tar",
+          "homer-latest.tar",
+          "headscale-latest.tar",
+          "headplane-latest.tar",
+          "semaphore-base-latest.tar",
+          "caddy-base-2-alpine.tar"
+        ],
+        "images/": [
+          "debian-13-genericcloud-amd64.qcow2"
+        ],
+        "templates/": [
+          "vzdump-qemu-105-opnsense.vma.zst"
+        ],
+        "source/": [
+          "privatebox-main.tar.gz"
+        ],
+        "installer/": [
+          "vmlinuz (future)",
+          "initrd.gz (future)",
+          "preseed.cfg (future)",
+          "cloud-init/ (future)"
+        ],
+        "recovery/": [
+          "recovery.squashfs (future)"
+        ]
+      }
+    }
+  },
+
+  "size_estimates": {
+    "containers_total": "~2.0GB",
+    "vm_images_total": "~1.2GB",
+    "source_code": "~10MB",
+    "installer_files": "~100MB (future)",
+    "recovery_os": "~120MB (future)",
+    "total_current": "~3.2GB",
+    "total_with_recovery": "~3.5GB"
+  },
+
+  "notes": [
+    "All container images use 'latest' tag for initial implementation",
+    "Future versions should pin specific versions for reproducibility",
+    "Custom builds (Semaphore, Caddy) are built on-device from base images",
+    "Recovery and installer components marked 'future' are not yet implemented",
+    "OPNsense template is stored on GitHub releases due to size (767MB)",
+    "Checksums should be added for all files before production use"
+  ]
+}
