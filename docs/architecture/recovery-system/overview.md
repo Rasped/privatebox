@@ -1,6 +1,5 @@
 ---
-status: implemented
-implemented_in: v1.0.0
+status: planned
 category: core
 complexity: high
 dependencies:
@@ -8,10 +7,16 @@ dependencies:
   - zfs
   - proxmox
 maintenance_priority: critical
-last_updated: 2025-10-24
+last_updated: 2025-10-26
 ---
 
 # PrivateBox Recovery System (v3 - ZFS Edition)
+
+**Status: Not yet implemented**
+
+This feature is planned but not yet available in the current version of PrivateBox.
+
+---
 
 ## Overview
 
