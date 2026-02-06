@@ -306,11 +306,19 @@
             name: caddy.service
             enabled: yes
 
+        - name: Restart Caddy service (config changed)
+          systemd:
+            name: caddy.service
+            state: restarted
+          register: service_started
+          when: quadlet_deployed.changed or caddyfile_deployed.changed
+
         - name: Start Caddy service
           systemd:
             name: caddy.service
             state: started
           register: service_started
+          when: not (quadlet_deployed.changed or caddyfile_deployed.changed)
 
         - name: Wait for Caddy health endpoint
           uri:
