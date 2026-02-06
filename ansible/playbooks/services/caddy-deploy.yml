@@ -247,6 +247,15 @@
             - "{{ caddy_config_storage_dir }}"
             - "{{ quadlet_system_path }}"
 
+        - name: Ensure DynDNS env file exists
+          copy:
+            content: "# Placeholder - populated by DynDNS playbook\n"
+            dest: /etc/privatebox/ddns-config.env
+            owner: root
+            group: root
+            mode: '0600'
+            force: no
+
         - name: Deploy Caddyfile configuration
           template:
             src: ../../files/caddy/Caddyfile.j2
