@@ -1,4 +1,4 @@
-your data is not a product.
+your data is not a product.°
 
 <div align="center">
   <img src="assets/rose-logo.svg" alt="Sub Rosa Logo" width="150">
@@ -22,18 +22,16 @@ PrivateBox automates the entire process. One command gives you a consistent, sec
 
 ### Architecture overview
 
-PrivateBox runs three core virtual machines on a single Proxmox host. The Management VM, in turn, runs all the containerized services.
+PrivateBox runs two core virtual machines on a single Proxmox host. The Management VM, in turn, runs all the containerized services.
 
 ```mermaid
 graph TD
     subgraph Proxmox VE Host
         A(OPNsense VM);
-        B(Subnet Router VM);
         subgraph Management VM
             direction TB
             D[AdGuard Home];
             E[Homer Dashboard];
-            F[Headplane UI];
             G[Semaphore];
             H[Portainer];
         end
@@ -49,15 +47,13 @@ Each component is deliberately placed in a specific network zone for security an
 | Proxmox Host | Services VLAN |
 | OPNsense VM | Services VLAN |
 | Management VM | Services VLAN |
-| **Subnet Router VM** | **Trusted LAN** |
 
 ## Key features
 
 -   **OPNsense® Firewall**: Deploys and configures a full OPNsense® VM for routing and security.
 -   **Network-Wide DNS Filtering**: Deploys AdGuard Home for blocking ads and trackers on all devices.
--   **Self-Hosted VPN**: Deploys Headscale to provide a secure WireGuard-based VPN for remote access.
 -   **Fully Automated**: A single script orchestrates the entire deployment on a fresh Proxmox host.
--   **Web-Based Management**: Includes Portainer, Semaphore, and Headplane for easy management of your stack.
+-   **Web-Based Management**: Includes Portainer and Semaphore for easy management of your stack.
 -   **Optional TLS Certificates**: Includes a playbook to automatically acquire Let's Encrypt certificates for a custom domain.
 
 ## System requirements
@@ -104,7 +100,6 @@ The script deploys the following services, accessible from your trusted network:
 | :--- | :--- | :--- |
 | **OPNsense®** | Firewall / Router (VM) | `https://opnsense.lan` |
 | **AdGuard Home** | DNS Filtering & Ad-Blocking | `https://adguard.lan` |
-| **Headplane** | Web UI for Headscale VPN | `https://headplane.lan/admin` |
 | **Semaphore** | Ansible Automation UI | `https://semaphore.lan` |
 | **Portainer** | Container Management UI | `https://portainer.lan` |
 | **Homer Dashboard** | Service Dashboard | `https://privatebox.lan` |

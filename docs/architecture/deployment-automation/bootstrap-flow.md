@@ -19,12 +19,11 @@ This document maps out the complete order of script execution during PrivateBox 
 The bootstrap process consists of 5 phases, starting from a workstation and culminating in a fully deployed management VM with services.
 
 **Key Points:**
-- **Generate Templates is called TWICE:** once before orchestration, once during (step 8/13)
-- **13-step orchestration** deploys all services in dependency order
-- **Subnet Router** requires 3-step process (deploy Debian VM, configure, approve routes)
+- **Generate Templates is called TWICE:** once before orchestration, once during (step 6/8)
+- **8-step orchestration** deploys all services in dependency order
 - **Portainer** is deployed first, before other services
 - **Caddy** is deployed last as reverse proxy for .lan domain access
-- **All 13 playbooks** are deployed automatically (11 Ansible playbooks + 1 Python script called twice)
+- **All 8 playbooks** are deployed automatically (7 Ansible playbooks + 1 Python script called twice)
 
 ---
 
@@ -248,7 +247,7 @@ create_default_projects()
 - **Runs in:** Semaphore container
 - **Purpose:** Deploy services in correct dependency order
 
-**Execution Order (13 steps):**
+**Execution Order (8 steps):**
 
 1. **Portainer 1: Deploy Container Management UI**
    - Playbook: `ansible/playbooks/services/portainer-deploy.yml`
@@ -275,47 +274,21 @@ create_default_projects()
    - Purpose: Configure firewall rules, VLANs, NAT
    - Target: OPNsense VM (10.10.20.1)
 
-6. **Headscale 1: Deploy VPN Control Server**
-   - Playbook: `ansible/playbooks/services/headscale-deploy.yml`
-   - Purpose: Deploy VPN coordination server
-   - Target: Management VM (container-host)
-
-7. **Subnet Router 1: Create Debian VM** (playbook name says "Alpine" but uses Debian!)
-   - Playbook: `ansible/playbooks/infrastructure/subnet-router-deploy.yml`
-   - Purpose: Create Debian 13 VM for VPN subnet routing
-   - Target: Proxmox (via API from localhost)
-   - OS: Debian 13 cloud image (same as management VM)
-
-8. **Generate Templates** (called AGAIN - 2nd time!)
+6. **Generate Templates** (called AGAIN - 2nd time!)
    - Script: `tools/generate-templates.py`
-   - Purpose: Re-scan playbooks to ensure subnet router templates exist
+   - Purpose: Re-scan playbooks to ensure all templates exist
    - Why: New playbooks may have been added; ensures all templates available
 
-9. **Subnet Router 2: Configure VPN Connection**
-   - Playbook: `ansible/playbooks/infrastructure/subnet-router-configure.yml`
-   - Purpose: Install Tailscale and connect to Headscale VPN
-   - Target: Subnet Router VM (10.10.10.10)
-
-10. **Subnet Router 3: Approve Routes**
-    - Playbook: `ansible/playbooks/infrastructure/subnet-router-approve.yml`
-    - Purpose: Approve subnet routes in Headscale
-    - Target: Management VM (localhost - runs against Headscale API)
-
-11. **Headplane 1: Deploy Headscale Web UI**
-    - Playbook: `ansible/playbooks/services/headplane-deploy.yml`
-    - Purpose: Deploy Headscale web management interface
-    - Target: Management VM (container-host)
-
-12. **Homer 1: Deploy Dashboard Service**
+7. **Homer 1: Deploy Dashboard Service**
     - Playbook: `ansible/playbooks/services/homer-deploy.yml`
     - Purpose: Deploy service dashboard
     - Target: Management VM (container-host)
 
-13. **Caddy 1: Deploy Reverse Proxy Service**
+8. **Caddy 1: Deploy Reverse Proxy Service**
     - Playbook: `ansible/playbooks/services/caddy-deploy.yml`
     - Purpose: Deploy reverse proxy for .lan domain access
     - Target: Management VM (container-host)
-    - Proxies: privatebox.lan, portainer.lan, semaphore.lan, adguard.lan, headplane.lan, opnsense.lan, proxmox.lan
+    - Proxies: privatebox.lan, portainer.lan, semaphore.lan, adguard.lan, opnsense.lan, proxmox.lan
     - Ports: 80 (HTTP), 443 (HTTPS)
 
 **Actions for each service:**
@@ -327,21 +300,16 @@ create_default_projects()
 
 **Output:** All services running and accessible via .lan domains
 
-**Playbook Inventory (13 total):**
+**Playbook Inventory (7 total):**
 
-**Deployed automatically (12 playbooks):**
+**Deployed automatically (7 playbooks):**
 1. portainer-deploy.yml
 2. adguard-deploy.yml
 3. opnsense-secure-access.yml
 4. opnsense-semaphore-integration.yml
 5. opnsense-post-config.yml
-6. headscale-deploy.yml
-7. subnet-router-deploy.yml (Debian, not Alpine despite name)
-8. subnet-router-configure.yml
-9. subnet-router-approve.yml
-10. headplane-deploy.yml
-11. homer-deploy.yml
-12. caddy-deploy.yml (NEW - added as final step)
+6. homer-deploy.yml
+7. caddy-deploy.yml (final step)
 
 **NOT deployed (manual/optional - 1 playbook):**
 - `homer-update.yml` - For updating Homer config after initial deployment
@@ -383,10 +351,7 @@ create_default_projects()
 | portainer-deploy.yml | Semaphore container | Ansible | Semaphore (via orchestrator) |
 | adguard-deploy.yml | Semaphore container | Ansible | Semaphore (via orchestrator) |
 | opnsense-*.yml (3 playbooks) | Semaphore container | Ansible | Semaphore (via orchestrator) |
-| headscale-deploy.yml | Semaphore container | Ansible | Semaphore (via orchestrator) |
-| subnet-router-*.yml (3 playbooks) | Semaphore container | Ansible | Semaphore (via orchestrator) |
 | generate-templates.py (2nd call) | Semaphore container | Python | orchestrate-services.py |
-| headplane-deploy.yml | Semaphore container | Ansible | Semaphore (via orchestrator) |
 | homer-deploy.yml | Semaphore container | Ansible | Semaphore (via orchestrator) |
 | caddy-deploy.yml | Semaphore container | Ansible | Semaphore (via orchestrator) |
 | verify-install.sh | Proxmox host | Root shell | bootstrap.sh |
@@ -447,20 +412,15 @@ create_default_projects()
                 │                                  │
                 │                                  └─→ run_service_orchestration()
                 │                                       │
-                │                                       └─→ tools/orchestrate-services.py (13 steps)
+                │                                       └─→ tools/orchestrate-services.py (8 steps)
                 │                                            ├─→ 1. portainer-deploy.yml
                 │                                            ├─→ 2. adguard-deploy.yml
                 │                                            ├─→ 3. opnsense-secure-access.yml
                 │                                            ├─→ 4. opnsense-semaphore-integration.yml
                 │                                            ├─→ 5. opnsense-post-config.yml
-                │                                            ├─→ 6. headscale-deploy.yml
-                │                                            ├─→ 7. subnet-router-deploy.yml (creates Debian VM)
-                │                                            ├─→ 8. generate-templates.py (CALLED AGAIN!)
-                │                                            ├─→ 9. subnet-router-configure.yml
-                │                                            ├─→ 10. subnet-router-approve.yml
-                │                                            ├─→ 11. headplane-deploy.yml
-                │                                            ├─→ 12. homer-deploy.yml
-                │                                            └─→ 13. caddy-deploy.yml (reverse proxy)
+                │                                            ├─→ 6. generate-templates.py (CALLED AGAIN!)
+                │                                            ├─→ 7. homer-deploy.yml
+                │                                            └─→ 8. caddy-deploy.yml (reverse proxy)
                 │
                 └─→ Phase 5: verify-install.sh
                      └─→ Display success + URLs
@@ -534,6 +494,6 @@ These markers allow bootstrap.sh (Phase 5) to monitor progress in real-time.
 ## Notes
 
 - Phase 4 orchestration is the longest phase due to sequential service deployments
-- 13-step orchestration with 12 Ansible playbooks + 1 Python script (called twice)
-- Generate Templates is called TWICE: once before orchestration, once during (step 8)
+- 8-step orchestration with 7 Ansible playbooks + 1 Python script (called twice)
+- Generate Templates is called TWICE: once before orchestration, once during (step 6)
 - All steps run sequentially with fail-fast on errors

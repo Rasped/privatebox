@@ -55,17 +55,23 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 ### VMs
 - **VM 9000** - Management VM (Debian 13) at 10.10.20.10 - hosts all containerized services
 - **VM 100** - OPNsense (firewall/router) at 10.10.20.1 (Services), 10.10.10.1 (Trusted LAN)
-- **VM 101** - Subnet Router (Debian 13) at 10.10.20.11 (Services), 10.10.10.10 (Trusted LAN) - Tailscale subnet router
 - **Proxmox Host** - at 10.10.20.20:8006 (not a VM, hypervisor itself)
+- **Test Server** - `privatebox-test-102` (Intel N150 hardware, Proxmox VE) - bare-metal test box
+  - Production IP: `10.10.20.102` (Services VLAN, no internet access)
+  - **Workaround**: Server's single NIC is on a different L2 segment than 192.168.0.1 gateway. To get internet, temporarily move to `192.168.0.102/24` with gateway `192.168.0.1`:
+    ```
+    ssh root@10.10.20.102 "ip addr del 10.10.20.102/24 dev vmbr0; ip addr add 192.168.0.102/24 dev vmbr0; ip route replace default via 192.168.0.1; echo 'nameserver 192.168.0.1' > /etc/resolv.conf"
+    ```
+  - Then reconnect via `ssh root@192.168.0.102`
+  - This is runtime only and resets on reboot. Access from workstation requires `10.10.20.250` alias on Mac's `en0`.
 
 ### Services (all on management VM)
-**Web services:** All accessible via `https://*.lan` domains (privatebox, portainer, semaphore, adguard, headplane)
+**Web services:** All accessible via `https://*.lan` domains (privatebox, portainer, semaphore, adguard, opnsense, proxmox)
 - See `ansible/files/caddy/Caddyfile.j2` for complete proxy configuration
 - Caddy reverse proxy terminates TLS with self-signed certs
 - Caddy health endpoint: `http://10.10.20.10/health` (monitoring)
 
 **Non-web services:**
-- **Headscale API** - `https://10.10.20.10:4443` - VPN control server (no web UI, accessed via Headplane)
 - **AdGuard DNS** - `10.10.20.10:53` - DNS filtering (web UI at adguard.lan)
 
 ### Domain access

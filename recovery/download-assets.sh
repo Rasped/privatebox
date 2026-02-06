@@ -138,8 +138,6 @@ download_container_images() {
         "docker.io/portainer/portainer-ce:latest|portainer-ce-latest.tar"
         "docker.io/adguard/adguardhome:latest|adguard-home-latest.tar"
         "docker.io/b4bz/homer:latest|homer-latest.tar"
-        "docker.io/headscale/headscale:latest|headscale-latest.tar"
-        "ghcr.io/tale/headplane:latest|headplane-latest.tar"
         "docker.io/semaphoreui/semaphore:latest|semaphore-base-latest.tar"
         "docker.io/caddy:2-alpine|caddy-base-2-alpine.tar"
     )

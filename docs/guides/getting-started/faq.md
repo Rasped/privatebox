@@ -4,7 +4,7 @@
 
 ### What is privatebox?
 
-PrivateBox is a pre-configured network security appliance running open-source software (OPNsense, AdGuard Home, Headscale, and more) on Proxmox VE. It provides firewall, DNS filtering, VPN, and network management in a single, energy-efficient device.
+PrivateBox is a pre-configured network security appliance running open-source software (OPNsense, AdGuard Home, and more) on Proxmox VE. It provides firewall, DNS filtering, and network management in a single, energy-efficient device.
 
 ### Is this really open source?
 
@@ -75,10 +75,9 @@ Yes. OPNsense has full VLAN support. You can create isolated network segments fo
 
 ### What operating system does it run?
 
-PrivateBox runs Proxmox VE as the hypervisor. On top of Proxmox, it runs three VMs:
+PrivateBox runs Proxmox VE as the hypervisor. On top of Proxmox, it runs two VMs:
 - OPNsense VM (firewall/router)
 - Management VM (running containers for all services)
-- Subnet Router VM (for VPN routing)
 - Applications VM (Optional)
 
 ### Can I add additional services?
@@ -121,7 +120,7 @@ No. PrivateBox operates entirely locally. No telemetry, no phone-home, no extern
 
 ### Is remote access secure?
 
-Yes. Remote access is provided via Headscale (self-hosted Tailscale alternative), which uses WireGuard VPN. Only Headscale is exposed to the internet, and all connections are encrypted end-to-end.
+Yes. Remote access can be configured via OPNsense's built-in VPN capabilities (WireGuard or OpenVPN). All connections are encrypted end-to-end.
 
 ### How often are security updates provided?
 

@@ -47,12 +47,6 @@ complexity: low | medium | high
   - Priority: High
   - DNS at 10.10.20.10:53 with upstream to Quad9
 
-- **[Headscale VPN](./headscale-vpn/)** - Self-hosted Tailscale control server
-  - Status: Implemented (v1.0.0)
-  - Complexity: Medium
-  - Priority: Normal
-  - API at https://10.10.20.10:4443
-
 ### Management and automation
 - **[Deployment Automation](./deployment-automation/)** - Ansible-based provisioning
   - Status: Implemented (v1.0.0)

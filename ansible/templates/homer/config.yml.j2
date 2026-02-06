@@ -37,18 +37,6 @@ colors:
     card-shadow: rgba(0, 0, 0, 0.4)
     link-hover: "#ffdd57"
 
-{% if headplane_api_key != "" %}
-# Credentials banner - displayed until user runs "Homer 2: Clear Credentials"
-message:
-  style: "is-info"
-  title: "🔑 Headplane Access Credentials"
-  icon: "fa fa-key"
-  content: |
-    <strong>API Key:</strong> <code>{{ headplane_api_key }}</code><br><br>
-    Use this key to log in to <a href="https://headplane.{{ custom_domain }}/admin" target="_blank"><strong>Headplane</strong></a> (VPN Management).<br>
-    After logging in, your session will be saved. Run <strong>"Homer: Clear Credentials"</strong> in Semaphore to hide this message.
-{% endif %}
-
 links: []
 
 services:
@@ -67,13 +55,6 @@ services:
         subtitle: "Firewall & Router"
         tag: "network"
         url: "https://opnsense.{{ custom_domain }}"
-        target: "_blank"
-
-      - name: "Headplane"
-        logo: "assets/tools/headscale.png"
-        subtitle: "VPN Management"
-        tag: "vpn"
-        url: "https://headplane.{{ custom_domain }}/admin"
         target: "_blank"
 
   - name: "Management"

@@ -32,22 +32,6 @@
         "command": "podman pull docker.io/b4bz/homer:latest && podman save -o homer-latest.tar docker.io/b4bz/homer:latest"
       },
       {
-        "name": "headscale",
-        "registry": "docker.io",
-        "image": "headscale/headscale",
-        "tag": "latest",
-        "filename": "headscale-latest.tar",
-        "command": "podman pull docker.io/headscale/headscale:latest && podman save -o headscale-latest.tar docker.io/headscale/headscale:latest"
-      },
-      {
-        "name": "headplane",
-        "registry": "ghcr.io",
-        "image": "tale/headplane",
-        "tag": "latest",
-        "filename": "headplane-latest.tar",
-        "command": "podman pull ghcr.io/tale/headplane:latest && podman save -o headplane-latest.tar ghcr.io/tale/headplane:latest"
-      },
-      {
         "name": "semaphore-base",
         "registry": "docker.io",
         "image": "semaphoreui/semaphore",
@@ -322,7 +306,7 @@
 
   "download_script": {
     "description": "Use this command to download all required assets",
-    "script": "#!/bin/bash\n\n# PrivateBox Asset Download Script\n# Downloads all assets listed in this manifest\n\nset -e\n\nMKDIR_CMD='mkdir -p assets/{containers,images,templates,source,installer}'\n\necho 'Downloading container base images...'\npodman pull docker.io/portainer/portainer-ce:latest\npodman pull docker.io/adguard/adguardhome:latest\npodman pull docker.io/b4bz/homer:latest\npodman pull docker.io/headscale/headscale:latest\npodman pull ghcr.io/tale/headplane:latest\npodman pull docker.io/semaphoreui/semaphore:latest\npodman pull docker.io/caddy:2-alpine\n\necho 'Saving container images as tar files...'\npodman save -o assets/containers/portainer-ce-latest.tar docker.io/portainer/portainer-ce:latest\npodman save -o assets/containers/adguard-home-latest.tar docker.io/adguard/adguardhome:latest\npodman save -o assets/containers/homer-latest.tar docker.io/b4bz/homer:latest\npodman save -o assets/containers/headscale-latest.tar docker.io/headscale/headscale:latest\npodman save -o assets/containers/headplane-latest.tar ghcr.io/tale/headplane:latest\npodman save -o assets/containers/semaphore-base-latest.tar docker.io/semaphoreui/semaphore:latest\npodman save -o assets/containers/caddy-base-2-alpine.tar docker.io/caddy:2-alpine\n\necho 'Downloading VM images...'\nwget -O assets/images/debian-13-genericcloud-amd64.qcow2 https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2\nwget -O assets/templates/vzdump-qemu-105-opnsense.vma.zst https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/vzdump-qemu-105-opnsense.vma.zst\n\necho 'Downloading source code...'\nwget -O assets/source/privatebox-main.tar.gz https://github.com/Rasped/privatebox/archive/refs/heads/main.tar.gz\n\necho 'Complete! All assets downloaded to ./assets/'\necho 'Total size estimate: ~3.5GB'"
+    "script": "#!/bin/bash\n\n# PrivateBox Asset Download Script\n# Downloads all assets listed in this manifest\n\nset -e\n\nMKDIR_CMD='mkdir -p assets/{containers,images,templates,source,installer}'\n\necho 'Downloading container base images...'\npodman pull docker.io/portainer/portainer-ce:latest\npodman pull docker.io/adguard/adguardhome:latest\npodman pull docker.io/b4bz/homer:latest\npodman pull docker.io/semaphoreui/semaphore:latest\npodman pull docker.io/caddy:2-alpine\n\necho 'Saving container images as tar files...'\npodman save -o assets/containers/portainer-ce-latest.tar docker.io/portainer/portainer-ce:latest\npodman save -o assets/containers/adguard-home-latest.tar docker.io/adguard/adguardhome:latest\npodman save -o assets/containers/homer-latest.tar docker.io/b4bz/homer:latest\npodman save -o assets/containers/semaphore-base-latest.tar docker.io/semaphoreui/semaphore:latest\npodman save -o assets/containers/caddy-base-2-alpine.tar docker.io/caddy:2-alpine\n\necho 'Downloading VM images...'\nwget -O assets/images/debian-13-genericcloud-amd64.qcow2 https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2\nwget -O assets/templates/vzdump-qemu-105-opnsense.vma.zst https://github.com/Rasped/privatebox/releases/download/v1.0.2-opnsense/vzdump-qemu-105-opnsense.vma.zst\n\necho 'Downloading source code...'\nwget -O assets/source/privatebox-main.tar.gz https://github.com/Rasped/privatebox/archive/refs/heads/main.tar.gz\n\necho 'Complete! All assets downloaded to ./assets/'\necho 'Total size estimate: ~3.5GB'"
   },
 
   "asset_structure": {
@@ -333,8 +317,6 @@
           "portainer-ce-latest.tar",
           "adguard-home-latest.tar",
           "homer-latest.tar",
-          "headscale-latest.tar",
-          "headplane-latest.tar",
           "semaphore-base-latest.tar",
           "caddy-base-2-alpine.tar"
         ],
