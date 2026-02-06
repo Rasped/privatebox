@@ -23,7 +23,7 @@ Volume={{ caddy_config_storage_dir }}:/config:{{ volume_mount_options | default(
 
 # Environment variables
 Environment="TZ={{ timezone | default('UTC') }}"
-EnvironmentFile=/etc/privatebox/ddns-config.env
+EnvironmentFile=-/etc/privatebox/ddns-config.env
 
 # Security settings
 SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}
