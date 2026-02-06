@@ -215,11 +215,10 @@ Categories:
 
 Examples:
 ```
-feat: Add Headscale VPN service deployment
+feat: Add Homer dashboard service deployment
 
-Implements Headscale control server for self-hosted Tailscale
-alternative. Includes Headplane web UI and Caddy reverse proxy
-configuration.
+Implements Homer dashboard with dynamic service registry
+and Caddy reverse proxy configuration.
 
 Fixes #42
 ```

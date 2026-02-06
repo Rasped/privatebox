@@ -762,7 +762,6 @@ usage() {
     echo "Common VMIDs:"
     echo "  100   - OPNsense"
     echo "  9000  - Management VM"
-    echo "  101   - Subnet Router"
     exit 1
 }
 
@@ -885,7 +884,6 @@ If the Management VM is broken and you cannot access Semaphore:
 Common VM IDs:
   100  - OPNsense (firewall/router)
   9000 - Management VM (Portainer, Semaphore, etc.)
-  101  - Subnet Router (Tailscale VPN)
 
 For OPNsense rollback:
   privatebox-emergency-rollback 100

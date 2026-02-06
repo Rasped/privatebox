@@ -57,13 +57,6 @@ services:
         url: "https://opnsense.lan"
         target: "_blank"
 
-      - name: "Headplane"
-        logo: "assets/tools/headscale.png"
-        subtitle: "VPN Management"
-        tag: "vpn"
-        url: "https://headplane.lan/admin"
-        target: "_blank"
-
   - name: "Management"
     icon: "fas fa-tools"
     items:

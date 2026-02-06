@@ -17,12 +17,13 @@ PublishPort={{ ansible_default_ipv4.address }}:80:80
 PublishPort={{ ansible_default_ipv4.address }}:443:443
 
 # Volume mounts
-Volume={{ caddy_config_dir }}/Caddyfile:/etc/caddy/Caddyfile:ro,{{ volume_mount_options | default('Z') }}
+Volume={{ caddy_config_dir }}/Caddyfile:/etc/caddy/Caddyfile,{{ volume_mount_options | default('Z') }}
 Volume={{ caddy_data_dir }}:/data:{{ volume_mount_options | default('Z') }}
 Volume={{ caddy_config_storage_dir }}:/config:{{ volume_mount_options | default('Z') }}
 
 # Environment variables
 Environment="TZ={{ timezone | default('UTC') }}"
+EnvironmentFile=/etc/privatebox/ddns-config.env
 
 # Security settings
 SecurityLabelDisable={{ container_security_label_disable | default('false') | lower }}

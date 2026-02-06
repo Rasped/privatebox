@@ -352,11 +352,11 @@
               - ""
               - "Access URLs (.lan domains):"
               - "  - privatebox.lan (PrivateBox Dashboard)"
-              - "  - headplane.lan (Headscale Web UI)"
               - "  - portainer.lan (Container Management)"
               - "  - semaphore.lan (Ansible Automation)"
               - "  - adguard.lan (DNS & Ad Blocking)"
-              - "  - headscale.lan (VPN Control Server)"
+              - "  - opnsense.lan (Firewall & Router)"
+              - "  - proxmox.lan (Hypervisor)"
               - ""
               - "Health Check:"
               - "  - http://{{ ansible_default_ipv4.address }}/health"
@@ -388,11 +388,11 @@
           Access URLs:
           - Health Check: http://{{ ansible_default_ipv4.address }}/health
           - PrivateBox Dashboard: https://privatebox.lan
-          - Headplane: https://headplane.lan
           - Portainer: https://portainer.lan
           - Semaphore: https://semaphore.lan
           - AdGuard: https://adguard.lan
-          - Headscale: https://headscale.lan
+          - OPNsense: https://opnsense.lan
+          - Proxmox: https://proxmox.lan
 
           Service: caddy.service
           Container: caddy

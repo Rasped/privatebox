@@ -46,44 +46,6 @@ privatebox.lan {
     }
 }
 
-# Headscale (VPN Control Server API)
-headscale.lan {
-    tls internal
-
-    reverse_proxy https://10.10.20.10:4443 {
-        header_up Host {upstream_hostport}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-
-        transport http {
-            tls_insecure_skip_verify
-        }
-    }
-
-    header {
-        -Server
-        X-Content-Type-Options nosniff
-    }
-}
-
-# Headplane (Headscale Web UI)
-headplane.lan {
-    tls internal
-
-    reverse_proxy 10.10.20.10:8080 {
-        header_up Host {upstream_hostport}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-    }
-
-    header {
-        -Server
-        X-Content-Type-Options nosniff
-    }
-}
-
 # Portainer (Container Management)
 portainer.lan {
     tls internal

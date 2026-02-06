@@ -57,12 +57,7 @@ class SemaphoreOrchestrator:
             "OPNsense 1: Configure Secure Access",
             "OPNsense 2: Configure Semaphore Integration",
             "OPNsense 3: Apply Post-Configuration",
-            "Headscale 1: Deploy VPN Control Server",
-            "Subnet Router 1: Create Debian VM",
             "Generate Templates",
-            "Subnet Router 2: Configure VPN Connection",
-            "Subnet Router 3: Approve Routes",
-            "Headplane 1: Deploy Headscale Web UI",
             "Homer 1: Deploy Dashboard Service",
             "Caddy 1: Deploy Reverse Proxy Service"
         ]
@@ -330,12 +325,9 @@ class SemaphoreOrchestrator:
             print("\n✅ All templates completed successfully!")
             print("\nServices deployed:")
             print("  - Portainer container UI at https://10.10.20.10:1443")
-            print("  - Subnet Router VM at 10.10.10.10 (LAN) / 10.10.20.11 (Services)")
             print("  - OPNsense firewall configured at 10.10.20.1")
             print("  - AdGuard DNS service running at 10.10.20.10:53")
             print("  - AdGuard web interface at https://10.10.20.10:3443")
-            print("  - Headscale VPN server at https://10.10.20.10:4443")
-            print("  - Headplane VPN management at http://10.10.20.10:8080")
             print("  - Homer dashboard at http://10.10.20.10:8081")
             return True
 

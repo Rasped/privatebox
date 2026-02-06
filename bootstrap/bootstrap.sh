@@ -406,7 +406,6 @@ main() {
     display "Network Services:"
     display "  AdGuard Home: https://adguard.lan"
     display "  OPNsense: https://opnsense.lan"
-    display "  Headplane: https://headplane.lan/admin"
     display ""
     display "Management Services:"
     display "  Portainer: https://portainer.lan"

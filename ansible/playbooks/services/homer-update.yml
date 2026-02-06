@@ -11,7 +11,6 @@
 
     # Template variables for Homer config
     custom_domain: "lan"
-    headplane_api_key: "{{ lookup('file', credentials_dir + '/headplane-api-key.txt', errors='ignore') | default('', true) }}"
 
   tasks:
     - name: Deploy updated Homer configuration

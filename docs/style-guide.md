@@ -137,7 +137,6 @@ Match the capitalization shown in the actual UI.
 ### Preferred component names
 
 - Use "management VM" when referring to the container host.
-- Use "Subnet Router VM" for the VPN routing virtual machine.
 - Refer to the automation interface as "Semaphore" (capitalized).
 - Refer to the service dashboard as "Homer dashboard".
 
