@@ -18,6 +18,7 @@ export TERM="${TERM:-dumb}"
 # Detect if stdout is a real terminal (spinners produce garbage over SSH pipes)
 IS_TTY="${IS_TTY:-false}"
 [[ -t 1 ]] && IS_TTY=true
+DOTS_PRINTED=false
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -100,6 +101,10 @@ display() {
 }
 
 display_always() {
+    if [[ "${DOTS_PRINTED:-false}" == true ]]; then
+        echo ""
+        DOTS_PRINTED=false
+    fi
     echo "$1"
     log "$1"
 }
@@ -120,6 +125,7 @@ update_status_line() {
         SPINNER_COUNT=$((${SPINNER_COUNT:-0} + 1))
         if [[ $((SPINNER_COUNT % 30)) -eq 0 ]]; then
             printf "."
+            DOTS_PRINTED=true
         fi
     fi
 }
@@ -132,6 +138,9 @@ cleanup_status_line() {
         tput sgr0 2>/dev/null || true                  # Reset colors/attributes
         tput el 2>/dev/null || true
         tput rc 2>/dev/null || true
+    elif [[ "${DOTS_PRINTED:-false}" == true ]]; then
+        echo ""
+        DOTS_PRINTED=false
     fi
 }
 
@@ -820,7 +829,7 @@ validate_deployment() {
             display "  ✓ VLAN interfaces are configured"
 
             # Specifically check VLAN 20
-            if echo "$vlan_output" | grep -q "vlan 20"; then
+            if echo "$vlan_output" | grep -q "vlan: 20"; then
                 display_always "  ✓ Services VLAN (20) is configured"
             else
                 display_always "  ✗ Services VLAN (20) not found"
