@@ -15,6 +15,10 @@ set -euo pipefail
 # Set fallback TERM for tput commands when running via pipe (e.g., curl | bash)
 export TERM="${TERM:-dumb}"
 
+# Detect if stdout is a real terminal (spinners produce garbage over SSH pipes)
+IS_TTY="${IS_TTY:-false}"
+[[ -t 1 ]] && IS_TTY=true
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/tmp/privatebox-opnsense-deploy.log"
@@ -100,10 +104,10 @@ display_always() {
     log "$1"
 }
 
-# Update status line at bottom of terminal
+# Update status line at bottom of terminal (only on real TTY)
 # Usage: update_status_line "spinner_char"
 update_status_line() {
-    if [[ "$VERBOSE" == "--quiet" ]]; then
+    if [[ "$VERBOSE" == "--quiet" ]] && [[ "$IS_TTY" == true ]]; then
         local spinner_char="$1"
         tput sc 2>/dev/null || true                    # Save cursor position
         tput cup $(tput lines) 0 2>/dev/null || true   # Move to last line
@@ -116,7 +120,7 @@ update_status_line() {
 
 # Clear status line at bottom of terminal
 cleanup_status_line() {
-    if [[ "$VERBOSE" == "--quiet" ]]; then
+    if [[ "$VERBOSE" == "--quiet" ]] && [[ "$IS_TTY" == true ]]; then
         tput sc 2>/dev/null || true
         tput cup $(tput lines) 0 2>/dev/null || true
         tput sgr0 2>/dev/null || true                  # Reset colors/attributes
@@ -632,6 +636,7 @@ apply_custom_config() {
     if sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
        ssh -o StrictHostKeyChecking=no \
            -o UserKnownHostsFile=/dev/null \
+           -o LogLevel=ERROR \
            ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
            "cp /conf/config.xml /conf/config.xml.backup.$(date +%Y%m%d-%H%M%S)"; then
         display "  ✓ Config backed up"
@@ -644,6 +649,7 @@ apply_custom_config() {
     if sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
        scp -o StrictHostKeyChecking=no \
            -o UserKnownHostsFile=/dev/null \
+           -o LogLevel=ERROR \
            "$OPNSENSE_CONFIG" \
            ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP}:/conf/config.xml; then
         display_always "  ✓ Configuration uploaded"
@@ -773,72 +779,71 @@ validate_deployment() {
     display_always "Validating deployment..."
     
     local all_good=true
-    
+
     # Check VM is running
     if qm status $VMID 2>/dev/null | grep -q "status: running"; then
         display "  ✓ VM is running"
     else
-        display "  ✗ VM is not running"
+        display_always "  ✗ VM is not running"
         all_good=false
         return 1  # No point checking further if VM isn't running
     fi
-    
+
     # Check Services VLAN connectivity (management access)
     if ping -c 1 -W 2 $OPNSENSE_SERVICES_IP &>/dev/null; then
         display "  ✓ Services VLAN interface responding at $OPNSENSE_SERVICES_IP"
     else
-        display "  ✗ Cannot ping Services VLAN interface"
+        display_always "  ✗ Cannot ping Services VLAN interface"
         all_good=false
     fi
-    
+
     # Check SSH access via Services VLAN
     if nc -zv $OPNSENSE_SERVICES_IP 22 &>/dev/null; then
         display "  ✓ SSH port is open on Services VLAN"
-        
-        # Test from OPNsense perspective
-        display "  Testing OPNsense connectivity..."
-        
-        # Can OPNsense reach internet?
+
+        # Check if VLAN interfaces are configured
+        local vlan_output=$(sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
+            ssh -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o LogLevel=ERROR \
+                -o ConnectTimeout=5 \
+                ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
+                "ifconfig | grep -E 'vlan: (20|30|40|50|60|70)'" 2>/dev/null || true)
+
+        if [[ -n "$vlan_output" ]]; then
+            display "  ✓ VLAN interfaces are configured"
+
+            # Specifically check VLAN 20
+            if echo "$vlan_output" | grep -q "vlan 20"; then
+                display_always "  ✓ Services VLAN (20) is configured"
+            else
+                display_always "  ✗ Services VLAN (20) not found"
+                all_good=false
+            fi
+        else
+            display_always "  ✗ No VLAN interfaces found"
+            display "    Config may not have been applied correctly"
+            all_good=false
+        fi
+
+        # Internet connectivity (non-critical — expected to fail in isolated networks)
         if sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
            ssh -o StrictHostKeyChecking=no \
                -o UserKnownHostsFile=/dev/null \
+               -o LogLevel=ERROR \
                -o ConnectTimeout=5 \
                ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
                "ping -c 1 -W 2 8.8.8.8" &>/dev/null; then
             display "  ✓ OPNsense has internet connectivity"
         else
-            display "  ✗ OPNsense cannot reach internet (check WAN)"
-            all_good=false
-        fi
-        
-        # Check if VLAN interfaces are configured
-        local vlan_output=$(sshpass -p "$OPNSENSE_DEFAULT_PASSWORD" \
-            ssh -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                -o ConnectTimeout=5 \
-                ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP} \
-                "ifconfig | grep -E 'vlan: (20|30|40|50|60|70)'" 2>/dev/null || true)
-        
-        if [[ -n "$vlan_output" ]]; then
-            display "  ✓ VLAN interfaces are configured"
-            
-            # Specifically check VLAN 20
-            if echo "$vlan_output" | grep -q "vlan 20"; then
-                display_always "  ✓ Services VLAN (20) is configured"
-            else
-                display "  ✗ Services VLAN (20) not found"
-                all_good=false
-            fi
-        else
-            display "  ✗ No VLAN interfaces found"
-            display "    Config may not have been applied correctly"
-            all_good=false
+            display "  ⚠ No internet (expected in isolated networks)"
+            log "Non-critical: OPNsense cannot reach internet"
         fi
     else
-        display "  ✗ SSH port not accessible"
+        display_always "  ✗ SSH port not accessible"
         all_good=false
     fi
-    
+
     # Check Services VLAN gateway from Proxmox
     if ping -I vmbr1.20 -c 1 -W 2 10.10.20.1 &>/dev/null; then
         display_always "  ✓ Services VLAN gateway (10.10.20.1) responding"
@@ -846,18 +851,18 @@ validate_deployment() {
         display "  ⚠ Services VLAN gateway not responding from Proxmox"
         display "    This is expected if VLAN 20 isn't trunked to Proxmox"
     fi
-    
+
     # Check web interface via Services VLAN
     if nc -zv $OPNSENSE_SERVICES_IP 443 -w 5 &>/dev/null; then
         display "  ✓ Web interface available on port 443 via Services VLAN"
     else
         display "  ⚠ Web interface not yet available on port 443"
     fi
-    
+
     if [[ "$all_good" == "true" ]]; then
         display_always "  ✓ All validations passed"
     else
-        display_always "  ⚠ Some validations failed"
+        display_always "  ✗ Critical validations failed"
         display_always "    Check /var/log/privatebox/opnsense-${VMID}-deployment.log for details"
     fi
 }
@@ -891,38 +896,38 @@ Deployment completed: $(date -Iseconds)
 ======================================
 EOF
     
-    # Display to console
-    display_always ""
-    display_always "=========================================="
-    display_always "OPNsense Deployment Complete!"
-    display_always "=========================================="
-    display_always ""
-    display_always "VM ID: $VMID"
-    display_always "VM Name: $VM_NAME"
-    display_always "Status: Running"
-    display_always ""
-    display_always "Network Configuration:"
-    display_always "  WAN: DHCP on vmbr0"
-    display_always "  LAN: ${OPNSENSE_LAN_IP}/24 on vmbr1"
-    display_always "  Services: 10.10.20.1/24 on VLAN 20"
-    display_always ""
-    display_always "Access Methods:"
-    display_always "  SSH (Services VLAN): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP}"
-    display_always "  SSH (LAN): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP}"
-    display_always "  Web (Services VLAN): https://${OPNSENSE_SERVICES_IP}"
-    display_always "  Web (LAN): https://${OPNSENSE_LAN_IP}"
-    display_always "  Credentials: ${OPNSENSE_DEFAULT_USER}/${OPNSENSE_DEFAULT_PASSWORD}"
-    display_always ""
-    display_always "IMPORTANT: Change the default password immediately!"
-    display_always ""
-    display_always "Management Commands:"
-    display_always "  Console: qm terminal $VMID"
-    display_always "  Stop: qm stop $VMID"
-    display_always "  Start: qm start $VMID"
-    display_always "  Remove: qm stop $VMID && qm destroy $VMID"
-    display_always ""
-    display_always "Logs: $DEPLOYMENT_INFO_FILE"
-    display_always "=========================================="
+    # Display to console (verbose only — in quiet mode, bootstrap.sh shows the final summary)
+    display ""
+    display "=========================================="
+    display "OPNsense Deployment Complete!"
+    display "=========================================="
+    display ""
+    display "VM ID: $VMID"
+    display "VM Name: $VM_NAME"
+    display "Status: Running"
+    display ""
+    display "Network Configuration:"
+    display "  WAN: DHCP on vmbr0"
+    display "  LAN: ${OPNSENSE_LAN_IP}/24 on vmbr1"
+    display "  Services: 10.10.20.1/24 on VLAN 20"
+    display ""
+    display "Access Methods:"
+    display "  SSH (Services VLAN): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_SERVICES_IP}"
+    display "  SSH (LAN): ssh ${OPNSENSE_DEFAULT_USER}@${OPNSENSE_LAN_IP}"
+    display "  Web (Services VLAN): https://${OPNSENSE_SERVICES_IP}"
+    display "  Web (LAN): https://${OPNSENSE_LAN_IP}"
+    display "  Credentials: ${OPNSENSE_DEFAULT_USER}/${OPNSENSE_DEFAULT_PASSWORD}"
+    display ""
+    display "IMPORTANT: Change the default password immediately!"
+    display ""
+    display "Management Commands:"
+    display "  Console: qm terminal $VMID"
+    display "  Stop: qm stop $VMID"
+    display "  Start: qm start $VMID"
+    display "  Remove: qm stop $VMID && qm destroy $VMID"
+    display ""
+    display "Logs: $DEPLOYMENT_INFO_FILE"
+    display "=========================================="
 }
 
 # Main execution

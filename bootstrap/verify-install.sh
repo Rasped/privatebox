@@ -1,5 +1,5 @@
 #!/bin/bash
-# Phase 4: Installation Verification
+# Installation Verification
 # Runs on Proxmox host to verify VM setup
 
 set -euo pipefail
@@ -24,7 +24,7 @@ CHECK_INTERVAL=10
 SSH_KEY_PATH="${SSH_KEY_PATH:-/root/.ssh/id_ed25519}"  # Default to root's Ed25519 key
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" >&2
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
 display() {
@@ -214,7 +214,7 @@ check_services() {
 # Main verification
 main() {
     display "Starting installation verification..."
-    log "Phase 4: Installation verification started"
+    log "Installation verification started"
     
     # Wait for VM to be accessible
     display "⏳ Waiting for VM to become accessible..."
@@ -248,32 +248,7 @@ main() {
         display "⚠️  Some services may not be fully operational"
         log "WARNING: Some services failed health checks"
     fi
-    
-    # Display summary
-    display ""
-    display "======================================"
-    display "🎉 PrivateBox Installation Complete!"
-    display "======================================"
-    display ""
-    display "Management VM Details:"
-    display "  IP Address: $VM_IP"
-    display "  Username: $VM_USERNAME"
-    display "  SSH: ssh -i $SSH_KEY_PATH ${VM_USERNAME}@${VM_IP}"
-    display ""
-    display "Services:"
-    display "  Portainer: https://${VM_IP}:1443"
-    display "    Username: admin"
-    display "    Password: ${SERVICES_PASSWORD}"
-    display ""
-    display "  Semaphore: https://${VM_IP}:2443"
-    display "    Username: admin"
-    display "    Password: ${SERVICES_PASSWORD}"
-    display ""
-    display "  ⚠️  First visit: Click 'Advanced' → 'Proceed' to trust certificate"
-    display ""
-    display "Configuration saved to: $CONFIG_FILE"
-    display "======================================"
-    
+
     log "Installation verification completed successfully"
 }
 

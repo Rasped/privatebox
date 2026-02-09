@@ -9,6 +9,10 @@ set -euo pipefail
 # Set fallback TERM for tput commands when running via pipe (e.g., curl | bash)
 export TERM="${TERM:-dumb}"
 
+# Detect if stdout is a real terminal (spinners produce garbage over SSH pipes)
+IS_TTY="${IS_TTY:-false}"
+[[ -t 1 ]] && IS_TTY=true
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/tmp/privatebox-bootstrap.log"
@@ -50,10 +54,10 @@ display_always() {
     log "$1"
 }
 
-# Update status line at bottom of terminal
+# Update status line at bottom of terminal (only on real TTY)
 # Usage: update_status_line "spinner_char"
 update_status_line() {
-    if [[ "$VERBOSE" == "--quiet" ]]; then
+    if [[ "$VERBOSE" == "--quiet" ]] && [[ "$IS_TTY" == true ]]; then
         local spinner_char="$1"
         tput sc 2>/dev/null || true                    # Save cursor position
         tput cup $(tput lines) 0 2>/dev/null || true   # Move to last line
@@ -66,7 +70,7 @@ update_status_line() {
 
 # Clear status line at bottom of terminal
 cleanup_status_line() {
-    if [[ "$VERBOSE" == "--quiet" ]]; then
+    if [[ "$VERBOSE" == "--quiet" ]] && [[ "$IS_TTY" == true ]]; then
         tput sc 2>/dev/null || true
         tput cup $(tput lines) 0 2>/dev/null || true
         tput sgr0 2>/dev/null || true                  # Reset colors/attributes
@@ -284,33 +288,33 @@ create_vm() {
         --serial0 socket \
         --vga serial0 \
         --agent enabled=1 \
-        || error_exit "Failed to create VM"
-    
+        >> "$LOG_FILE" 2>&1 || error_exit "Failed to create VM"
+
     # Import the disk image
-    qm importdisk $VMID "$DEBIAN_IMAGE" $VM_STORAGE &>/dev/null || error_exit "Failed to import disk"
-    
+    qm importdisk $VMID "$DEBIAN_IMAGE" $VM_STORAGE >> "$LOG_FILE" 2>&1 || error_exit "Failed to import disk"
+
     # Attach the disk
     qm set $VMID \
         --scsihw virtio-scsi-pci \
         --scsi0 ${VM_STORAGE}:vm-${VMID}-disk-0 \
         --boot c --bootdisk scsi0 \
-        || error_exit "Failed to attach disk"
-    
+        >> "$LOG_FILE" 2>&1 || error_exit "Failed to attach disk"
+
     # Resize disk to specified size
-    qm resize $VMID scsi0 $VM_DISK_SIZE &>/dev/null || error_exit "Failed to resize disk"
-    
+    qm resize $VMID scsi0 $VM_DISK_SIZE >> "$LOG_FILE" 2>&1 || error_exit "Failed to resize disk"
+
     # Add cloud-init drive for network configuration
-    qm set $VMID --ide2 ${VM_STORAGE}:cloudinit || error_exit "Failed to add cloud-init drive"
-    
+    qm set $VMID --ide2 ${VM_STORAGE}:cloudinit >> "$LOG_FILE" 2>&1 || error_exit "Failed to add cloud-init drive"
+
     # Enable auto-start on boot
-    qm set $VMID --onboot 1 || error_exit "Failed to enable auto-start"
-    
+    qm set $VMID --onboot 1 >> "$LOG_FILE" 2>&1 || error_exit "Failed to enable auto-start"
+
     # Configure cloud-init with custom user-data snippet
     qm set $VMID \
         --ipconfig0 ip=${STATIC_IP}/${SERVICES_NETMASK},gw=${SERVICES_GATEWAY} \
         --nameserver ${SERVICES_GATEWAY} \
         --cicustom "user=local:snippets/privatebox-${VMID}.yml" \
-        || error_exit "Failed to configure cloud-init"
+        >> "$LOG_FILE" 2>&1 || error_exit "Failed to configure cloud-init"
     
     log "VM $VMID created successfully"
     display "  ✓ VM configuration complete"
@@ -320,7 +324,7 @@ create_vm() {
 start_vm() {
     display "Starting VM $VMID..."
     
-    if ! qm start $VMID; then
+    if ! qm start $VMID >> "$LOG_FILE" 2>&1; then
         error_exit "Failed to start VM"
     fi
     
