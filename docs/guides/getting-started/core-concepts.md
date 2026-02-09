@@ -47,6 +47,8 @@ For complete details on all seven network segments, see the [VLAN configuration 
 
 **The concept:** The VPN creates a secure, encrypted "tunnel" from your device (like your laptop at a coffee shop) back to your home network.
 
-**What it does:** It lets you access your home network when you're away. It also protects your internet traffic on public Wi-Fi by routing it through your home connection.
+**What it does:** It lets you access your home network when you're away. It can also protect your traffic on public Wi-Fi by routing it through your home connection.
 
 **What it's not:** This isn't a commercial VPN service designed to make you anonymous or change your geographic location to bypass content restrictions. Its purpose is to give you secure access to *your own network*, not to hide your identity from third-party websites.
+
+**How it works in PrivateBox:** PrivateBox does not automatically set up VPN access. If you want remote access, configure WireGuard or OpenVPN in OPNsense.

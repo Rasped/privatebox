@@ -13,7 +13,7 @@ Welcome to the PrivateBox documentation!
 
 ### For users
 - **[Getting Started](./guides/getting-started/)** - Setup guides, core concepts, and troubleshooting
-- **[Advanced Guides](./guides/advanced/)** - VLANs, VPN, custom services, and system administration
+- **[Advanced Guides](./guides/advanced/)** - VLANs, dynamic DNS, and system administration
 
 ### For developers
 - **[Architecture](./architecture/)** - Technical design, ADRs, and feature documentation

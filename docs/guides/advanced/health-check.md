@@ -28,7 +28,7 @@ This process will take a few minutes to complete as it thoroughly tests every co
 
 ## 3. Understanding the results
 
-Once the check is complete, the results will be displayed in a new "System Health" dashboard on your main PrivateBox homepage (`http://privatebox.lan`).
+Once the check is complete, the results will be displayed in a new "System Health" dashboard on your main PrivateBox homepage (`https://privatebox.lan`).
 
 ### The overall status
 

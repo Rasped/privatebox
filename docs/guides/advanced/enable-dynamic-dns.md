@@ -58,7 +58,7 @@ Semaphore will execute the automation in the background. You can watch the progr
 
 After the playbook is finished, you can access your PrivateBox services using your new domain. For example, `https://opnsense.my-home.dedyn.io` will work with a valid SSL certificate (no browser warnings).
 
-**Note:** Services are accessible from your local network or VPN. They're not exposed to the public internet.
+**Note:** Services are accessible from your local network. For remote access, configure it in OPNsense (for example, WireGuard or OpenVPN). This playbook does not expose services to the public internet by default.
 
 ---
 

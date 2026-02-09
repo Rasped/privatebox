@@ -20,7 +20,7 @@ This document defines the comprehensive OPNsense configuration requirements for 
 ## Design philosophy
 
 - **Good Enough Security**: 80% protection with 20% complexity
-- **Privacy First**: Full tunnel VPN, recursive DNS, ad blocking
+- **Privacy First**: Optional full tunnel VPN, recursive DNS, ad blocking
 - **User Friendly**: No captive portals, sensible defaults
 - **Performance Conscious**: Optimized for Intel N100 hardware
 - **Maintainable**: Avoid complex rule sets that require constant updates
@@ -83,6 +83,8 @@ Specific IP pools:
 - **Rebind Protection**: Disable for RFC1918 (needed for local DNS)
 
 ## VPN Configuration
+
+VPN is optional and configured in OPNsense. PrivateBox does not automate VPN setup.
 
 ### WireGuard (Road Warrior)
 - **Port**: 51820 (default)
@@ -185,7 +187,7 @@ Specific IP pools:
 - **Translation**: Interface address
 
 ### Port forwarding
-- **None by default** (all access via VPN)
+- None by default. For remote access, prefer VPN (WireGuard or OpenVPN).
 - Document process for game consoles if needed
 
 ### NAT Reflection

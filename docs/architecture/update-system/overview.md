@@ -393,7 +393,7 @@ WantedBy=timers.target
 2. User clicks "Rollback OPNsense"
 3. Dropdown shows: List of snapshots with dates
 4. User selects: "pre-update-20251021-opnsense-24.7.5"
-5. Confirmation: "This will revert OPNsense to October 21. VPN configs added after this date will be lost."
+5. Confirmation: "This will revert OPNsense to October 21. Any VPN configuration changes you made after this date will be lost."
 6. User confirms
 7. Rollback executes in 60 seconds
 8. Success: "OPNsense rolled back to October 21 snapshot"

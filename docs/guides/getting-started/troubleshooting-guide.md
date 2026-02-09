@@ -43,7 +43,7 @@ Ensure the device you're using is connected to your local network (either via Et
 
 **Solution 2: Check the address**
 
-- Make sure you've typed the address correctly: `http://privatebox.lan`
+- Make sure you've typed the address correctly: `https://privatebox.lan`
 - Don't add `.com` or other extensions.
 - Remember to accept the security warning, which is normal.
 
