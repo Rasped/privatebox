@@ -138,7 +138,6 @@ For playbooks without metadata or custom configurations:
 
 - **Pi-hole** - Alternative DNS ad blocker
 - **Unbound** - Recursive DNS resolver
-- **WireGuard** - VPN server
 - **Nginx Proxy Manager** - Reverse proxy with GUI
 
 ## Configuration

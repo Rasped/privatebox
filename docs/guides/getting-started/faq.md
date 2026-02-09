@@ -90,7 +90,7 @@ Right now, it's up to you to curate the updates you wish to run. We're working o
 
 ### Can I customize the firewall rules?
 
-Yes. You have full access to OPNsense and can configure any firewall rules, NAT, VPN, or advanced features you need.
+Yes. You have full access to OPNsense and can configure firewall rules, NAT, VPN, and other advanced features.
 
 ### Does it include antivirus or malware protection?
 
@@ -120,7 +120,7 @@ No. PrivateBox operates entirely locally. No telemetry, no phone-home, no extern
 
 ### Is remote access secure?
 
-Yes. Remote access can be configured via OPNsense's built-in VPN capabilities (WireGuard or OpenVPN). All connections are encrypted end-to-end.
+Yes. You can configure remote access in OPNsense using WireGuard or OpenVPN. All connections are encrypted end-to-end. PrivateBox does not automate VPN setup.
 
 ### How often are security updates provided?
 
@@ -189,7 +189,7 @@ For EU customers, there are no customs fees. VAT is included in the displayed pr
 - **Platform:** Proxmox-based (allows additional VMs/services), not bare metal
 - **Modern UI:** OPNsense's modern interface vs. pfSense's older UI
 - **Price:** Better value at the €400-500 price point
-- **Flexibility:** Runs services beyond just firewall (dashboard, VPN, DNS, automation)
+- **Flexibility:** Runs services beyond just firewall (dashboard, DNS, automation)
 
 ### Why not just build it myself?
 

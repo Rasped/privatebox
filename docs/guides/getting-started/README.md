@@ -18,7 +18,7 @@ Welcome to PrivateBox! This section contains guides for setting up and using you
 
 Once you're comfortable with the basics, check out the [Advanced Guides](../advanced/) for more features:
 - Custom VLANs for network segmentation
-- VPN access to your home network
+- Remote access (optional, configured in OPNsense)
 - Advanced firewall rules
 - Service customization
 - Adding your own applications

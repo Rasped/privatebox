@@ -2,6 +2,8 @@
 
 Welcome to PrivateBox! This guide will walk you through setting up your new network hardware.
 
+If you are installing PrivateBox on your own Proxmox host, start with `quickstart.sh` in the repository root. This guide covers the network wiring and first access after the system is installed.
+
 ## 1. What's in the box
 
 *   The PrivateBox unit
@@ -46,9 +48,9 @@ Some routers have an "Access Point" or "AP Mode" setting. This automatically dis
 ## 4. First access
 
 1.  **Connect to your network:** Make sure your computer is connected to your network (either via an Ethernet cable to the port on the right, or to your existing Wi-Fi).
-2.  **Visit the dashboard:** Open a web browser and go to: **`http://privatebox.lan`**
+2.  **Visit the dashboard:** Open a web browser and go to: **`https://privatebox.lan`**
 
-    *If privatebox.lan doesn't work, try `http://10.10.10.1` instead.*
+    If `privatebox.lan` doesn't work, try `https://10.10.20.10` instead.
 
 3.  **Accept the security warning:** You'll likely see a security warning page. **This is normal and expected.** It appears because your PrivateBox is using a private, self-signed security certificate instead of one from a public authority.
     *   Click **"Advanced"**
@@ -70,4 +72,4 @@ Now that you're up and running:
 - Cables connected: modem → left port (WAN), network/switch → right port (LAN)
 - ISP modem rebooted after making the switch
 - Old router DHCP disabled or AP mode enabled
-- PrivateBox dashboard reachable at `http://privatebox.lan` or `http://10.10.10.1`
+- PrivateBox dashboard reachable at `https://privatebox.lan` or `https://10.10.20.10`
