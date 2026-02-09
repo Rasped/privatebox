@@ -12,6 +12,11 @@ export LC_ALL=C
 # Set fallback TERM for tput commands when running via pipe (e.g., curl | bash)
 export TERM="${TERM:-dumb}"
 
+# Detect if stdout is a real terminal (spinners produce garbage over SSH pipes)
+IS_TTY=false
+[[ -t 1 ]] && IS_TTY=true
+export IS_TTY
+
 # Script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/lib"
@@ -62,9 +67,9 @@ Options:
 
 The bootstrap process has 4 phases:
 1. Host preparation - Pre-flight checks and config generation
-2. VM provisioning - Create and configure VM with cloud-init
-3. Guest setup - Install services inside VM
-4. Verification - Confirm successful installation
+2. OPNsense deployment - Deploy and configure firewall VM
+3. VM provisioning - Create management VM with cloud-init
+4. Service configuration - Install services and verify
 
 Optional: Setup Proxmox API token for automation (use --setup-proxmox-api)
 
@@ -103,10 +108,10 @@ display() {
     log "$message"
 }
 
-# Update status line at bottom of terminal
+# Update status line at bottom of terminal (only on real TTY)
 # Usage: update_status_line "spinner_char"
 update_status_line() {
-    if [[ "$QUIET_MODE" == true ]]; then
+    if [[ "$QUIET_MODE" == true ]] && [[ "$IS_TTY" == true ]]; then
         local spinner_char="$1"
         tput sc 2>/dev/null || true                    # Save cursor position
         tput cup $(tput lines) 0 2>/dev/null || true   # Move to last line
@@ -119,7 +124,7 @@ update_status_line() {
 
 # Clear status line at bottom of terminal
 cleanup_status_line() {
-    if [[ "$QUIET_MODE" == true ]]; then
+    if [[ "$QUIET_MODE" == true ]] && [[ "$IS_TTY" == true ]]; then
         tput sc 2>/dev/null || true
         tput cup $(tput lines) 0 2>/dev/null || true
         tput sgr0 2>/dev/null || true                  # Reset colors/attributes
@@ -179,9 +184,8 @@ main() {
     log "Configuration loaded successfully"
 
     cleanup_status_line
-    display "✅ Host preparation complete"
     display ""
-    
+
     # Check for dry-run mode
     if [[ "$DRY_RUN" == true ]]; then
         display "======================================"
@@ -222,8 +226,6 @@ main() {
             error_exit "OPNsense deployment failed - cannot continue without firewall"
         else
             cleanup_status_line
-            display "✅ OPNsense firewall deployed"
-            log "OPNsense deployed successfully"
         fi
     fi
     display ""
@@ -246,9 +248,8 @@ main() {
     fi
 
     cleanup_status_line
-    display "✅ VM provisioning complete"
     display ""
-    
+
     # Phase 4: Service Configuration (runs inside VM via cloud-init)
     display "Phase 4: Service Configuration"
     display "-------------------------------"
@@ -322,7 +323,6 @@ main() {
                     SUCCESS)
                         cleanup_status_line
                         log "Phase 4 completed successfully"
-                        display "✅ Service configuration complete"
                         phase4_progress_shown=true
                         break
                         ;;
@@ -366,26 +366,21 @@ main() {
 
     display ""
 
-    # Export flag for Phase 5 to know if progress was shown
+    # Verify installation
     export PHASE4_PROGRESS_SHOWN="$phase4_progress_shown"
-
-    # Phase 5: Installation Verification
-    display "Phase 5: Installation Verification"
-    display "----------------------------------"
-    log "Starting Phase 5: Installation verification"
+    log "Starting installation verification"
 
     if [[ ! -f "${SCRIPT_DIR}/verify-install.sh" ]]; then
         error_exit "verify-install.sh not found"
     fi
 
-    if ! bash "${SCRIPT_DIR}/verify-install.sh"; then
+    if ! bash "${SCRIPT_DIR}/verify-install.sh" 2>>"$LOG_FILE"; then
         error_exit "Installation verification failed"
     fi
 
     cleanup_status_line
-    display "✅ Installation verified successfully"
     display ""
-    
+
     # Final summary
     display "======================================"
     display "   Installation Complete!"
@@ -401,28 +396,21 @@ main() {
     display "  Password: $ADMIN_PASSWORD"
     display ""
     display "Service Access:"
-    display "  Dashboard: https://privatebox.lan"
-    display ""
-    display "Network Services:"
-    display "  AdGuard Home: https://adguard.lan"
-    display "  OPNsense: https://opnsense.lan"
-    display ""
-    display "Management Services:"
-    display "  Portainer: https://portainer.lan"
-    display "  Semaphore: https://semaphore.lan"
-    display "  Proxmox: https://proxmox.lan"
-    display ""
-    display "  Admin Password: $SERVICES_PASSWORD"
+    display "  Dashboard:   https://privatebox.lan"
+    display "  AdGuard:     https://adguard.lan"
+    display "  OPNsense:    https://opnsense.lan"
+    display "  Portainer:   https://portainer.lan  (admin / $SERVICES_PASSWORD)"
+    display "  Semaphore:   https://semaphore.lan  (admin / $SERVICES_PASSWORD)"
+    display "  Proxmox:     https://proxmox.lan"
     display ""
     display "Note: Services use .lan domains with self-signed certificates"
     display "      Accept security warnings on first visit"
     display "      Configure your DNS to point to AdGuard at $STATIC_IP"
     display ""
     display "Logs saved to: $LOG_FILE"
-    display "Configuration saved to: $CONFIG_FILE"
-    
+
     log "Bootstrap completed successfully"
-    
+
     # Clean up config file (contains passwords)
     if [[ -f "$CONFIG_FILE" ]]; then
         log "Removing temporary config file"
