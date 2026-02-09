@@ -16,6 +16,7 @@ export TERM="${TERM:-dumb}"
 IS_TTY=false
 [[ -t 1 ]] && IS_TTY=true
 export IS_TTY
+DOTS_PRINTED=false
 
 # Script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -104,6 +105,10 @@ log() {
 # Display important messages (always shown)
 display() {
     local message="$1"
+    if [[ "${DOTS_PRINTED:-false}" == true ]]; then
+        echo ""
+        DOTS_PRINTED=false
+    fi
     echo "$message"
     log "$message"
 }
@@ -124,6 +129,7 @@ update_status_line() {
         SPINNER_COUNT=$((${SPINNER_COUNT:-0} + 1))
         if [[ $((SPINNER_COUNT % 30)) -eq 0 ]]; then
             printf "."
+            DOTS_PRINTED=true
         fi
     fi
 }
@@ -136,6 +142,9 @@ cleanup_status_line() {
         tput sgr0 2>/dev/null || true                  # Reset colors/attributes
         tput el 2>/dev/null || true
         tput rc 2>/dev/null || true
+    elif [[ "${DOTS_PRINTED:-false}" == true ]]; then
+        echo ""
+        DOTS_PRINTED=false
     fi
 }
 
@@ -404,7 +413,7 @@ main() {
     display "Service Access:"
     display "  Dashboard:   https://privatebox.lan"
     display "  AdGuard:     https://adguard.lan"
-    display "  OPNsense:    https://opnsense.lan"
+    display "  OPNsense:    https://opnsense.lan  (root / opnsense)"
     display "  Portainer:   https://portainer.lan  (admin / $SERVICES_PASSWORD)"
     display "  Semaphore:   https://semaphore.lan  (admin / $SERVICES_PASSWORD)"
     display "  Proxmox:     https://proxmox.lan"

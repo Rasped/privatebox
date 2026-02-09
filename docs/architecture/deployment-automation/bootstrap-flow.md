@@ -7,7 +7,7 @@ dependencies:
   - ansible
   - semaphore
 maintenance_priority: high
-last_updated: 2025-10-24
+last_updated: 2026-02-09
 ---
 
 # PrivateBox Bootstrap Execution Flow
@@ -16,7 +16,7 @@ This document maps out the complete order of script execution during PrivateBox 
 
 ## Overview
 
-The bootstrap process consists of 5 phases, starting from a workstation and culminating in a fully deployed management VM with services.
+The bootstrap process consists of 4 phases, starting from a workstation and culminating in a fully deployed management VM with services.
 
 **Key Points:**
 - **Generate Templates is called TWICE:** once before orchestration, once during (step 6/8)
@@ -316,11 +316,11 @@ create_default_projects()
 
 ---
 
-#### Phase 5: installation verification
+#### Phase 4 (continued): installation verification
 
 **10. verify-install.sh**
 - **Location:** `bootstrap/verify-install.sh`
-- **Called by:** bootstrap.sh Phase 5
+- **Called by:** bootstrap.sh Phase 4
 - **Runs on:** Proxmox host
 - **Purpose:** Verify successful installation and display access info
 
@@ -422,7 +422,7 @@ create_default_projects()
                 │                                            ├─→ 7. homer-deploy.yml
                 │                                            └─→ 8. caddy-deploy.yml (reverse proxy)
                 │
-                └─→ Phase 5: verify-install.sh
+                └─→ Phase 4 (verify): verify-install.sh
                      └─→ Display success + URLs
 ```
 
@@ -477,7 +477,7 @@ PROGRESS:All services deployed successfully
 SUCCESS
 ```
 
-These markers allow bootstrap.sh (Phase 5) to monitor progress in real-time.
+These markers allow bootstrap.sh (Phase 4) to monitor progress in real-time.
 
 ---
 
