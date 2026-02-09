@@ -108,7 +108,7 @@ display() {
     log "$message"
 }
 
-# Update status line at bottom of terminal (only on real TTY)
+# Update status line at bottom of terminal
 # Usage: update_status_line "spinner_char"
 update_status_line() {
     if [[ "$QUIET_MODE" == true ]] && [[ "$IS_TTY" == true ]]; then
@@ -119,6 +119,12 @@ update_status_line() {
         tput el 2>/dev/null || true                    # Clear line
         printf "%s Configuring PrivateBox..." "$spinner_char"
         tput rc 2>/dev/null || true                    # Restore cursor
+    elif [[ "$QUIET_MODE" == true ]]; then
+        # Non-TTY (SSH pipe): print dot every ~30s to keep pipe buffer flushing
+        SPINNER_COUNT=$((${SPINNER_COUNT:-0} + 1))
+        if [[ $((SPINNER_COUNT % 30)) -eq 0 ]]; then
+            printf "."
+        fi
     fi
 }
 
