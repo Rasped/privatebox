@@ -1,5 +1,3 @@
-your data is not a product.°
-
 # PrivateBox
 
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12)
@@ -31,13 +29,14 @@ graph TD
 
 ### Network layout
 
-Each component is deliberately placed in a specific network zone for security and performance:
+Two bridges, VLAN isolation, all services on a dedicated management network:
 
-| Component | Network Zone |
-| :--- | :--- |
-| Proxmox Host | Services VLAN |
-| OPNsense VM | Services VLAN |
-| Management VM | Services VLAN |
+| Bridge | Role | Subnet |
+| :--- | :--- | :--- |
+| `vmbr0` | WAN (ISP uplink) | DHCP from ISP |
+| `vmbr1` | LAN (VLAN-aware) | `10.10.10.0/24` (trusted), `10.10.20.0/24` (services), + guest/IoT/camera VLANs |
+
+OPNsense routes between VLANs. All management services bind to `10.10.20.10` and are only accessible from the trusted network.
 
 ## Key features
 
