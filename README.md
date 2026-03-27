@@ -11,12 +11,6 @@ PrivateBox uses shell scripts, Python, and Ansible to turn a bare-metal Proxmox 
 
 ---
 
-## Why privatebox?
-
-I built PrivateBox after setting up the same secure network four times: at home, for my dad, my brother, and our cottage. Each time took days. Each time I thought: there should be a better way.
-
-PrivateBox automates the entire process. One command gives you a consistent, secure, repeatable deployment. It's for developers and tech enthusiasts who value their time but won't compromise on control or transparency.
-
 ### Architecture overview
 
 PrivateBox runs two core virtual machines on a single Proxmox host. The Management VM, in turn, runs all the containerized services.
@@ -121,23 +115,6 @@ bash quickstart.sh --help         # Display all available arguments.
 </details>
 
 ---
-
-## A note on development
-
-I'm not a professional sysadmin or network engineer. I built this because I needed it - four times: at home, for my dad, my brother, and our cottage. Each time I had to learn OPNsense, VLANs, and Proxmox from scratch. Each time I thought: this shouldn't be this hard.
-
-So I automated it. Heavily using AI (Claude) to move faster.
-
-Here's what that means:
-- AI wrote most of the code and documentation
-- I made the technical decisions and architecture choices
-- I tested everything on real hardware, repeatedly
-- I fixed what broke (a lot broke)
-- I learned networking by building this
-
-The result is automation that works for people like me - technically capable but not infrastructure experts. I've deployed it successfully multiple times. But it's AI-assisted code built by someone who learned by doing.
-
-If that's a dealbreaker, I understand. The entire codebase is open source - audit it, improve it, or don't use it. I chose transparency over pretending to be something I'm not.
 
 ## Contributing
 
