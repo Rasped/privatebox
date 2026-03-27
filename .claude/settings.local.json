@@ -21,7 +21,17 @@
       "WebFetch",
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
-      "Read(//Users/rasped/.claude/**)"
+      "Read(//Users/rasped/.claude/**)",
+      "Bash(ping:*)",
+      "Bash(sudo ifconfig:*)",
+      "Bash(cat .claude/commands/*.md)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//Users/rasped/privatebox/**)",
+      "Bash(done)",
+      "Bash(wc:*)",
+      "Bash(rm .claude/agents/automation-engineer.md .claude/agents/internal-doc-writer.md .claude/agents/privatebox-orchestrator.md .claude/agents/system-debugger.md .claude/agents/technical-writer.md)",
+      "Bash(rmdir .claude/agents)"
     ],
     "deny": [],
     "ask": [],
