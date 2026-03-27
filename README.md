@@ -63,26 +63,19 @@ bash quickstart.sh
 
 ---
 
-## What now? your first login
+## After installation
 
-After the script completes, your PrivateBox is running. 
-
--   The main dashboard is available at: **`https://privatebox.lan`**
--   Your credentials for the various services are displayed on screen at the end of the installation.
-
-**IMPORTANT:** You must set up your Portainer admin account within 5 minutes of the first boot or after a restart. Navigate to **`https://portainer.lan`** to create your account.
-
-## Deployed services
-
-The script deploys the following services, accessible from your trusted network:
+Credentials are displayed at the end of the bootstrap. All services use self-signed certificates (accept the browser warning).
 
 | Service | Purpose | Access |
 | :--- | :--- | :--- |
-| **OPNsense®** | Firewall / Router (VM) | `https://opnsense.lan` |
-| **AdGuard Home** | DNS Filtering & Ad-Blocking | `https://adguard.lan` |
-| **Semaphore** | Ansible Automation UI | `https://semaphore.lan` |
-| **Portainer** | Container Management UI | `https://portainer.lan` |
-| **Homer Dashboard** | Service Dashboard | `https://privatebox.lan` |
+| **OPNsense®** | Firewall / Router (VM) | `https://10.10.20.1` |
+| **AdGuard Home** | DNS Filtering & Ad-Blocking | `https://10.10.20.10:3443` |
+| **Semaphore** | Ansible Automation UI | `https://10.10.20.10:2443` |
+| **Portainer** | Container Management UI | `https://10.10.20.10:1443` |
+| **Homer Dashboard** | Service Dashboard | `http://10.10.20.10:8081` |
+
+Once you point your network's DNS to `10.10.20.10`, the `.lan` domains also work (e.g. `https://adguard.lan`, `https://portainer.lan`).
 
 <details>
 <summary><b>View deployment process & advanced options</b></summary>
