@@ -75,6 +75,8 @@ Credentials are displayed at the end of the bootstrap. All services use self-sig
 | **Portainer** | Container Management UI | `https://10.10.20.10:1443` |
 | **Homer Dashboard** | Service Dashboard | `http://10.10.20.10:8081` |
 
+These addresses are on the Services VLAN (`10.10.20.0/24`). Your devices need to be on the Trusted LAN (`10.10.10.0/24`) — OPNsense routes between them. This requires a VLAN-capable switch or WiFi access point. See the [network access rules](docs/guides/advanced/network-access-rules.md) and [VLAN guide](docs/guides/advanced/how-to-use-vlans.md) for details.
+
 Once you point your network's DNS to `10.10.20.10`, the `.lan` domains also work (e.g. `https://adguard.lan`, `https://portainer.lan`).
 
 <details>
