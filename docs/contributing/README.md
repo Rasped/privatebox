@@ -281,7 +281,7 @@ When contributing, consider:
 - **Questions:** Open a GitHub Discussion
 - **Bugs:** Open a GitHub Issue
 - **Chat:** Join our community (link TBD)
-- **Email:** contribute@privatebox.dev (for sensitive issues)
+- **Security issues:** Open a private GitHub security advisory
 
 ## License
 

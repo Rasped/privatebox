@@ -1,9 +1,5 @@
 your data is not a product.°
 
-<div align="center">
-  <img src="assets/rose-logo.svg" alt="Sub Rosa Logo" width="150">
-</div>
-
 # PrivateBox
 
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12)
