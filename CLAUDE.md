@@ -57,13 +57,10 @@ Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned wit
 - **VM 100** - OPNsense (firewall/router) at 10.10.20.1 (Services), 10.10.10.1 (Trusted LAN)
 - **Proxmox Host** - at 10.10.20.20:8006 (not a VM, hypervisor itself)
 - **Test Server** - `privatebox-test-102` (Intel N150 hardware, Proxmox VE) - bare-metal test box
-  - Production IP: `10.10.20.102` (Services VLAN, no internet access)
-  - **Workaround**: Server's single NIC is on a different L2 segment than 192.168.0.1 gateway. To get internet, temporarily move to `192.168.0.102/24` with gateway `192.168.0.1`:
-    ```
-    ssh root@10.10.20.102 "ip addr del 10.10.20.102/24 dev vmbr0; ip addr add 192.168.0.102/24 dev vmbr0; ip route replace default via 192.168.0.1; echo 'nameserver 192.168.0.1' > /etc/resolv.conf"
-    ```
-  - Then reconnect via `ssh root@192.168.0.102`
-  - This is runtime only and resets on reboot. Access from workstation requires `10.10.20.250` alias on Mac's `en0`.
+  - WAN IP: `192.168.0.102` (vmbr0 — simulates customer ISP network)
+  - Services VLAN: `10.10.20.20` (vmbr1.20 — Proxmox management access to VMs)
+  - SSH: `ssh root@192.168.0.102`
+  - Double-hop to management VM: `ssh root@192.168.0.102 "ssh debian@10.10.20.10 'cmd'"`
 
 ### Services (all on management VM)
 **Web services:** All accessible via `https://*.lan` domains (privatebox, portainer, semaphore, adguard, opnsense, proxmox)
