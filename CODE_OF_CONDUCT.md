@@ -9,7 +9,7 @@
 
 ## Enforcement
 
-Violations can be reported to conduct@subrosa.dev. Serious or repeated violations may result in being banned from the project.
+Violations can be reported via GitHub issues or by contacting the maintainer. Serious or repeated violations may result in being banned from the project.
 
 ## Scope
 

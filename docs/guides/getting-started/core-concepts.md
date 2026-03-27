@@ -8,7 +8,7 @@ Your PrivateBox is designed around a single, core principle: *your data isn't a 
 
 **The concept:** Think of your home network as a single, large open-plan room where everyone can see and interact with everyone else. Network segmentation, using a technology called VLANs, is like building digital walls to create separate, secure rooms. What happens in one room cannot affect the others unless you specifically create a doorway.
 
-Your PrivateBox comes with several pre-configured "rooms" for different purposes:
+PrivateBox includes several pre-configured "rooms" for different purposes:
 
 *   **Trusted:** Your personal computers, laptops, and phones
 *   **Services:** Where PrivateBox services run (only accessible from Trusted)

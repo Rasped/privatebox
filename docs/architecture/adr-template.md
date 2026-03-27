@@ -13,10 +13,10 @@ superseded_by: null  # ADR number if superseded
 What is the issue we're facing? What factors are driving this decision?
 
 Include:
-- Business context (commercial product, customer needs)
+- Project context (user needs, design goals)
 - Technical constraints (hardware, platform, dependencies)
 - Timeline pressures
-- Regulatory requirements (EU, CE marking, GDPR)
+- Privacy requirements
 
 ## Decision
 

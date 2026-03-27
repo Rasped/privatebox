@@ -4,10 +4,10 @@ Thank you for your interest in contributing to PrivateBox! This guide will help 
 
 ## Code of conduct
 
-PrivateBox is a commercial open-source project. We expect all contributors to:
+We expect all contributors to:
 - Be respectful and professional
 - Focus on technical merit
-- Respect the project's commercial goals and architectural decisions
+- Respect the project's architectural decisions
 
 ## Getting started
 
@@ -67,8 +67,8 @@ Include:
 ### 2. Suggesting features
 
 Feature requests should:
-- Align with product vision (privacy-focused consumer appliance)
-- Consider support burden (documentation-first support model)
+- Align with project vision (privacy-focused, open-source network security)
+- Consider support burden (documentation-first, community-driven)
 - Include use cases and user stories
 - Propose implementation approach (optional)
 
@@ -258,39 +258,30 @@ Major architectural decisions require:
 1. Discussion in GitHub issue or PR
 2. Architecture Decision Record (ADR)
 3. Update to architecture documentation
-4. Consideration of commercial implications
-
 Areas requiring extra scrutiny:
 - Security changes (encryption, authentication, firewall rules)
-- Recovery system changes (customer experience impact)
 - Network architecture changes (backward compatibility)
 - Service dependencies (offline operation requirement)
 
-## Commercial considerations
+## Design considerations
 
-PrivateBox is open-source but commercially sold. Consider:
+When contributing, consider:
 
-**Support Impact:**
-- Will this increase support burden?
-- Can customers troubleshoot this themselves?
+**Usability:**
+- Does this maintain simplicity for the target audience?
+- Can users troubleshoot this themselves?
 - Does documentation need updates?
 
-**Customer Experience:**
-- Does this maintain appliance-like simplicity?
-- Is it optional or mandatory?
-- Does it affect existing users?
-
-**Regulatory:**
-- EU compliance (CE, WEEE, GDPR)
+**Privacy:**
 - Does this affect data privacy?
-- Any export control concerns?
+- Does it introduce external dependencies or phone-home behavior?
 
 ## Getting help
 
 - **Questions:** Open a GitHub Discussion
 - **Bugs:** Open a GitHub Issue
 - **Chat:** Join our community (link TBD)
-- **Email:** contribute@privatebox.io (for sensitive issues)
+- **Email:** contribute@privatebox.dev (for sensitive issues)
 
 ## License
 

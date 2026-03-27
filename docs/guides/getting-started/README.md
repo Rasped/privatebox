@@ -1,6 +1,6 @@
 # Getting Started with PrivateBox
 
-Welcome to PrivateBox! This section contains guides for setting up and using your PrivateBox appliance.
+Welcome to PrivateBox! This section contains guides for setting up and using PrivateBox.
 
 ## First-time setup
 

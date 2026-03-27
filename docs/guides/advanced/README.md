@@ -1,6 +1,6 @@
 # Advanced PrivateBox Guides
 
-These guides are for technical users who want to customize and optimize their PrivateBox appliance.
+These guides are for technical users who want to customize and optimize their PrivateBox deployment.
 
 ## Prerequisites
 

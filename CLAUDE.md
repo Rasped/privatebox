@@ -2,29 +2,21 @@
 
 Purpose: Repo-local guardrails for LLMs (Claude, etc.). Keep changes aligned with flow, security, and end state.
 
-## Product context - CRITICAL
-**PrivateBox is a commercial consumer appliance, NOT a homelab project.**
+## Project context
+**PrivateBox is a free and open-source network security project.**
 
-- **Business**: SubRosa ApS (Denmark) selling pre-configured firewall appliances to consumers
-- **Hardware**: Intel N150 mini-PC (16GB RAM, 256GB SSD, dual NICs) - €399 retail
-- **Target users**: Privacy-conscious consumers and technical enthusiasts who value time over DIY
-- **Key selling points**: No subscriptions, fully open source, physical ownership, no cloud dependencies
-- **Market**: Direct-to-consumer, EU/Denmark focus, launching late 2025
+Originally designed as a commercial hardware appliance (SubRosa ApS, Denmark), the project pivoted to FOSS-only in early 2026 due to rising RAM and SSD prices making the target hardware unviable.
 
-### Why this matters for design decisions
-- **Recovery system is mandatory**: Customers need appliance-like factory reset without vendor support
-- **Offline operation required**: Customer's network may be broken when they need recovery
-- **Support must scale**: Documentation-first, no phone support, community-driven
-- **Professional quality**: This competes with Firewalla ($229-459) and Ubiquiti - corner-cutting shows
-- **Regulatory compliance**: CE marking, WEEE registration, 2-year EU warranty, GDPR by design
-- **Physical console access**: Intel N150 hardware has VGA/HDMI, USB keyboard support guaranteed
+- **What it is**: Automation that turns bare-metal Proxmox into a production-ready firewall/network manager
+- **Target users**: Privacy-conscious developers and tech enthusiasts with a dual-NIC system
+- **Key values**: No subscriptions, fully open source, no cloud dependencies, user owns everything
+- **Hardware**: Any dual-NIC x86_64 system with 8GB+ RAM (Intel N100/N150/N200 recommended)
 
-### Design implications
-1. Recovery infrastructure (7 partitions, encrypted vault, immutable OS) is **appropriately thorough**, not over-engineered
-2. "Golden image timing" matters - customers expect consistent experience
-3. Offline asset storage prevents dependency on GitHub/internet during recovery
-4. Physical-only recovery prevents remote attacks on consumer devices
-5. Every technical decision impacts support burden and customer satisfaction
+### Design principles
+- **Quality matters**: Competes with Firewalla and Ubiquiti in functionality — corner-cutting shows
+- **Documentation-first**: Community-driven support, no phone support
+- **Offline-capable**: Should work without internet after initial bootstrap
+- **Professional automation**: Idempotent, deterministic, well-logged
 
 ## Golden rules
 - Be concise and surgical; prefer small, verifiable diffs.

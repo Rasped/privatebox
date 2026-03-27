@@ -8,9 +8,10 @@ your data is not a product.°
 
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Version](https://img.shields.io/badge/Version-1.0.0-informational.svg)]()
 
-PrivateBox is a project that uses shell scripts, Python, and Ansible to turn a bare-metal Proxmox server into a production-ready, open-source firewall and network manager in about 15 minutes.
+PrivateBox uses shell scripts, Python, and Ansible to turn a bare-metal Proxmox server into a production-ready, open-source firewall and network manager in about 15 minutes.
+
+> **Note:** PrivateBox was originally designed as a commercial hardware appliance. Due to rising RAM and SSD prices making the target hardware unviable, the project has pivoted to a free and open-source software project. Bring your own hardware, run the scripts, and you're set.
 
 ---
 
@@ -71,13 +72,6 @@ curl -fsSL https://raw.githubusercontent.com/Rasped/privatebox/main/quickstart.s
 bash quickstart.sh
 ```
 
-## See it in action
-
-Watch the 2-minute video to see the entire deployment process, from the `curl` command to the final dashboard.
-
-[![Watch the 2-minute Demo](https://privatebox.com/images/youtube-placeholder.jpg)](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-> *(Link to a 2-minute technical demo video is pending.)*
-
 ---
 
 ## What now? your first login
@@ -88,9 +82,6 @@ After the script completes, your PrivateBox is running.
 -   Your credentials for the various services are displayed on screen at the end of the installation.
 
 **IMPORTANT:** You must set up your Portainer admin account within 5 minutes of the first boot or after a restart. Navigate to **`https://portainer.lan`** to create your account.
-
-### Homer dashboard screenshot
-*(Placeholder for a screenshot of the final Homer dashboard. This is valuable for transparency, even if the UI is simple.)*
 
 ## Deployed services
 
@@ -134,12 +125,6 @@ bash quickstart.sh --help         # Display all available arguments.
 </details>
 
 ---
-
-## Supporting the project
-
-This project is and always will be free and open source. If you find it useful and would like to support its continued development, we also offer a pre-configured hardware appliance running the exact same software.
-
-[**➡️ Learn More About the Hardware**](https://privatebox.com/preorder)
 
 ## A note on development
 
